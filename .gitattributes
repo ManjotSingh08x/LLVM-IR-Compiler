@@ -1,0 +1,32 @@
+* text=auto
+*.c      text
+*.cpp    text
+*.cxx    text
+*.cc     text
+*.h      text
+*.hpp    text
+*.hxx    text
+*.inc    text
+*.ll     text
+*.td     text
+CMakeLists.txt text
+*.cmake        text
+*.sh     text eol=lf
+*.md     text
+*.txt    text
+.gitignore text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.obj binary
+*.o binary
+*.a binary
+*.lib binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.exe binary

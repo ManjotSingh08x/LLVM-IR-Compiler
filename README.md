@@ -22,3 +22,9 @@ make
 cd build
 ctest
 ```
+
+## Work TODO
+
+Regex writing: vardhan, garima 
+Lex structure and parsing input/output : manjot
+testcases and error handling: naivadhya 

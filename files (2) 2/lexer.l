@@ -1,121 +1,11 @@
 %{
 /*
- * lexer.l -- Lexical Analyzer for a C-like source language
- * CSC-305 Compiler Design, Assignment 1
+ * lexer.l — Lexical Analyzer, Assignment 1, CSC-305
  *
- * LANGUAGE FEATURES TOKENIZED:
- * ============================================================================
- *
- * BASIC FEATURES:
- *   - All arithmetic operators:       +  -  *  /  %
- *   - All logical operators:          &&  ||  !
- *   - All relational operators:       ==  !=  <  >  <=  >=
- *   - All bitwise operators:          &  |  ^  ~  <<  >>
- *   - Compound assignment:            +=  -=  *=  /=  %=
- *   - Increment / decrement:          ++  --
- *   - Ternary operator:               ?  :
- *   - if-else                         keywords: if, else
- *   - for loop                        keywords: for
- *   - while loop                      keywords: while
- *   - do-while loop                   keywords: do, while
- *   - switch / case / default         keywords: switch, case, default
- *   - Arrays (integer and char)       tokens: [ ]  and identifiers
- *   - Pointers                        tokens: *  &  ->
- *   - Structures                      keywords: struct, .  ->
- *   - printf and scanf                identifiers (not keywords -- they
- *                                     become built-in declarations later)
- *   - Function call with arguments    tokens: (  )  ,  and identifiers
- *   - goto, break, continue           keywords: goto, break, continue
- *
- * ADVANCED FEATURES:
- *   - Recursive function call         (same tokens as regular calls)
- *   - Class and object                keywords: class, new, delete
- *   - Inheritance                     token: :  after class name
- *   - Dynamic memory allocation       keywords: new, delete
- *   - Lambda function                 tokens: [ ] ( ) { }  keyword: auto
- *   - Function pointer                tokens: ( * ) ( )
- *   - Command line input              main(int argc, char *argv[])
- *   - public / private / protected    keywords: public, private, protected
- *   - Reference                       token: &  (parser distinguishes)
- *   - Multi-dimensional arrays        tokens: [ ] [ ] [ ] …
- *   - Scope resolution                token: ::
- *   - this pointer                    keyword: this
- *   - Boolean literals                keywords: true, false
- *   - null pointer                    keyword: null
- *
- * LITERAL FORMS:
- *   - Decimal integers                42, 0
- *   - Hexadecimal integers            0x1F, 0XAB
- *   - Octal integers                  0755
- *   - Binary integers                 0b1010, 0B110
- *   - Floating point                  3.14, .5, 2., 1e10, 1.5e-3
- *   - Character literals              'a', '\n', '\t', '\\', '\'', '\0',
- *                                     '\x41'
- *   - String literals                 "hello", "tab\there", "" (empty)
- *     with full escape handling and unterminated-string detection
- *
- * COMMENTS:
- *   - Line comments                   // ...
- *   - Block comments                  slash-star ... star-slash  (with unterminated detect)
- *
- * ERROR DETECTION:
- *   - Illegal characters              @  $  #  `
- *   - Malformed numeric literals      123abc, 1.2.3, 0x (no digits), 1e
- *   - Integer literal out of range    99999999999999999999
- *   - Empty character literal         ''
- *   - Multi-character literal         'ab'
- *   - Unterminated character literal  'q  (no closing quote)
- *   - Invalid escape sequence         '\q'
- *   - Unterminated string literal     "abc\n  or  "abc<<EOF>>
- *   - Unterminated block comment      slash-star ... <<EOF>>
- *
- * REGEX PATTERNS EXPLAINED:
- * ============================================================================
- *
- * {LETTER}{IDCHAR}*
- *   Matches identifiers: must start with [a-zA-Z_] then zero or more
- *   [a-zA-Z0-9_].  This single rule handles BOTH identifiers AND keywords
- *   by looking up the matched text in keywordTable().
- *
- * {DIGIT}+"."{DIGIT}*{EXPONENT}?
- *   Matches floats like 3.14, 2., 1.5e-3.  Requires digits before the dot.
- *
- * "."{DIGIT}+{EXPONENT}?
- *   Matches floats like .5, .25e3.  Dot-first form.
- *
- * {DIGIT}+{EXPONENT}
- *   Matches floats like 1e10.  No dot, mandatory exponent.
- *
- * 0[xX]{HEXDIGIT}+
- *   Matches hex integers: 0x prefix then one or more [0-9a-fA-F].
- *
- * 0[bB][01]+
- *   Matches binary integers: 0b prefix then one or more binary digits.
- *
- * 0[0-7]+
- *   Matches octal integers: leading 0 then octal digits.
- *
- * {DIGIT}+
- *   Matches plain decimal integers.  Also checks for ERANGE overflow.
- *
- * ({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*
- *   Catch-all for malformed numbers.  Starts like a number but has trailing
- *   junk.  Placed LAST among number rules so flex's longest-match picks
- *   valid rules first.
- *
- * '\\x{HEXDIGIT}{1,2}'
- *   Matches hex character escapes: '\x41', '\x7'.
- *
- * '{CHARBODY}'
- *   Matches single-character literals including simple escapes.
- *   CHARBODY = ([^'\\\\\\n]|\\\\.)  -- either a non-special char or a
- *   backslash-escape pair.
- *
- * DESIGN FOR FUTURE COMPILER STAGES:
- * ============================================================================
+ * Design note (read before extending):
  *   This file ONLY recognizes lexemes and classifies them via token_types.h.
  *   It does not know about grammar, so it stays reusable as-is once a bison
- *   parser is added in Assignment 2 -- at that point:
+ *   parser is added in Assignment 2 — at that point:
  *     1. change addToken(TOK_X); to addToken(TOK_X); return TOK_X;
  *     2. delete main()/printTable() and let bison's yyparse() drive yylex()
  *     3. nothing in the rules section below needs to change
@@ -123,9 +13,9 @@
  *   rules, keep it in main()/printTable() instead.
  *
  * Two things every reader should know about how flex picks a rule:
- *   LONGEST MATCH  -- of all rules that match at the current position, flex
+ *   LONGEST MATCH  — of all rules that match at the current position, flex
  *                    takes the one matching the MOST characters.
- *   FIRST LISTED   -- if two rules match the SAME number of characters, the
+ *   FIRST LISTED   — if two rules match the SAME number of characters, the
  *                    one written earlier in this file wins.
  *   Several rules below depend on that ordering. They are marked ORDER.
  */
@@ -186,7 +76,7 @@ static void addErrorAt(int line, int col, const std::string &message) {
 
 // The escapes our language accepts after a backslash.
 static bool isValidEscape(char c) {
-    return strchr("\\\\'\"0abfnrtv", c) != NULL;
+    return strchr("\\'\"0abfnrtv", c) != NULL;
 }
 
 // Render a byte for an error message; non-printable bytes shown as \xNN.
@@ -232,7 +122,7 @@ CHARBODY    ([^'\\\n]|\\.)
                                  backslash followed by any one character */
 
 /* Exclusive start conditions. "Exclusive" (%x) means that while we are inside
- * one, ONLY rules tagged with it can match -- the normal rules are switched
+ * one, ONLY rules tagged with it can match — the normal rules are switched
  * off. We use them so an unterminated string or comment can report the line
  * where it OPENED, which a single regex cannot do. */
 %x BLOCK_COMMENT
@@ -242,22 +132,6 @@ CHARBODY    ([^'\\\n]|\\.)
 
     /* =====================================================================
      * COMMENTS AND WHITESPACE
-     *
-     * Block comments use exclusive start condition BLOCK_COMMENT so we can
-     * report the opening line if the comment is never closed.
-     *
-     * Regex logic:
-     *   slash-star          -- opens a block comment
-     *   BLOCK_COMMENT state star-slash -- closes the block comment
-     *   BLOCK_COMMENT [^*\n]+  -- consume non-star, non-newline runs (speed)
-     *   BLOCK_COMMENT "*"   -- lone star not followed by slash (longest-match
-     *                          ensures star-slash beats lone star)
-     *   BLOCK_COMMENT \n    -- newline inside comment (yylineno counts it)
-     *   BLOCK_COMMENT EOF   -- unterminated comment error
-     *
-     *   "//"[^\n]*          -- line comment: // then everything to end of line
-     *   [ \t\r]+            -- whitespace (spaces, tabs, carriage returns)
-     *   \n                  -- newline (yylineno auto-increments)
      * ===================================================================== */
 
 "/*"                    { /* opens a block comment */
@@ -266,7 +140,7 @@ CHARBODY    ([^'\\\n]|\\.)
 <BLOCK_COMMENT>"*/"     { /* closes the block comment */
                           BEGIN(INITIAL); }
 <BLOCK_COMMENT>[^*\n]+  { /* a run of characters that are neither '*' nor a
-                             newline -- the bulk of the comment body, matched
+                             newline — the bulk of the comment body, matched
                              in one go for speed */ }
 <BLOCK_COMMENT>"*"      { /* a lone '*' not followed by '/' */ }
 <BLOCK_COMMENT>\n       { /* newline inside the comment; yylineno auto-counts */ }
@@ -276,34 +150,15 @@ CHARBODY    ([^'\\\n]|\\.)
                           BEGIN(INITIAL); yyterminate(); }
 
 "//"[^\n]*              { /* '//' followed by any run of non-newline
-                             characters -- a line comment, discarded */ }
+                             characters — a line comment, discarded */ }
 
 [ \t\r]+                { /* one or more spaces, tabs or carriage returns */ }
 \n                      { /* a newline; yylineno tracks it automatically */ }
 
     /* =====================================================================
      * IDENTIFIERS AND KEYWORDS
-     *
-     * Regex: {LETTER}{IDCHAR}*
-     *   Expands to: [a-zA-Z_][a-zA-Z0-9_]*
-     *   Must start with letter or underscore, then any alphanumeric or _.
-     *
      * A keyword is just an identifier that happens to be in keywordTable(),
-     * so there is ONE rule here, not thirty.  This keeps the lexer small
-     * and makes adding keywords a one-line change in token_types.h.
-     *
-     * Keywords recognized (see token_types.h for full list):
-     *   Type keywords:    int, char, float, double, void, bool, auto
-     *   Control flow:     if, else, for, while, do, switch, case, default,
-     *                     break, continue, goto, return
-     *   OOP keywords:     struct, class, public, private, protected,
-     *                     new, delete, this
-     *   Literal keywords: true, false, null
-     *
-     * Everything else matching this pattern is classified as TOK_IDENTIFIER:
-     *   variable names, function names (including printf, scanf -- they are
-     *   NOT keywords; they become built-in declarations in later stages),
-     *   class names, labels (the label-colon is a separate token).
+     * so there is ONE rule here, not thirty.
      * ===================================================================== */
 
 {LETTER}{IDCHAR}*       { /* a letter or underscore, then any number of
@@ -315,53 +170,10 @@ CHARBODY    ([^'\\\n]|\\.)
 
     /* =====================================================================
      * NUMERIC LITERALS
-     *
      * ORDER: every valid form must appear ABOVE the malformed-number rule at
      * the end of this block. On an equal-length match flex takes the rule
      * listed first, so putting the malformed rule last keeps it from
      * swallowing valid numbers.
-     *
-     * FLOAT PATTERNS:
-     *   {DIGIT}+"."{DIGIT}*{EXPONENT}?
-     *     Expands to: [0-9]+"."[0-9]*([eE][+-]?[0-9]+)?
-     *     Matches: 3.14, 2., 1.5e-3, 100.0E+2
-     *     Logic: digits, mandatory dot, optional fractional digits, optional
-     *            exponent.
-     *
-     *   "."{DIGIT}+{EXPONENT}?
-     *     Expands to: "."[0-9]+([eE][+-]?[0-9]+)?
-     *     Matches: .5, .25e3
-     *     Logic: dot-first float (no leading digits).
-     *
-     *   {DIGIT}+{EXPONENT}
-     *     Expands to: [0-9]+[eE][+-]?[0-9]+
-     *     Matches: 1e10, 5E-3
-     *     Logic: no dot, mandatory exponent makes it a float.
-     *
-     * INTEGER PATTERNS:
-     *   0[xX]{HEXDIGIT}+
-     *     Expands to: 0[xX][0-9a-fA-F]+
-     *     Matches: 0x1F, 0XAB
-     *     Logic: hex prefix then hex digits.
-     *
-     *   0[bB][01]+
-     *     Matches: 0b1010, 0B110
-     *     Logic: binary prefix then binary digits.
-     *
-     *   0[0-7]+
-     *     Matches: 0755, 077
-     *     Logic: leading zero then octal digits.
-     *
-     *   {DIGIT}+
-     *     Expands to: [0-9]+
-     *     Matches: 0, 42, 1000
-     *     Logic: plain decimal.  Also checks strtoll for ERANGE overflow.
-     *
-     * MALFORMED CATCH-ALL:
-     *   ({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*
-     *     Starts like a number then has trailing junk: 123abc, 1.2.3, 0x
-     *     Only wins over valid rules when junk chars extend the match
-     *     (longest-match principle).
      * ===================================================================== */
 
 {DIGIT}+"."{DIGIT}*{EXPONENT}?   { /* digits, a dot, optional digits, optional
@@ -401,24 +213,8 @@ CHARBODY    ([^'\\\n]|\\.)
 
     /* =====================================================================
      * CHARACTER LITERALS
-     *
-     * Regex logic:
-     *   '\\x{HEXDIGIT}{1,2}'  -- hex escape char: '\x41', '\x7'
-     *     Must come FIRST (ORDER) so '\x41' is not split into multiple
-     *     CHARBODY units triggering multi-char error.
-     *
-     *   '{CHARBODY}'          -- single-char literal: 'a', '\n', '\0'
-     *     CHARBODY = ([^'\\\n]|\\.)
-     *     Matches: one char that is not quote/backslash/newline, OR
-     *     a backslash followed by any char.
-     *     After matching, we validate the escape is in our set.
-     *
-     *   ''                    -- empty char literal (two quotes, nothing inside)
-     *
-     *   '{CHARBODY}{2,}'      -- two or more body units: 'ab' multi-char error
-     *
-     *   '{CHARBODY}*          -- opening quote with no close: unterminated
-     *     ORDER: last, so closing-quote variants match longer and win.
+     * ORDER: the \x rule must come first, otherwise '\x41' looks like four
+     * separate body units and gets flagged as a multi-character literal.
      * ===================================================================== */
 
 '\\x{HEXDIGIT}{1,2}'    { /* quote, backslash-x, one or two hex digits, quote:
@@ -436,25 +232,14 @@ CHARBODY    ([^'\\\n]|\\.)
                           addError(std::string("multi-character literal: ")
                                    + yytext); }
 '{CHARBODY}*            { /* ORDER: last. A quote and any number of body
-                             units with NO closing quote -- the earlier rules
+                             units with NO closing quote — the earlier rules
                              all match longer when a closing quote exists */
                           addError("unterminated character literal"); }
 
     /* =====================================================================
      * STRING LITERALS
-     *
-     * Handled with exclusive start condition STRING_LIT rather than one big
-     * regex so that an unterminated string can be reported at the line where
-     * it OPENED.
-     *
-     * Regex logic:
-     *   \"                         -- opening double quote, enters STRING_LIT
-     *   <STRING_LIT>\"             -- closing double quote, emits token
-     *   <STRING_LIT>\\x{HEXDIGIT}{1,2} -- hex escape inside string: \x41
-     *   <STRING_LIT>\\(.|\n)       -- backslash + any char (validates escape)
-     *   <STRING_LIT>[^\\\n"]+      -- run of ordinary chars (not \ or " or \n)
-     *   <STRING_LIT>\n             -- newline before close = unterminated
-     *   <STRING_LIT><<EOF>>        -- EOF before close = unterminated
+     * Handled with a start condition rather than one big regex so that an
+     * unterminated string can be reported at the line where it OPENED.
      * ===================================================================== */
 
 \"                      { /* an opening double quote */
@@ -473,7 +258,7 @@ CHARBODY    ([^'\\\n]|\\.)
                               addError(std::string("invalid escape sequence: ")
                                        + yytext);
                           g_strBuf += yytext; }
-<STRING_LIT>[^\\\n"]+   { /* a run of ordinary string characters -- anything
+<STRING_LIT>[^\\\n"]+   { /* a run of ordinary string characters — anything
                              that is not a backslash, newline or quote */
                           g_strBuf += yytext; }
 <STRING_LIT>\n          { /* a newline before the closing quote */
@@ -487,31 +272,9 @@ CHARBODY    ([^'\\\n]|\\.)
 
     /* =====================================================================
      * OPERATORS
-     *
      * Two-character operators are listed before one-character ones. Strictly
-     * this is unnecessary -- flex's longest-match rule already prefers "+=" to
-     * "+" -- but reading them grouped this way makes the set easy to audit.
-     *
-     * Regex logic: each is a literal string match (no regex metacharacters).
-     *
-     * Multi-char operators (must win over single-char via longest match):
-     *   "++"  increment          "+="  add-assign
-     *   "--"  decrement          "-="  sub-assign
-     *   "*="  mul-assign         "/="  div-assign
-     *   "%="  mod-assign         "=="  equality
-     *   "!="  not-equal          "<="  less-or-equal
-     *   ">="  greater-or-equal   "&&"  logical AND
-     *   "||"  logical OR         "<<"  left shift
-     *   ">>"  right shift        "->"  member-via-pointer
-     *   "::"  scope resolution
-     *
-     * Single-char operators:
-     *   +  -  *  /  %  =  <  >  !  &  |  ^  ~  .  ?  :
-     *
-     * NOTE on * and &: the lexer emits TOK_STAR and TOK_BITAND. Whether *
-     * means multiply, dereference, or pointer-declarator (and whether &
-     * means bitwise-and, address-of, or reference-declarator) is decided
-     * by the parser -- the lexer does not disambiguate.
+     * this is unnecessary — flex's longest-match rule already prefers "+=" to
+     * "+" — but reading them grouped this way makes the set easy to audit.
      * ===================================================================== */
 
 "++"    { /* increment */                addToken(TOK_INC); }
@@ -534,7 +297,7 @@ CHARBODY    ([^'\\\n]|\\.)
 
 "+"     { /* add */                      addToken(TOK_PLUS); }
 "-"     { /* subtract or negate */       addToken(TOK_MINUS); }
-"*"     { /* multiply, dereference, or pointer declarator -- telling these
+"*"     { /* multiply, dereference, or pointer declarator — telling these
              apart is the parser's job, not ours */
                                          addToken(TOK_STAR); }
 "/"     { /* divide */                   addToken(TOK_SLASH); }
@@ -543,7 +306,7 @@ CHARBODY    ([^'\\\n]|\\.)
 "<"     { /* less than */                addToken(TOK_LT); }
 ">"     { /* greater than */             addToken(TOK_GT); }
 "!"     { /* logical not */              addToken(TOK_NOT); }
-"&"     { /* bitwise and, address-of, or reference declarator -- again the
+"&"     { /* bitwise and, address-of, or reference declarator — again the
              parser decides which */
                                          addToken(TOK_BITAND); }
 "|"     { /* bitwise or */               addToken(TOK_BITOR); }
@@ -556,15 +319,6 @@ CHARBODY    ([^'\\\n]|\\.)
 
     /* =====================================================================
      * PUNCTUATION
-     *
-     * Each is a single literal character. These delimit expressions,
-     * function argument lists, array subscripts, and blocks.
-     *
-     * ( )  -- function calls, grouping, lambda parameter lists
-     * { }  -- compound statements, class bodies, lambda bodies
-     * [ ]  -- array subscripts, multi-dimensional arrays, lambda captures
-     * ;    -- statement terminator
-     * ,    -- separator in argument lists, declarations, initializers
      * ===================================================================== */
 
 "("     { addToken(TOK_LPAREN); }
@@ -578,10 +332,6 @@ CHARBODY    ([^'\\\n]|\\.)
 
     /* =====================================================================
      * ANYTHING ELSE
-     *
-     * Regex: .  (matches any single character not matched above)
-     * Records illegal character and keeps scanning -- the assignment asks
-     * for ALL lexical errors, not just the first.
      * ===================================================================== */
 
 .       { /* a single character no rule above accepted: @, $, #, backtick.
@@ -590,14 +340,6 @@ CHARBODY    ([^'\\\n]|\\.)
           addError("illegal character '" + showChar(yytext[0]) + "'"); }
 
 %%
-
-/* =========================================================================
- * USER CODE SECTION -- printTable(), printErrors(), main()
- *
- * This section is ONLY for Assignment 1 standalone mode.  When integrating
- * with bison (Assignment 2), delete main()/printTable() and let yyparse()
- * drive yylex() -- the rules section above stays unchanged.
- * ========================================================================= */
 
 static void printTable() {
     // Size the Lexeme column to the widest lexeme so a long string literal
@@ -636,8 +378,8 @@ int main(int argc, char **argv) {
     yyin = f;
 
     // No rule above executes `return`, so this single call scans the whole
-    // file -- every token and error is recorded by addToken()/addError() as
-    // it goes -- and then returns 0 at end of input.
+    // file — every token and error is recorded by addToken()/addError() as
+    // it goes — and then returns 0 at end of input.
     yylex();
     fclose(f);
 

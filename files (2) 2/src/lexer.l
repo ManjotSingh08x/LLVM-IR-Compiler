@@ -340,51 +340,47 @@ CHARBODY    ([^'\\\n]|\\.)
           addError("illegal character '" + showChar(yytext[0]) + "'"); }
 
 %%
-
-static void printTable() {
-    // Size the Lexeme column to the widest lexeme so a long string literal
-    // cannot push the Token column out of alignment.
-    size_t width = 6;                       // length of the word "Lexeme"
-    for (auto &t : g_tokens)
-        if (t.lexeme.size() > width) width = t.lexeme.size();
-    width += 2;                             // gap between the columns
-
-    std::cout << std::left << std::setw((int)width) << "Lexeme" << "Token\n";
-    std::cout << std::string(width + 16, '-') << "\n";
-    for (auto &t : g_tokens)
-        std::cout << std::left << std::setw((int)width) << t.lexeme
-                  << tokenCategory(t.id) << "\n";
-    std::cout << std::string(width + 16, '-') << "\n";
-    std::cout << g_tokens.size() << " tokens.\n";
+using namespace std;
+static void printTable(){
+    size_t width = 6;
+    for(size_t i = 0; i < g_tokens.size(); i++){
+        if(g_tokens[i].lexeme.size() > width){
+            width = g_tokens[i].lexeme.size();
+        }
+    }
+    width += 2;
+    cout << left << setw(width) << "Lexeme" << "Token" << endl;
+    cout << string(width + 16, '-') << endl;
+    for(size_t i = 0; i < g_tokens.size(); i++){
+        string lexeme = g_tokens[i].lexeme;
+        string category = tokenCategory(g_tokens[i].id);
+        cout << left << setw(width) << lexeme << category << endl;
+    }
+    cout << "Total Tokens: " << g_tokens.size() << endl;
 }
 
 static void printErrors(const char *filename) {
-    for (auto &e : g_errors)
-        std::cout << filename << ":" << e.line << ":" << e.col
-                  << ": error: " << e.message << "\n";
-    std::cout << g_errors.size() << " lexical error(s) found.\n";
+    for(size_t i = 0; i < g_errors.size(); i++){
+        int line = g_errors[i].line;
+        int col = g_errors[i].col;
+        string message = g_errors[i].message;
+        cout << filename << " line: " << line << " col: " << col << " error: " << message << endl;
+    }
+    cout << g_errors.size() << " lexical error(s) found." << endl;
 }
-
 int main(int argc, char **argv) {
     if (argc < 2) {
-        std::cerr << "usage: " << argv[0] << " <source-file>\n";
+        cerr << "usage: " << argv[0] << " <source-file>\n";
         return 1;
     }
     FILE *f = fopen(argv[1], "r");
     if (!f) {
-        std::cerr << "error: cannot open " << argv[1] << "\n";
+        cerr << "error: cannot open " << argv[1] << "\n";
         return 1;
     }
     yyin = f;
-
-    // No rule above executes `return`, so this single call scans the whole
-    // file — every token and error is recorded by addToken()/addError() as
-    // it goes — and then returns 0 at end of input.
-    yylex();
+    yylex(); // since return is not called, this will scan the entire file
     fclose(f);
-
-    // The assignment asks for the table only when the program is clean, and
-    // for the full error list otherwise.
     if (!g_errors.empty()) {
         printErrors(argv[1]);
         return 1;

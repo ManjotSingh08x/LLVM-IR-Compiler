@@ -5,7 +5,7 @@
 #   ./run.sh                    uses build/lexer
 #   ./run.sh path/to/lexer      uses the executable you pass in
 
-set -uo pipefail
+# set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -14,14 +14,14 @@ EXE="${1:-build/lexer}"
 TEST_DIR="test"
 
 if [ ! -x "$EXE" ]; then
-    echo "Executable '$EXE' not found. Building..."
+    echo "Executable '$EXE' not found. Building"
     make || exit 1
 fi
 
 clean=0
 witherr=0
 for f in "$TEST_DIR"/*.c; do
-    echo "=== $(basename "$f") ==="
+    echo "Processing $(basename "$f")"
     if "$EXE" "$f"; then
         clean=$((clean+1))
     else
@@ -30,5 +30,5 @@ for f in "$TEST_DIR"/*.c; do
     echo
 done
 
-echo "-----------------------------------------"
+# echo "-----------------------------------------"
 echo "$((clean+witherr)) test file(s): $clean clean, $witherr with lexical errors."

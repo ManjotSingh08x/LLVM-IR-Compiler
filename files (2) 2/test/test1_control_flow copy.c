@@ -1,8 +1,4 @@
-// test1_control_flow.c
-// Covers: if-else, for, while, do-while, goto, break, continue,
-//         all arithmetic / relational / logical / bitwise operators,
-//         the ternary operator, compound assignment.
-
+// Tests: if-else
 int classify(int n) {
     if (n < 0) {
         return -1;
@@ -14,6 +10,7 @@ int classify(int n) {
 }
 
 int main() {
+    // Tests: arithmetic operators
     int a = 10, b = 3, c;
     bool t;
 
@@ -25,16 +22,20 @@ int main() {
 
     a++;  a--;  ++a;  --a;
 
+    // Tests: logical and relational operators
     t = (a == b);  t = (a != b);
     t = (a <  b);  t = (a >  b);
     t = (a <= b);  t = (a >= b);
     t = (a && b);  t = (a || b);  t = !a;
 
+    // Tests: additional bitwise operators
     c = a & b;   c = a | b;   c = a ^ b;
     c = ~a;      c = a << 2;  c = a >> 2;
 
+    // Tests: additional ternary operator
     c = (a > b) ? a : b;
 
+    // Tests: for loop; break and continue
     int i, sum = 0;
     for (i = 0; i < 10; i++) {
         if (i % 2 == 0) continue;
@@ -42,13 +43,18 @@ int main() {
         sum += i;
     }
 
+    // Tests: while loop
     while (sum > 0) { sum -= 1; }
+
+    // Tests: do-while loop
     do { sum += 2; } while (sum < 10);
 
+    // Tests: goto
     i = 0;
 top:
     i = i + 1;
     if (i < 3) goto top;
 
+    // Tests: function call with arguments
     return classify(sum);
 }

@@ -1,7 +1,4 @@
-// test4_oop_features.c
-// Covers: classes and objects, inheritance, the public / private / protected
-//         keywords, this, new and delete, scope resolution.
-
+// Tests: class and object; public/private/protected keywords
 class Animal {
 public:
     int age;
@@ -21,6 +18,7 @@ private:
     }
 };
 
+// Tests: inheritance
 class Dog : public Animal {
 public:
     bool loud;
@@ -30,18 +28,22 @@ public:
     }
 };
 
+// Tests: inheritance; protected and private keywords
 class Cat : protected Animal {
 private:
     bool quiet;
 };
 
+// Tests: additional scope resolution operator
 int Animal::age = 0;
 
 int main() {
+    // Tests: class and object; dynamic memory allocation
     Animal *a = new Animal();
     a->setAge(3);
     delete a;
 
+    // Tests: class and object; inheritance
     Dog d;
     d.bark();
     d.setAge(5);

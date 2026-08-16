@@ -78,11 +78,10 @@ Scanning continues past every error, so one run reports all of them.
 `*` and `&` each produce one token. Whether a given `*` means multiply,
 dereference or a pointer declarator is decided by the parser, not here.
 
-`static`, `typedef`, `enum`, `union` and `sizeof` are not keywords in this
-language, so they are read as plain identifiers.
+`static`, `typedef`, `enum` and `union` are not keywords in this
+language, so they are read as plain identifiers. `sizeof` is a keyword.
 
-`printf` and `scanf` are ordinary identifiers. They become built-in function
-declarations during semantic analysis, not lexical analysis.
+`printf` and `scanf` are keywords (built-in I/O functions).
 
 ## Note for Assignment 2
 

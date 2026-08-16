@@ -1,0 +1,17 @@
+test/test6_lexical_errors.c:6:15: error: illegal character '@'
+test/test6_lexical_errors.c:7:15: error: illegal character '$'
+test/test6_lexical_errors.c:8:15: error: illegal character '#'
+test/test6_lexical_errors.c:9:15: error: illegal character '`'
+test/test6_lexical_errors.c:11:16: error: malformed numeric literal: 123abc
+test/test6_lexical_errors.c:12:16: error: malformed numeric literal: 1.2.3
+test/test6_lexical_errors.c:13:16: error: malformed numeric literal: 0x
+test/test6_lexical_errors.c:14:16: error: malformed numeric literal: 1e
+test/test6_lexical_errors.c:16:16: error: integer literal out of range: 999999999999999999999999
+test/test6_lexical_errors.c:18:15: error: empty character literal
+test/test6_lexical_errors.c:19:15: error: multi-character literal: 'ab'
+test/test6_lexical_errors.c:20:15: error: unterminated character literal
+test/test6_lexical_errors.c:21:15: error: invalid escape sequence: '\q'
+test/test6_lexical_errors.c:23:16: error: unterminated string literal
+test/test6_lexical_errors.c:24:28: error: invalid escape sequence: \q
+test/test6_lexical_errors.c:26:5: error: unterminated block comment
+16 lexical error(s) found.

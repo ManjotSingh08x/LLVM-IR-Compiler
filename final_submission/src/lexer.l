@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     yyin = f;
-    yylex();
+    yylex(); // since return is not called, this will scan the entire file
     fclose(f);
     if (!g_errors.empty()) {
         printErrors(argv[1]);

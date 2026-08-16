@@ -7,7 +7,7 @@ Team members:
 - Manjot Singh (24116048)
 - Naivadhya Garg (24115106)
 
-Source language: C-like (C++ subset)
+Source language: C-like (C++ subset) (file extension: .ckp)
 
 Implementation language: C++ with lex
 
@@ -82,8 +82,9 @@ Scanning continues past every error, so one run reports all of them.
 - **test3**: Function calls with arguments, recursion, function pointers, lambdas, `printf` and `scanf`, `argc`/`argv`, `new` and `delete`.
 - **test4**: Classes and objects, inheritance, `public`/`private`/`protected`, `this`, and scope resolution.
 - **test5**: `switch`/`case`/`default`, and every literal form.
-- **test6**: Every class of lexical error.
-- **test7**: Contains
+- **test6**: Every class of lexical error to demonstrate error handling
+- **test7**: Contains comprehensive scan over all check-marked features
+- **test8**: Contains scan over unimplemented/unchecked features to be used as normal identifiers
 
 ## Language notes
 

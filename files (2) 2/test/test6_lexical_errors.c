@@ -12,7 +12,8 @@ int main() {
     int bad2 = 1.2.3;               // malformed numeric literal
     int bad3 = 0x;                  // malformed numeric literal
     int bad4 = 1e;                  // malformed numeric literal
-    int big  = 99999999999999999999;  // integer literal out of range
+    int small_test=000000000000000000000000000;
+    int big  = 999999999999999999999999;  // integer literal out of range
 
     char e1 = '';                   // empty character literal
     char e2 = 'ab';                 // multi-character literal

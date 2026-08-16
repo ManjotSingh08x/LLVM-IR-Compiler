@@ -127,5 +127,4 @@ return              keyword
 a                   identifier
 ;                   punctuation
 }                   punctuation
-------------------------------------
-127 tokens.
+Total Tokens: 127

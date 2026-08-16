@@ -333,5 +333,4 @@ sum       identifier
 )         punctuation
 ;         punctuation
 }         punctuation
---------------------------
-333 tokens.
+Total Tokens: 333

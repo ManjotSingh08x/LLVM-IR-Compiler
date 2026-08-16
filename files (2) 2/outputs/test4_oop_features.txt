@@ -137,5 +137,4 @@ return     keyword
 0          integer_literal
 ;          punctuation
 }          punctuation
----------------------------
-137 tokens.
+Total Tokens: 137

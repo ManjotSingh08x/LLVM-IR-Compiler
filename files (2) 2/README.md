@@ -83,6 +83,7 @@ Scanning continues past every error, so one run reports all of them.
 - **test4**: Classes and objects, inheritance, `public`/`private`/`protected`, `this`, and scope resolution.
 - **test5**: `switch`/`case`/`default`, and every literal form.
 - **test6**: Every class of lexical error.
+- **test7**: Contains
 
 ## Language notes
 

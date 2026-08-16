@@ -72,7 +72,7 @@ argv          identifier
 int           keyword
 input         identifier
 ;             punctuation
-scanf         keyword
+scanf         identifier
 (             punctuation
 "%d"          string_literal
 ,             punctuation
@@ -170,7 +170,7 @@ double        keyword
 delete        keyword
 d             identifier
 ;             punctuation
-printf        keyword
+printf        identifier
 (             punctuation
 "%d %d %s\n"  string_literal
 ,             punctuation

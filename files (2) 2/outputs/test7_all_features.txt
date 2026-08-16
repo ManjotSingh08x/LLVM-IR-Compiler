@@ -380,7 +380,7 @@ mode                                                identifier
 2                                                   integer_literal
 ;                                                   punctuation
 }                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "argc = %d, program = %s\n"                         string_literal
 ,                                                   punctuation
@@ -705,7 +705,7 @@ mode                                                identifier
 case                                                keyword
 1                                                   integer_literal
 :                                                   operator
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "mode: default run\n"                               string_literal
 )                                                   punctuation
@@ -715,7 +715,7 @@ break                                               keyword
 case                                                keyword
 2                                                   integer_literal
 :                                                   operator
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "mode: arguments supplied\n"                        string_literal
 )                                                   punctuation
@@ -724,7 +724,7 @@ break                                               keyword
 ;                                                   punctuation
 default                                             keyword
 :                                                   operator
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "mode: unknown\n"                                   string_literal
 )                                                   punctuation
@@ -1045,7 +1045,7 @@ p                                                   identifier
 null                                                keyword
 )                                                   punctuation
 {                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "null pointer check ok\n"                           string_literal
 )                                                   punctuation
@@ -1338,12 +1338,12 @@ typed                                               identifier
 =                                                   operator
 0                                                   integer_literal
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "enter a number: "                                  string_literal
 )                                                   punctuation
 ;                                                   punctuation
-scanf                                               keyword
+scanf                                               identifier
 (                                                   punctuation
 "%d"                                                string_literal
 ,                                                   punctuation
@@ -1351,7 +1351,7 @@ scanf                                               keyword
 typed                                               identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "you typed %d, doubled %d\n"                        string_literal
 ,                                                   punctuation
@@ -1476,7 +1476,7 @@ no                                                  identifier
 =                                                   operator
 false                                               keyword
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "%s squares=%d trace=%d evens=%d tries=%d\n"        string_literal
 ,                                                   punctuation
@@ -1491,7 +1491,7 @@ evens                                               identifier
 tries                                               identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "swapped=%d,%d alias=%d point=(%d,%d)\n"            string_literal
 ,                                                   punctuation
@@ -1510,7 +1510,7 @@ origin                                              identifier
 y                                                   identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "rect area=%d perim=%d heap area=%d heap sum=%d\n"  string_literal
 ,                                                   punctuation
@@ -1523,7 +1523,7 @@ heapArea                                            identifier
 heapSum                                             identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "cubed=%d combined=%d gcd=%d fact=%d both=%d\n"     string_literal
 ,                                                   punctuation
@@ -1538,7 +1538,7 @@ f                                                   identifier
 both                                                identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "mask=%d biggest=%d countdown=%d c=%d t=%d\n"       string_literal
 ,                                                   punctuation
@@ -1553,7 +1553,7 @@ c                                                   identifier
 t                                                   identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "literals %d %d %d %d %f %f %f %f %f\n"             string_literal
 ,                                                   punctuation
@@ -1576,7 +1576,7 @@ two                                                 identifier
 huge                                                identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "chars %c%c%c%c%c%c%c\n"                            string_literal
 ,                                                   punctuation
@@ -1595,7 +1595,7 @@ hexChar                                             identifier
 nul                                                 identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "strings %s %s %s %s\n"                             string_literal
 ,                                                   punctuation
@@ -1608,7 +1608,7 @@ tricky                                              identifier
 empty                                               identifier
 )                                                   punctuation
 ;                                                   punctuation
-printf                                              keyword
+printf                                              identifier
 (                                                   punctuation
 "bools %d %d board %c%c\n"                          string_literal
 ,                                                   punctuation

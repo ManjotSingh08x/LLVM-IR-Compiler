@@ -17,7 +17,8 @@ int main() {
     int a = 10, b = 3, c;
     bool t;
 
-    c = a + b;   c = a - b;   c = a * b;
+    c= a+b;   c=a -b;
+    c=a* b;
     c = a / b;   c = a % b;
 
     c += a;  c -= a;  c *= a;  c /= a;  c %= a;

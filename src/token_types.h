@@ -30,7 +30,8 @@ enum TokenID {
     TOK_IF, TOK_ELSE, TOK_FOR, TOK_WHILE, TOK_DO, TOK_SWITCH, TOK_CASE,
     TOK_DEFAULT, TOK_BREAK, TOK_CONTINUE, TOK_GOTO, TOK_RETURN,
     TOK_STRUCT, TOK_CLASS, TOK_PUBLIC, TOK_PRIVATE, TOK_PROTECTED,
-    TOK_NEW, TOK_DELETE, TOK_TRUE, TOK_FALSE, TOK_THIS, TOK_NULL,
+    TOK_NEW, TOK_DELETE, TOK_TRUE, TOK_FALSE, TOK_THIS, TOK_NULL, TOK_SIZEOF,
+    TOK_PRINTF, TOK_SCANF,
     TOK__KEYWORD_END,       // sentinel — not a real token
 
     // ----- operators -----
@@ -71,9 +72,9 @@ inline std::string tokenCategory(int tok) {
 // code strings.
 //
 // Deliberately NOT keywords, because they are not in our language spec:
-//   static, typedef, enum, union, sizeof
-// Also deliberately NOT keywords: printf, scanf. They are ordinary
-// identifiers; they become built-in function declarations in Assignment 3.
+//   static, typedef, enum, union
+// Also deliberately NOT keywords: printf, scanf were previously identifiers
+// but are now keywords in our language.
 inline const std::unordered_map<std::string, int>& keywordTable() {
     static const std::unordered_map<std::string, int> kw = {
         {"int", TOK_INT}, {"char", TOK_CHAR}, {"float", TOK_FLOAT},
@@ -86,7 +87,9 @@ inline const std::unordered_map<std::string, int>& keywordTable() {
         {"struct", TOK_STRUCT}, {"class", TOK_CLASS}, {"public", TOK_PUBLIC},
         {"private", TOK_PRIVATE}, {"protected", TOK_PROTECTED},
         {"new", TOK_NEW}, {"delete", TOK_DELETE}, {"true", TOK_TRUE},
-        {"false", TOK_FALSE}, {"this", TOK_THIS}, {"null", TOK_NULL}
+        {"false", TOK_FALSE}, {"this", TOK_THIS}, {"null", TOK_NULL},
+        {"sizeof", TOK_SIZEOF},
+        {"printf", TOK_PRINTF}, {"scanf", TOK_SCANF}
     };
     return kw;
 }

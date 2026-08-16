@@ -29,6 +29,4 @@ for f in "$TEST_DIR"/*.c; do
     fi
     echo
 done
-
-# echo "-----------------------------------------"
 echo "$((clean+witherr)) test file(s): $clean clean, $witherr with lexical errors."

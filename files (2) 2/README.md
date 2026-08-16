@@ -1,7 +1,14 @@
-# CSC-305 Assignment 1 — Lexical Analyzer
+# CSC-305 Assignment 1: Lexical Analyzer
+
+Team members:
+
+- Adityavardhan Singh (24322005)
+- Manjot Singh (24116048)
+- Garima Sidana (24113043)
+- Naivadhya Garg (24115106)
 
 Source language: C-like (C++ subset)
-Implementation language: C++ with flex
+Implementation language: C++ with lex
 
 ## Build
 

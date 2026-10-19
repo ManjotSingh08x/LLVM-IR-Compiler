@@ -94,7 +94,7 @@ declared type itself, so it reports that type marked as a class specifier:
 
 ## Test coverage
 
-There are sixteen test cases. Seven parse and produce a token table; nine are
+There are seventeen test cases. Eight parse and produce a token table; nine are
 rejected and report errors.
 
 Feature coverage:
@@ -109,6 +109,9 @@ Feature coverage:
   body, and allocation with constructor arguments.
 - **test5** switch labels and every submitted literal form.
 - **test7** a comprehensive regression over every accepted feature.
+- **test17** `static` variables, functions and members, list initialisation
+  without `=` (`int a{5};`, `Point p{1, 2};`, `new int[3]{1, 2, 3}`), and
+  multi-dimensional element access through arrays, pointers and members.
 
 Cases that must be rejected:
 
@@ -174,6 +177,7 @@ test/
   test14_jumbled.ckp
   test15_missing_operator.ckp
   test16_brackets.ckp
+  test17_brace_static_multidim.ckp
 Makefile
 run.sh
 README.md
@@ -207,8 +211,14 @@ The grammar covers the features selected for our submission:
 - integer and character arrays, multi-dimensional arrays, one-level pointers,
   references, function pointers as variables and as parameters, and pointers to
   arrays written as `int (*p)[3]`;
-- brace initialisers, including nested ones for multi-dimensional arrays and
-  structures;
+- brace initialisers, both `= { ... }` and the list form without `=` such as
+  `int a{5};`, `int g[2][2]{{1, 2}, {3, 4}};` or `Point p{1, 2};`, including
+  nested ones for multi-dimensional arrays and structures, and after `new`
+  as in `new int[3]{1, 2, 3}` or `new Point{1, 2}`;
+- `static` variables and functions at file scope, `static` locals, and
+  `static` class members;
+- multi-dimensional element access of any depth, such as `cube[i][j][k]`,
+  `p->cells[1][2]` or `m[i][j]++`;
 - structures, classes, objects, inheritance with or without an access
   specifier and from more than one base, classes and structures defined inside
   another, `public`, `private`, `protected`, `this`, `.`/`->`, and scope
@@ -222,7 +232,6 @@ The grammar covers the features selected for our submission:
 This is the submitted C++ subset, not a complete ISO C++ grammar. Each of the
 following was checked against the built parser and is rejected:
 
-- `static` declarations
 - `typedef`, `using`, `enum`, or `union`
 - variadic `...` parameters
 - `until` loops
@@ -235,7 +244,7 @@ following was checked against the built parser and is rejected:
 - templates, namespaces, exceptions, STL syntax, operator overloading, or other
   unselected C++ features.
 
-The scanner reads `static`, `typedef`, `enum`, `union`, and `until` as
+The scanner reads `typedef`, `enum`, `union`, and `until` as
 identifiers, since none of them appears in the Phase 1 keyword table. That keeps
 Phase 1 behavior unchanged, but their unsupported C++ roles do not parse as
 valid syntax. Similarly, a name such as `fopen` may only appear through the
@@ -245,7 +254,7 @@ ordinary identifier and function-call grammar.
 
 | Category | Examples or meaning |
 | --- | --- |
-| `keyword` | the 31 Phase 1 keyword entries |
+| `keyword` | the 31 Phase 1 keyword entries, plus `static` |
 | `identifier` | letter or underscore followed by letters, digits, or underscores |
 | `integer_literal` | decimal, `0x1F`, `0755`, `0b1010` |
 | `float_literal` | `3.14`, `.5`, `2.`, `1e10`, `1.5e-3` |

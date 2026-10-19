@@ -1,9 +1,3 @@
-// Tests: static keywords (unticked)
-int useStatic() {
-    static int counter = 0;
-    return counter;
-}
-
 // Tests: typedef (unticked)
 typedef int Integer;
 

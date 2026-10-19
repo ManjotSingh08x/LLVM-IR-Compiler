@@ -80,6 +80,7 @@ static std::string typeNameAt(int index) {
 %token TOK_IF TOK_ELSE TOK_FOR TOK_WHILE TOK_DO TOK_SWITCH TOK_CASE
 %token TOK_STRUCT TOK_CLASS TOK_PUBLIC TOK_PRIVATE TOK_PROTECTED
 %token TOK_NEW TOK_DELETE TOK_TRUE TOK_FALSE TOK_THIS TOK_NULL TOK_SIZEOF
+%token TOK_STATIC
 %token TOK__KEYWORD_END
 
 %token TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH TOK_PERCENT
@@ -118,7 +119,15 @@ external_item
     | function_declaration
     | qualified_special_member_definition
     | declaration
+    | static_item
     | error TOK_SEMI                  { yyerrok; }
+    ;
+
+//static applies to variables and functions, at file scope and inside a class
+static_item
+    : TOK_STATIC function_definition
+    | TOK_STATIC function_declaration
+    | TOK_STATIC declaration
     ;
 
 
@@ -202,6 +211,7 @@ member_item
     | special_member_definition
     | special_member_declaration
     | declaration
+    | static_item
     | error TOK_SEMI                  { yyerrok; }
     ;
 
@@ -316,15 +326,21 @@ array_dimensions
                                                       { $$ = $1 + 1; }
     ;
 
+//both copy initialisation, int a = 1, and list initialisation, int a{1}
 initializer_opt
     : /* empty */
     | TOK_ASSIGN initializer
+    | braced_init_list
     ;
 
 
 initializer
     : assignment_expression
-    | TOK_LBRACE initializer_list_opt TOK_RBRACE
+    | braced_init_list
+    ;
+
+braced_init_list
+    : TOK_LBRACE initializer_list_opt TOK_RBRACE
     ;
 
 initializer_list_opt
@@ -341,6 +357,7 @@ initializer_list
 //local declarations
 local_declaration
     : local_declaration_body TOK_SEMI
+    | TOK_STATIC local_declaration_body TOK_SEMI
     ;
 
 local_declaration_body
@@ -551,7 +568,9 @@ allocation_type
 allocation_suffix_opt
     : /* empty */
     | TOK_LPAREN argument_list_opt TOK_RPAREN
+    | braced_init_list
     | allocation_dimensions
+    | allocation_dimensions braced_init_list
     ;
 
 

@@ -1,0 +1,320 @@
+Program <1:1>
+  VarDecl instances 'int' static init=copy <2:12>
+    init: IntLiteral 0 <2:24>
+  VarDecl limit 'int' static init=brace <3:12>
+    init: InitListExpr 1 item(s) <3:17>
+      IntLiteral 10 <3:18>
+  FunctionDecl helper returns 'int' static declaration <4:12>
+    param: ParamDecl x 'int' <4:23>
+  FunctionDecl helper returns 'int' static <5:12>
+    param: ParamDecl x 'int' <5:23>
+    body: CompoundStmt <5:26>
+      ReturnStmt <6:5>
+        BinaryExpr '*' <6:14>
+          DeclRefExpr x <6:12>
+          IntLiteral 2 <6:16>
+  RecordDecl struct Point <9:1>
+    member: VarDecl x 'int' <10:9>
+    member: VarDecl y 'int' <11:9>
+  RecordDecl class Counter <14:1>
+    member: AccessSpecDecl public <15:1>
+    member: VarDecl total 'int' static <17:16>
+    member: FunctionDecl next returns 'int' static <18:16>
+      body: CompoundStmt <18:23>
+        ExprStmt <19:9>
+          UnaryExpr '++' postfix <19:14>
+            DeclRefExpr total <19:9>
+        ReturnStmt <20:9>
+          DeclRefExpr total <20:16>
+    member: VarDecl start 'int' init=brace <22:9>
+      init: InitListExpr 1 item(s) <22:14>
+        IntLiteral 0 <22:15>
+    member: VarDecl cells 'int' <23:9>
+      dim: IntLiteral 2 <23:15>
+      dim: IntLiteral 3 <23:18>
+  FunctionDecl sumGrid returns 'int' <27:5>
+    param: ParamDecl m 'int' <27:17>
+      dim: <unsized>
+      dim: IntLiteral 3 <27:21>
+    param: ParamDecl rows 'int' <27:29>
+    body: CompoundStmt <27:35>
+      DeclStmt <28:5>
+        VarDecl s 'int' init=brace <28:9>
+          init: InitListExpr 0 item(s) <28:10>
+      ForStmt <29:5>
+        init: DeclStmt <29:10>
+          VarDecl i 'int' init=brace <29:14>
+            init: InitListExpr 1 item(s) <29:15>
+              IntLiteral 0 <29:16>
+        cond: BinaryExpr '<' <29:22>
+          DeclRefExpr i <29:20>
+          DeclRefExpr rows <29:24>
+        inc: UnaryExpr '++' postfix <29:31>
+          DeclRefExpr i <29:30>
+        body: CompoundStmt <29:35>
+          ForStmt <30:9>
+            init: DeclStmt <30:14>
+              VarDecl j 'int' init=copy <30:18>
+                init: IntLiteral 0 <30:22>
+            cond: BinaryExpr '<' <30:27>
+              DeclRefExpr j <30:25>
+              IntLiteral 3 <30:29>
+            inc: UnaryExpr '++' postfix <30:33>
+              DeclRefExpr j <30:32>
+            body: CompoundStmt <30:37>
+              ExprStmt <31:13>
+                AssignExpr '+=' <31:15>
+                  target: DeclRefExpr s <31:13>
+                  value: ArraySubscriptExpr <31:22>
+                    base: ArraySubscriptExpr <31:19>
+                      base: DeclRefExpr m <31:18>
+                      index: DeclRefExpr i <31:20>
+                    index: DeclRefExpr j <31:23>
+      ReturnStmt <34:5>
+        DeclRefExpr s <34:12>
+  FunctionDecl main returns 'int' <37:5>
+    body: CompoundStmt <37:12>
+      DeclStmt <39:5>
+        VarDecl calls 'int' static init=copy <39:16>
+          init: IntLiteral 0 <39:24>
+      DeclStmt <40:5>
+        VarDecl seen 'int' static init=brace <40:16>
+          dim: IntLiteral 4 <40:21>
+          init: InitListExpr 0 item(s) <40:23>
+      ExprStmt <41:5>
+        UnaryExpr '++' postfix <41:10>
+          DeclRefExpr calls <41:5>
+      DeclStmt <44:5>
+        VarDecl a 'int' init=brace <44:9>
+          init: InitListExpr 1 item(s) <44:10>
+            IntLiteral 5 <44:11>
+      DeclStmt <45:5>
+        VarDecl b 'int' init=brace <45:9>
+          init: InitListExpr 0 item(s) <45:10>
+      DeclStmt <46:5>
+        VarDecl arr 'int' init=brace <46:9>
+          dim: IntLiteral 3 <46:13>
+          init: InitListExpr 3 item(s) <46:15>
+            IntLiteral 1 <46:16>
+            IntLiteral 2 <46:19>
+            IntLiteral 3 <46:22>
+      DeclStmt <47:5>
+        VarDecl grid 'int' init=brace <47:9>
+          dim: IntLiteral 2 <47:14>
+          dim: IntLiteral 3 <47:17>
+          init: InitListExpr 2 item(s) <47:19>
+            InitListExpr 3 item(s) <47:20>
+              IntLiteral 1 <47:21>
+              IntLiteral 2 <47:24>
+              IntLiteral 3 <47:27>
+            InitListExpr 3 item(s) <47:31>
+              IntLiteral 4 <47:32>
+              IntLiteral 5 <47:35>
+              IntLiteral 6 <47:38>
+      DeclStmt <48:5>
+        VarDecl word 'char' init=brace <48:10>
+          dim: IntLiteral 3 <48:15>
+          init: InitListExpr 3 item(s) <48:17>
+            CharLiteral 'h' <48:18>
+            CharLiteral 'i' <48:23>
+            CharLiteral '\0' <48:28>
+      DeclStmt <49:5>
+        VarDecl origin 'struct Point' init=brace <49:18>
+          init: InitListExpr 2 item(s) <49:24>
+            IntLiteral 0 <49:25>
+            IntLiteral 0 <49:28>
+      DeclStmt <50:5>
+        VarDecl p 'Point' init=brace <50:11>
+          init: InitListExpr 2 item(s) <50:12>
+            IntLiteral 1 <50:13>
+            IntLiteral 2 <50:16>
+      DeclStmt <51:5>
+        VarDecl q 'Point' init=copy <51:11>
+          init: InitListExpr 2 item(s) <51:15>
+            IntLiteral 3 <51:16>
+            IntLiteral 4 <51:19>
+      DeclStmt <52:5>
+        VarDecl pp 'Point*' init=brace <52:12>
+          init: InitListExpr 1 item(s) <52:14>
+            UnaryExpr '&' prefix <52:15>
+              DeclRefExpr p <52:16>
+      DeclStmt <55:5>
+        VarDecl heap 'int*' init=copy <55:10>
+          init: NewExpr 'int' array+initlist <55:17>
+            dim: IntLiteral 3 <55:25>
+            init: InitListExpr 3 item(s) <55:27>
+              IntLiteral 7 <55:28>
+              IntLiteral 8 <55:31>
+              IntLiteral 9 <55:34>
+      DeclStmt <56:5>
+        VarDecl np 'Point*' init=copy <56:12>
+          init: NewExpr 'Point' initlist <56:17>
+            init: InitListExpr 2 item(s) <56:26>
+              IntLiteral 5 <56:27>
+              IntLiteral 6 <56:30>
+      DeclStmt <57:5>
+        VarDecl m 'int (*)[]' init=copy <57:11>
+          dim: IntLiteral 3 <57:14>
+          init: NewExpr 'int' array+initlist <57:19>
+            dim: IntLiteral 2 <57:27>
+            dim: IntLiteral 3 <57:30>
+            init: InitListExpr 2 item(s) <57:32>
+              InitListExpr 3 item(s) <57:33>
+                IntLiteral 1 <57:34>
+                IntLiteral 2 <57:37>
+                IntLiteral 3 <57:40>
+              InitListExpr 3 item(s) <57:44>
+                IntLiteral 4 <57:45>
+                IntLiteral 5 <57:48>
+                IntLiteral 6 <57:51>
+      DeclStmt <60:5>
+        VarDecl cube 'int' <60:9>
+          dim: IntLiteral 2 <60:14>
+          dim: IntLiteral 2 <60:17>
+          dim: IntLiteral 2 <60:20>
+      ExprStmt <61:5>
+        AssignExpr '=' <61:19>
+          target: ArraySubscriptExpr <61:15>
+            base: ArraySubscriptExpr <61:12>
+              base: ArraySubscriptExpr <61:9>
+                base: DeclRefExpr cube <61:5>
+                index: IntLiteral 1 <61:10>
+              index: IntLiteral 0 <61:13>
+            index: IntLiteral 1 <61:16>
+          value: BinaryExpr '+' <61:32>
+            ArraySubscriptExpr <61:28>
+              base: ArraySubscriptExpr <61:25>
+                base: DeclRefExpr grid <61:21>
+                index: IntLiteral 1 <61:26>
+              index: IntLiteral 2 <61:29>
+            ArraySubscriptExpr <61:38>
+              base: ArraySubscriptExpr <61:35>
+                base: DeclRefExpr m <61:34>
+                index: IntLiteral 0 <61:36>
+              index: IntLiteral 1 <61:39>
+      ExprStmt <62:5>
+        AssignExpr '+=' <62:20>
+          target: ArraySubscriptExpr <62:16>
+            base: ArraySubscriptExpr <62:9>
+              base: DeclRefExpr grid <62:5>
+              index: BinaryExpr '-' <62:12>
+                DeclRefExpr a <62:10>
+                IntLiteral 4 <62:14>
+            index: DeclRefExpr b <62:17>
+          value: ArraySubscriptExpr <62:33>
+            base: ArraySubscriptExpr <62:30>
+              base: ArraySubscriptExpr <62:27>
+                base: DeclRefExpr cube <62:23>
+                index: IntLiteral 0 <62:28>
+              index: IntLiteral 0 <62:31>
+            index: IntLiteral 0 <62:34>
+      ExprStmt <63:5>
+        UnaryExpr '++' postfix <63:12>
+          ArraySubscriptExpr <63:9>
+            base: ArraySubscriptExpr <63:6>
+              base: DeclRefExpr m <63:5>
+              index: IntLiteral 1 <63:7>
+            index: IntLiteral 2 <63:10>
+      ExprStmt <64:5>
+        UnaryExpr '--' prefix <64:5>
+          ArraySubscriptExpr <64:14>
+            base: ArraySubscriptExpr <64:11>
+              base: DeclRefExpr grid <64:7>
+              index: IntLiteral 0 <64:12>
+            index: IntLiteral 0 <64:15>
+      DeclStmt <65:5>
+        VarDecl cell 'int*' init=copy <65:10>
+          init: UnaryExpr '&' prefix <65:17>
+            ArraySubscriptExpr <65:25>
+              base: ArraySubscriptExpr <65:22>
+                base: DeclRefExpr grid <65:18>
+                index: IntLiteral 1 <65:23>
+              index: IntLiteral 1 <65:26>
+      DeclStmt <66:5>
+        VarDecl c 'Counter' <66:13>
+      ExprStmt <67:5>
+        AssignExpr '=' <67:19>
+          target: ArraySubscriptExpr <67:15>
+            base: ArraySubscriptExpr <67:12>
+              base: MemberExpr .cells <67:6>
+                base: DeclRefExpr c <67:5>
+              index: IntLiteral 1 <67:13>
+            index: IntLiteral 2 <67:16>
+          value: IntLiteral 4 <67:21>
+      DeclStmt <68:5>
+        VarDecl cp 'Counter*' init=copy <68:14>
+          init: UnaryExpr '&' prefix <68:19>
+            DeclRefExpr c <68:20>
+      ExprStmt <69:5>
+        AssignExpr '=' <69:21>
+          target: ArraySubscriptExpr <69:17>
+            base: ArraySubscriptExpr <69:14>
+              base: MemberExpr ->cells <69:7>
+                base: DeclRefExpr cp <69:5>
+              index: IntLiteral 0 <69:15>
+            index: IntLiteral 1 <69:18>
+          value: BinaryExpr '*' <69:39>
+            ArraySubscriptExpr <69:35>
+              base: ArraySubscriptExpr <69:32>
+                base: MemberExpr ->cells <69:25>
+                  base: DeclRefExpr cp <69:23>
+                index: IntLiteral 1 <69:33>
+              index: IntLiteral 2 <69:36>
+            IntLiteral 2 <69:41>
+      DeclStmt <70:5>
+        VarDecl total 'int' init=copy <70:9>
+          init: BinaryExpr '+' <70:44>
+            BinaryExpr '+' <70:34>
+              CallExpr 2 arg(s) <70:24>
+                callee: DeclRefExpr sumGrid <70:17>
+                arg: DeclRefExpr grid <70:25>
+                arg: IntLiteral 2 <70:31>
+              ArraySubscriptExpr <70:40>
+                base: DeclRefExpr seen <70:36>
+                index: IntLiteral 0 <70:41>
+            ArraySubscriptExpr <70:49>
+              base: DeclRefExpr arr <70:46>
+              index: ArraySubscriptExpr <70:57>
+                base: ArraySubscriptExpr <70:54>
+                  base: DeclRefExpr grid <70:50>
+                  index: IntLiteral 0 <70:55>
+                index: IntLiteral 0 <70:58>
+      ExprStmt <72:5>
+        DeleteExpr array <72:5>
+          DeclRefExpr heap <72:14>
+      ExprStmt <73:5>
+        DeleteExpr array <73:5>
+          DeclRefExpr m <73:14>
+      ExprStmt <74:5>
+        DeleteExpr <74:5>
+          DeclRefExpr np <74:12>
+      ReturnStmt <75:5>
+        BinaryExpr '+' <75:98>
+          BinaryExpr '+' <75:87>
+            BinaryExpr '+' <75:79>
+              BinaryExpr '+' <75:71>
+                BinaryExpr '+' <75:61>
+                  BinaryExpr '+' <75:50>
+                    BinaryExpr '+' <75:38>
+                      BinaryExpr '+' <75:30>
+                        BinaryExpr '+' <75:18>
+                          DeclRefExpr total <75:12>
+                          DeclRefExpr instances <75:20>
+                        DeclRefExpr limit <75:32>
+                      CallExpr 1 arg(s) <75:46>
+                        callee: DeclRefExpr helper <75:40>
+                        arg: DeclRefExpr a <75:47>
+                    CallExpr 0 arg(s) <75:58>
+                      callee: MemberExpr .next <75:53>
+                        base: DeclRefExpr c <75:52>
+                  ArraySubscriptExpr <75:67>
+                    base: DeclRefExpr word <75:63>
+                    index: IntLiteral 0 <75:68>
+                UnaryExpr '*' prefix <75:73>
+                  DeclRefExpr cell <75:74>
+              MemberExpr ->x <75:83>
+                base: DeclRefExpr pp <75:81>
+            MemberExpr .y <75:95>
+              base: DeclRefExpr origin <75:89>
+          MemberExpr .x <75:101>
+            base: DeclRefExpr q <75:100>

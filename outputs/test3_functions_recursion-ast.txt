@@ -1,0 +1,112 @@
+Program <1:1>
+  FunctionDecl factorial returns 'int' <2:5>
+    param: ParamDecl n 'int' <2:19>
+    body: CompoundStmt <2:22>
+      IfStmt <3:5>
+        cond: BinaryExpr '<=' <3:11>
+          DeclRefExpr n <3:9>
+          IntLiteral 1 <3:14>
+        then: ReturnStmt <3:17>
+          IntLiteral 1 <3:24>
+      ReturnStmt <4:5>
+        BinaryExpr '*' <4:14>
+          DeclRefExpr n <4:12>
+          CallExpr 1 arg(s) <4:25>
+            callee: DeclRefExpr factorial <4:16>
+            arg: BinaryExpr '-' <4:28>
+              DeclRefExpr n <4:26>
+              IntLiteral 1 <4:30>
+  FunctionDecl add returns 'int' <8:5>
+    param: ParamDecl a 'int' <8:13>
+    param: ParamDecl b 'int' <8:20>
+    body: CompoundStmt <8:23>
+      ReturnStmt <9:5>
+        BinaryExpr '+' <9:14>
+          DeclRefExpr a <9:12>
+          DeclRefExpr b <9:16>
+  FunctionDecl twice returns 'int' <12:5>
+    param: ParamDecl x 'int' <12:15>
+    body: CompoundStmt <12:18>
+      ReturnStmt <13:5>
+        BinaryExpr '*' <13:14>
+          DeclRefExpr x <13:12>
+          IntLiteral 2 <13:16>
+  FunctionDecl main returns 'int' <17:5>
+    param: ParamDecl argc 'int' <17:14>
+    param: ParamDecl argv 'char*' <17:26>
+      dim: <unsized>
+    body: CompoundStmt <17:34>
+      DeclStmt <19:5>
+        VarDecl input 'int' <19:9>
+      ExprStmt <20:5>
+        CallExpr 2 arg(s) <20:10>
+          callee: DeclRefExpr scanf <20:5>
+          arg: StringLiteral ""%d"" <20:11>
+          arg: UnaryExpr '&' prefix <20:17>
+            DeclRefExpr input <20:18>
+      DeclStmt <23:5>
+        VarDecl f 'int' init=copy <23:9>
+          init: CallExpr 1 arg(s) <23:22>
+            callee: DeclRefExpr factorial <23:13>
+            arg: DeclRefExpr input <23:23>
+      DeclStmt <24:5>
+        VarDecl s 'int' init=copy <24:9>
+          init: CallExpr 2 arg(s) <24:16>
+            callee: DeclRefExpr add <24:13>
+            arg: DeclRefExpr f <24:17>
+            arg: IntLiteral 10 <24:20>
+      DeclStmt <27:5>
+        VarDecl fp 'int (*)(...)' init=copy <27:11>
+          param: ParamDecl <unnamed> 'int' <27:15>
+          init: DeclRefExpr twice <27:22>
+      ExprStmt <28:5>
+        AssignExpr '=' <28:7>
+          target: DeclRefExpr s <28:5>
+          value: CallExpr 1 arg(s) <28:11>
+            callee: DeclRefExpr fp <28:9>
+            arg: DeclRefExpr s <28:12>
+      DeclStmt <31:5>
+        VarDecl square 'auto' init=copy <31:10>
+          init: LambdaExpr [] <31:19>
+            param: ParamDecl x 'int' <31:26>
+            body: CompoundStmt <31:29>
+              ReturnStmt <31:31>
+                BinaryExpr '*' <31:40>
+                  DeclRefExpr x <31:38>
+                  DeclRefExpr x <31:42>
+      ExprStmt <32:5>
+        AssignExpr '=' <32:7>
+          target: DeclRefExpr s <32:5>
+          value: CallExpr 1 arg(s) <32:15>
+            callee: DeclRefExpr square <32:9>
+            arg: DeclRefExpr s <32:16>
+      DeclStmt <35:5>
+        VarDecl buffer 'int*' init=copy <35:10>
+          init: NewExpr 'int' array <35:19>
+            dim: IntLiteral 10 <35:27>
+      ExprStmt <36:5>
+        AssignExpr '=' <36:15>
+          target: ArraySubscriptExpr <36:11>
+            base: DeclRefExpr buffer <36:5>
+            index: IntLiteral 0 <36:12>
+          value: DeclRefExpr s <36:17>
+      ExprStmt <37:5>
+        DeleteExpr <37:5>
+          DeclRefExpr buffer <37:12>
+      DeclStmt <39:5>
+        VarDecl d 'double*' init=copy <39:13>
+          init: NewExpr 'double' plain <39:17>
+      ExprStmt <40:5>
+        DeleteExpr <40:5>
+          DeclRefExpr d <40:12>
+      ExprStmt <43:5>
+        CallExpr 4 arg(s) <43:11>
+          callee: DeclRefExpr printf <43:5>
+          arg: StringLiteral ""%d %d %s\n"" <43:12>
+          arg: DeclRefExpr s <43:26>
+          arg: DeclRefExpr argc <43:29>
+          arg: ArraySubscriptExpr <43:39>
+            base: DeclRefExpr argv <43:35>
+            index: IntLiteral 0 <43:40>
+      ReturnStmt <44:5>
+        IntLiteral 0 <44:12>

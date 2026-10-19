@@ -1,0 +1,1137 @@
+Program <1:1>
+  RecordDecl struct Point <2:1>
+    member: VarDecl x 'int' <3:9>
+    member: VarDecl y 'int' <4:9>
+  RecordDecl class Foo <8:1>
+    member: AccessSpecDecl public <9:1>
+    member: VarDecl m_id 'int' <10:10>
+    member: FunctionDecl setId returns 'void' <11:10>
+      param: ParamDecl v 'int' <11:20>
+      body: CompoundStmt <11:28>
+        ExprStmt <11:30>
+          AssignExpr '=' <11:41>
+            target: MemberExpr ->m_id <11:34>
+              base: ThisExpr <11:30>
+            value: DeclRefExpr v <11:43>
+    member: FunctionDecl getId returns 'int' <12:10>
+      body: CompoundStmt <12:28>
+        ReturnStmt <12:30>
+          MemberExpr ->m_id <12:41>
+            base: ThisExpr <12:37>
+    member: FunctionDecl setFilled returns 'void' <13:10>
+      param: ParamDecl f 'bool' <13:25>
+      body: CompoundStmt <13:28>
+        ExprStmt <13:30>
+          AssignExpr '=' <13:45>
+            target: MemberExpr ->m_filled <13:34>
+              base: ThisExpr <13:30>
+            value: DeclRefExpr f <13:47>
+    member: FunctionDecl isFilled returns 'bool' <14:10>
+      body: CompoundStmt <14:28>
+        ReturnStmt <14:30>
+          MemberExpr ->m_filled <14:41>
+            base: ThisExpr <14:37>
+    member: AccessSpecDecl protected <15:1>
+    member: VarDecl m_level 'int' <16:10>
+    member: VarDecl m_filled 'bool' <17:10>
+    member: AccessSpecDecl private <18:1>
+    member: VarDecl m_serial 'int' <19:10>
+    member: FunctionDecl checksum returns 'int' <20:10>
+      body: CompoundStmt <20:28>
+        ReturnStmt <20:30>
+          BinaryExpr '+' <20:52>
+            MemberExpr ->m_serial <20:41>
+              base: ThisExpr <20:37>
+            MemberExpr ->m_level <20:58>
+              base: ThisExpr <20:54>
+  RecordDecl class Bar : public Foo <24:1>
+    member: AccessSpecDecl private <25:1>
+    member: VarDecl m_width 'int' <26:9>
+    member: VarDecl m_height 'int' <27:9>
+    member: AccessSpecDecl public <28:1>
+    member: FunctionDecl init returns 'void' <29:10>
+      param: ParamDecl a 'int' <29:19>
+      param: ParamDecl b 'int' <29:26>
+      body: CompoundStmt <29:29>
+        ExprStmt <29:31>
+          AssignExpr '=' <29:45>
+            target: MemberExpr ->m_width <29:35>
+              base: ThisExpr <29:31>
+            value: DeclRefExpr a <29:47>
+        ExprStmt <29:50>
+          AssignExpr '=' <29:65>
+            target: MemberExpr ->m_height <29:54>
+              base: ThisExpr <29:50>
+            value: DeclRefExpr b <29:67>
+    member: FunctionDecl area returns 'int' <30:10>
+      body: CompoundStmt <30:29>
+        ReturnStmt <30:31>
+          BinaryExpr '*' <30:52>
+            MemberExpr ->m_width <30:42>
+              base: ThisExpr <30:38>
+            MemberExpr ->m_height <30:58>
+              base: ThisExpr <30:54>
+    member: FunctionDecl perimeter returns 'int' <31:10>
+      body: CompoundStmt <31:29>
+        ReturnStmt <31:31>
+          BinaryExpr '*' <31:40>
+            IntLiteral 2 <31:38>
+            ParenExpr <31:42>
+              BinaryExpr '+' <31:57>
+                MemberExpr ->m_width <31:47>
+                  base: ThisExpr <31:43>
+                MemberExpr ->m_height <31:63>
+                  base: ThisExpr <31:59>
+  FunctionDecl add returns 'int' <35:5>
+    param: ParamDecl a 'int' <35:13>
+    param: ParamDecl b 'int' <35:20>
+    body: CompoundStmt <35:23>
+      ReturnStmt <36:5>
+        BinaryExpr '+' <36:14>
+          DeclRefExpr a <36:12>
+          DeclRefExpr b <36:16>
+  FunctionDecl gcd returns 'int' <40:5>
+    param: ParamDecl a 'int' <40:13>
+    param: ParamDecl b 'int' <40:20>
+    body: CompoundStmt <40:23>
+      IfStmt <41:5>
+        cond: BinaryExpr '==' <41:11>
+          DeclRefExpr b <41:9>
+          IntLiteral 0 <41:14>
+        then: ReturnStmt <41:17>
+          DeclRefExpr a <41:24>
+      ReturnStmt <42:5>
+        CallExpr 2 arg(s) <42:15>
+          callee: DeclRefExpr gcd <42:12>
+          arg: DeclRefExpr b <42:16>
+          arg: BinaryExpr '%' <42:21>
+            DeclRefExpr a <42:19>
+            DeclRefExpr b <42:23>
+  FunctionDecl factorial returns 'int' <46:5>
+    param: ParamDecl n 'int' <46:19>
+    body: CompoundStmt <46:22>
+      IfStmt <47:5>
+        cond: BinaryExpr '<=' <47:11>
+          DeclRefExpr n <47:9>
+          IntLiteral 1 <47:14>
+        then: ReturnStmt <47:17>
+          IntLiteral 1 <47:24>
+      ReturnStmt <48:5>
+        BinaryExpr '*' <48:14>
+          DeclRefExpr n <48:12>
+          CallExpr 1 arg(s) <48:25>
+            callee: DeclRefExpr factorial <48:16>
+            arg: BinaryExpr '-' <48:28>
+              DeclRefExpr n <48:26>
+              IntLiteral 1 <48:30>
+  FunctionDecl swap returns 'void' <52:6>
+    param: ParamDecl a 'int&' <52:16>
+    param: ParamDecl b 'int&' <52:24>
+    body: CompoundStmt <52:27>
+      DeclStmt <53:5>
+        VarDecl t 'int' init=copy <53:9>
+          init: DeclRefExpr a <53:13>
+      ExprStmt <54:5>
+        AssignExpr '=' <54:7>
+          target: DeclRefExpr a <54:5>
+          value: DeclRefExpr b <54:9>
+      ExprStmt <55:5>
+        AssignExpr '=' <55:7>
+          target: DeclRefExpr b <55:5>
+          value: DeclRefExpr t <55:9>
+  FunctionDecl sumArray returns 'int' <59:5>
+    param: ParamDecl data 'int*' <59:19>
+    param: ParamDecl count 'int' <59:29>
+    body: CompoundStmt <59:36>
+      DeclStmt <60:5>
+        VarDecl total 'int' init=copy <60:9>
+          init: IntLiteral 0 <60:17>
+      DeclStmt <61:5>
+        VarDecl i 'int' <61:9>
+      ForStmt <62:5>
+        init: ExprStmt <62:10>
+          AssignExpr '=' <62:12>
+            target: DeclRefExpr i <62:10>
+            value: IntLiteral 0 <62:14>
+        cond: BinaryExpr '<' <62:19>
+          DeclRefExpr i <62:17>
+          DeclRefExpr count <62:21>
+        inc: UnaryExpr '++' postfix <62:29>
+          DeclRefExpr i <62:28>
+        body: CompoundStmt <62:33>
+          ExprStmt <63:9>
+            AssignExpr '+=' <63:15>
+              target: DeclRefExpr total <63:9>
+              value: ArraySubscriptExpr <63:22>
+                base: DeclRefExpr data <63:18>
+                index: DeclRefExpr i <63:23>
+      ReturnStmt <65:5>
+        DeclRefExpr total <65:12>
+  FunctionDecl addOp returns 'int' <69:5>
+    param: ParamDecl a 'int' <69:15>
+    param: ParamDecl b 'int' <69:22>
+    body: CompoundStmt <69:25>
+      ReturnStmt <69:27>
+        BinaryExpr '+' <69:36>
+          DeclRefExpr a <69:34>
+          DeclRefExpr b <69:38>
+  FunctionDecl mulOp returns 'int' <70:5>
+    param: ParamDecl a 'int' <70:15>
+    param: ParamDecl b 'int' <70:22>
+    body: CompoundStmt <70:25>
+      ReturnStmt <70:27>
+        BinaryExpr '*' <70:36>
+          DeclRefExpr a <70:34>
+          DeclRefExpr b <70:38>
+  FunctionDecl main returns 'int' <73:5>
+    param: ParamDecl argc 'int' <73:14>
+    param: ParamDecl argv 'char*' <73:26>
+      dim: <unsized>
+    body: CompoundStmt <73:34>
+      DeclStmt <75:5>
+        VarDecl mode 'int' init=copy <75:9>
+          init: IntLiteral 1 <75:16>
+      IfStmt <76:5>
+        cond: BinaryExpr '>' <76:14>
+          DeclRefExpr argc <76:9>
+          IntLiteral 1 <76:16>
+        then: CompoundStmt <76:19>
+          ExprStmt <77:9>
+            AssignExpr '=' <77:14>
+              target: DeclRefExpr mode <77:9>
+              value: IntLiteral 2 <77:16>
+      ExprStmt <79:5>
+        CallExpr 3 arg(s) <79:11>
+          callee: DeclRefExpr printf <79:5>
+          arg: StringLiteral ""argc = %d, program = %s\n"" <79:12>
+          arg: DeclRefExpr argc <79:41>
+          arg: ArraySubscriptExpr <79:51>
+            base: DeclRefExpr argv <79:47>
+            index: IntLiteral 0 <79:52>
+      DeclStmt <82:5>
+        VarDecl a 'int' init=copy <82:9>
+          init: IntLiteral 10 <82:13>
+      DeclStmt <83:5>
+        VarDecl b 'int' init=copy <83:9>
+          init: IntLiteral 3 <83:13>
+      DeclStmt <84:5>
+        VarDecl c 'int' <84:9>
+      ExprStmt <86:5>
+        AssignExpr '=' <86:7>
+          target: DeclRefExpr c <86:5>
+          value: BinaryExpr '+' <86:11>
+            DeclRefExpr a <86:9>
+            DeclRefExpr b <86:13>
+      ExprStmt <87:5>
+        AssignExpr '=' <87:7>
+          target: DeclRefExpr c <87:5>
+          value: BinaryExpr '-' <87:11>
+            DeclRefExpr a <87:9>
+            DeclRefExpr b <87:13>
+      ExprStmt <88:5>
+        AssignExpr '=' <88:7>
+          target: DeclRefExpr c <88:5>
+          value: BinaryExpr '*' <88:11>
+            DeclRefExpr a <88:9>
+            DeclRefExpr b <88:13>
+      ExprStmt <89:5>
+        AssignExpr '=' <89:7>
+          target: DeclRefExpr c <89:5>
+          value: BinaryExpr '/' <89:11>
+            DeclRefExpr a <89:9>
+            DeclRefExpr b <89:13>
+      ExprStmt <90:5>
+        AssignExpr '=' <90:7>
+          target: DeclRefExpr c <90:5>
+          value: BinaryExpr '%' <90:11>
+            DeclRefExpr a <90:9>
+            DeclRefExpr b <90:13>
+      ExprStmt <91:5>
+        AssignExpr '=' <91:7>
+          target: DeclRefExpr c <91:5>
+          value: UnaryExpr '-' prefix <91:9>
+            DeclRefExpr a <91:10>
+      ExprStmt <92:5>
+        AssignExpr '=' <92:7>
+          target: DeclRefExpr c <92:5>
+          value: UnaryExpr '+' prefix <92:9>
+            DeclRefExpr a <92:10>
+      ExprStmt <94:5>
+        UnaryExpr '++' postfix <94:6>
+          DeclRefExpr a <94:5>
+      ExprStmt <95:5>
+        UnaryExpr '--' postfix <95:6>
+          DeclRefExpr a <95:5>
+      ExprStmt <96:5>
+        UnaryExpr '++' prefix <96:5>
+          DeclRefExpr a <96:7>
+      ExprStmt <97:5>
+        UnaryExpr '--' prefix <97:5>
+          DeclRefExpr a <97:7>
+      ExprStmt <99:5>
+        AssignExpr '+=' <99:7>
+          target: DeclRefExpr c <99:5>
+          value: DeclRefExpr a <99:10>
+      ExprStmt <100:5>
+        AssignExpr '-=' <100:7>
+          target: DeclRefExpr c <100:5>
+          value: DeclRefExpr a <100:10>
+      ExprStmt <101:5>
+        AssignExpr '*=' <101:7>
+          target: DeclRefExpr c <101:5>
+          value: DeclRefExpr a <101:10>
+      ExprStmt <102:5>
+        AssignExpr '/=' <102:7>
+          target: DeclRefExpr c <102:5>
+          value: DeclRefExpr a <102:10>
+      ExprStmt <103:5>
+        AssignExpr '%=' <103:7>
+          target: DeclRefExpr c <103:5>
+          value: DeclRefExpr a <103:10>
+      DeclStmt <106:5>
+        VarDecl t 'bool' <106:10>
+      ExprStmt <107:5>
+        AssignExpr '=' <107:7>
+          target: DeclRefExpr t <107:5>
+          value: ParenExpr <107:9>
+            BinaryExpr '==' <107:12>
+              DeclRefExpr a <107:10>
+              DeclRefExpr b <107:15>
+      ExprStmt <108:5>
+        AssignExpr '=' <108:7>
+          target: DeclRefExpr t <108:5>
+          value: ParenExpr <108:9>
+            BinaryExpr '!=' <108:12>
+              DeclRefExpr a <108:10>
+              DeclRefExpr b <108:15>
+      ExprStmt <109:5>
+        AssignExpr '=' <109:7>
+          target: DeclRefExpr t <109:5>
+          value: ParenExpr <109:9>
+            BinaryExpr '<' <109:12>
+              DeclRefExpr a <109:10>
+              DeclRefExpr b <109:15>
+      ExprStmt <110:5>
+        AssignExpr '=' <110:7>
+          target: DeclRefExpr t <110:5>
+          value: ParenExpr <110:9>
+            BinaryExpr '>' <110:12>
+              DeclRefExpr a <110:10>
+              DeclRefExpr b <110:15>
+      ExprStmt <111:5>
+        AssignExpr '=' <111:7>
+          target: DeclRefExpr t <111:5>
+          value: ParenExpr <111:9>
+            BinaryExpr '<=' <111:12>
+              DeclRefExpr a <111:10>
+              DeclRefExpr b <111:15>
+      ExprStmt <112:5>
+        AssignExpr '=' <112:7>
+          target: DeclRefExpr t <112:5>
+          value: ParenExpr <112:9>
+            BinaryExpr '>=' <112:12>
+              DeclRefExpr a <112:10>
+              DeclRefExpr b <112:15>
+      ExprStmt <113:5>
+        AssignExpr '=' <113:7>
+          target: DeclRefExpr t <113:5>
+          value: ParenExpr <113:9>
+            BinaryExpr '&&' <113:12>
+              DeclRefExpr a <113:10>
+              DeclRefExpr b <113:15>
+      ExprStmt <114:5>
+        AssignExpr '=' <114:7>
+          target: DeclRefExpr t <114:5>
+          value: ParenExpr <114:9>
+            BinaryExpr '||' <114:12>
+              DeclRefExpr a <114:10>
+              DeclRefExpr b <114:15>
+      ExprStmt <115:5>
+        AssignExpr '=' <115:7>
+          target: DeclRefExpr t <115:5>
+          value: UnaryExpr '!' prefix <115:9>
+            DeclRefExpr t <115:10>
+      ExprStmt <116:5>
+        AssignExpr '=' <116:7>
+          target: DeclRefExpr t <116:5>
+          value: BoolLiteral true <116:9>
+      ExprStmt <117:5>
+        AssignExpr '=' <117:7>
+          target: DeclRefExpr t <117:5>
+          value: BoolLiteral false <117:9>
+      DeclStmt <119:5>
+        VarDecl biggest 'int' init=copy <119:9>
+          init: ConditionalExpr <119:27>
+            cond: ParenExpr <119:19>
+              BinaryExpr '>' <119:22>
+                DeclRefExpr a <119:20>
+                DeclRefExpr b <119:24>
+            true: DeclRefExpr a <119:29>
+            false: DeclRefExpr b <119:33>
+      DeclStmt <122:5>
+        VarDecl mask 'int' <122:9>
+      ExprStmt <123:5>
+        AssignExpr '=' <123:10>
+          target: DeclRefExpr mask <123:5>
+          value: BinaryExpr '&' <123:14>
+            DeclRefExpr a <123:12>
+            DeclRefExpr b <123:16>
+      ExprStmt <124:5>
+        AssignExpr '=' <124:10>
+          target: DeclRefExpr mask <124:5>
+          value: BinaryExpr '|' <124:14>
+            DeclRefExpr a <124:12>
+            DeclRefExpr b <124:16>
+      ExprStmt <125:5>
+        AssignExpr '=' <125:10>
+          target: DeclRefExpr mask <125:5>
+          value: BinaryExpr '^' <125:14>
+            DeclRefExpr a <125:12>
+            DeclRefExpr b <125:16>
+      ExprStmt <126:5>
+        AssignExpr '=' <126:10>
+          target: DeclRefExpr mask <126:5>
+          value: UnaryExpr '~' prefix <126:12>
+            DeclRefExpr a <126:13>
+      ExprStmt <127:5>
+        AssignExpr '=' <127:10>
+          target: DeclRefExpr mask <127:5>
+          value: BinaryExpr '<<' <127:14>
+            DeclRefExpr a <127:12>
+            IntLiteral 2 <127:17>
+      ExprStmt <128:5>
+        AssignExpr '=' <128:10>
+          target: DeclRefExpr mask <128:5>
+          value: BinaryExpr '>>' <128:14>
+            DeclRefExpr a <128:12>
+            IntLiteral 2 <128:17>
+      IfStmt has_else <131:5>
+        cond: BinaryExpr '<' <131:17>
+          DeclRefExpr biggest <131:9>
+          IntLiteral 0 <131:19>
+        then: CompoundStmt <131:22>
+          ExprStmt <132:9>
+            AssignExpr '=' <132:11>
+              target: DeclRefExpr c <132:9>
+              value: IntLiteral 0 <132:13>
+        else: IfStmt has_else <133:12>
+          cond: BinaryExpr '==' <133:24>
+            DeclRefExpr biggest <133:16>
+            IntLiteral 0 <133:27>
+          then: CompoundStmt <133:30>
+            ExprStmt <134:9>
+              AssignExpr '=' <134:11>
+                target: DeclRefExpr c <134:9>
+                value: IntLiteral 1 <134:13>
+          else: CompoundStmt <135:12>
+            ExprStmt <136:9>
+              AssignExpr '=' <136:11>
+                target: DeclRefExpr c <136:9>
+                value: IntLiteral 2 <136:13>
+      DeclStmt <140:5>
+        VarDecl sum 'int' init=copy <140:9>
+          init: IntLiteral 0 <140:15>
+      DeclStmt <141:5>
+        VarDecl i 'int' <141:9>
+      ForStmt <142:5>
+        init: ExprStmt <142:10>
+          AssignExpr '=' <142:12>
+            target: DeclRefExpr i <142:10>
+            value: IntLiteral 0 <142:14>
+        cond: BinaryExpr '<' <142:19>
+          DeclRefExpr i <142:17>
+          IntLiteral 10 <142:21>
+        inc: UnaryExpr '++' postfix <142:26>
+          DeclRefExpr i <142:25>
+        body: CompoundStmt <142:30>
+          ExprStmt <143:9>
+            AssignExpr '+=' <143:13>
+              target: DeclRefExpr sum <143:9>
+              value: DeclRefExpr i <143:16>
+      WhileStmt <147:5>
+        cond: BinaryExpr '>' <147:16>
+          DeclRefExpr sum <147:12>
+          IntLiteral 20 <147:18>
+        body: CompoundStmt <147:22>
+          ExprStmt <148:9>
+            AssignExpr '-=' <148:13>
+              target: DeclRefExpr sum <148:9>
+              value: IntLiteral 1 <148:16>
+      DeclStmt <152:5>
+        VarDecl countdown 'int' init=copy <152:9>
+          init: IntLiteral 3 <152:21>
+      DoStmt <153:5>
+        body: CompoundStmt <153:8>
+          ExprStmt <154:9>
+            UnaryExpr '--' postfix <154:18>
+              DeclRefExpr countdown <154:9>
+        cond: BinaryExpr '>' <155:24>
+          DeclRefExpr countdown <155:14>
+          IntLiteral 0 <155:26>
+      SwitchStmt <158:5>
+        cond: DeclRefExpr mode <158:13>
+        body: CompoundStmt <158:19>
+          CaseStmt <159:9>
+            value: IntLiteral 1 <159:14>
+            ExprStmt <160:13>
+              CallExpr 1 arg(s) <160:19>
+                callee: DeclRefExpr printf <160:13>
+                arg: StringLiteral ""mode: default run\n"" <160:20>
+          BreakStmt <161:13>
+          CaseStmt <162:9>
+            value: IntLiteral 2 <162:14>
+            ExprStmt <163:13>
+              CallExpr 1 arg(s) <163:19>
+                callee: DeclRefExpr printf <163:13>
+                arg: StringLiteral ""mode: arguments supplied\n"" <163:20>
+          BreakStmt <164:13>
+          DefaultStmt <165:9>
+            ExprStmt <166:13>
+              CallExpr 1 arg(s) <166:19>
+                callee: DeclRefExpr printf <166:13>
+                arg: StringLiteral ""mode: unknown\n"" <166:20>
+      DeclStmt <170:5>
+        VarDecl evens 'int' init=copy <170:9>
+          init: IntLiteral 0 <170:17>
+      ForStmt <171:5>
+        init: ExprStmt <171:10>
+          AssignExpr '=' <171:12>
+            target: DeclRefExpr i <171:10>
+            value: IntLiteral 0 <171:14>
+        cond: BinaryExpr '<' <171:19>
+          DeclRefExpr i <171:17>
+          IntLiteral 20 <171:21>
+        inc: UnaryExpr '++' postfix <171:26>
+          DeclRefExpr i <171:25>
+        body: CompoundStmt <171:30>
+          IfStmt <172:9>
+            cond: BinaryExpr '!=' <172:19>
+              BinaryExpr '%' <172:15>
+                DeclRefExpr i <172:13>
+                IntLiteral 2 <172:17>
+              IntLiteral 0 <172:22>
+            then: ContinueStmt <172:25>
+          IfStmt <173:9>
+            cond: BinaryExpr '>' <173:15>
+              DeclRefExpr i <173:13>
+              IntLiteral 12 <173:17>
+            then: BreakStmt <173:21>
+          ExprStmt <174:9>
+            AssignExpr '+=' <174:15>
+              target: DeclRefExpr evens <174:9>
+              value: DeclRefExpr i <174:18>
+      DeclStmt <177:5>
+        VarDecl tries 'int' init=copy <177:9>
+          init: IntLiteral 0 <177:17>
+      LabelStmt retry <178:1>
+        ExprStmt <179:5>
+          UnaryExpr '++' postfix <179:10>
+            DeclRefExpr tries <179:5>
+      IfStmt <180:5>
+        cond: BinaryExpr '<' <180:15>
+          DeclRefExpr tries <180:9>
+          IntLiteral 3 <180:17>
+        then: GotoStmt retry <180:20>
+      DeclStmt <183:5>
+        VarDecl values 'int' <183:9>
+          dim: IntLiteral 8 <183:16>
+      ForStmt <184:5>
+        init: ExprStmt <184:10>
+          AssignExpr '=' <184:12>
+            target: DeclRefExpr i <184:10>
+            value: IntLiteral 0 <184:14>
+        cond: BinaryExpr '<' <184:19>
+          DeclRefExpr i <184:17>
+          IntLiteral 8 <184:21>
+        inc: UnaryExpr '++' postfix <184:25>
+          DeclRefExpr i <184:24>
+        body: CompoundStmt <184:29>
+          ExprStmt <185:9>
+            AssignExpr '=' <185:19>
+              target: ArraySubscriptExpr <185:15>
+                base: DeclRefExpr values <185:9>
+                index: DeclRefExpr i <185:16>
+              value: BinaryExpr '*' <185:29>
+                ParenExpr <185:21>
+                  BinaryExpr '+' <185:24>
+                    DeclRefExpr i <185:22>
+                    IntLiteral 1 <185:26>
+                ParenExpr <185:31>
+                  BinaryExpr '+' <185:34>
+                    DeclRefExpr i <185:32>
+                    IntLiteral 1 <185:36>
+      DeclStmt <187:5>
+        VarDecl squares 'int' init=copy <187:9>
+          init: CallExpr 2 arg(s) <187:27>
+            callee: DeclRefExpr sumArray <187:19>
+            arg: DeclRefExpr values <187:28>
+            arg: IntLiteral 8 <187:36>
+      DeclStmt <189:5>
+        VarDecl label 'char' <189:10>
+          dim: IntLiteral 8 <189:16>
+      ExprStmt <190:5>
+        AssignExpr '=' <190:14>
+          target: ArraySubscriptExpr <190:10>
+            base: DeclRefExpr label <190:5>
+            index: IntLiteral 0 <190:11>
+          value: CharLiteral 'R' <190:16>
+      ExprStmt <191:5>
+        AssignExpr '=' <191:14>
+          target: ArraySubscriptExpr <191:10>
+            base: DeclRefExpr label <191:5>
+            index: IntLiteral 1 <191:11>
+          value: CharLiteral 'E' <191:16>
+      ExprStmt <192:5>
+        AssignExpr '=' <192:14>
+          target: ArraySubscriptExpr <192:10>
+            base: DeclRefExpr label <192:5>
+            index: IntLiteral 2 <192:11>
+          value: CharLiteral 'S' <192:16>
+      ExprStmt <193:5>
+        AssignExpr '=' <193:14>
+          target: ArraySubscriptExpr <193:10>
+            base: DeclRefExpr label <193:5>
+            index: IntLiteral 3 <193:11>
+          value: CharLiteral 'U' <193:16>
+      ExprStmt <194:5>
+        AssignExpr '=' <194:14>
+          target: ArraySubscriptExpr <194:10>
+            base: DeclRefExpr label <194:5>
+            index: IntLiteral 4 <194:11>
+          value: CharLiteral 'L' <194:16>
+      ExprStmt <195:5>
+        AssignExpr '=' <195:14>
+          target: ArraySubscriptExpr <195:10>
+            base: DeclRefExpr label <195:5>
+            index: IntLiteral 5 <195:11>
+          value: CharLiteral 'T' <195:16>
+      ExprStmt <196:5>
+        AssignExpr '=' <196:14>
+          target: ArraySubscriptExpr <196:10>
+            base: DeclRefExpr label <196:5>
+            index: IntLiteral 6 <196:11>
+          value: CharLiteral ':' <196:16>
+      ExprStmt <197:5>
+        AssignExpr '=' <197:14>
+          target: ArraySubscriptExpr <197:10>
+            base: DeclRefExpr label <197:5>
+            index: IntLiteral 7 <197:11>
+          value: CharLiteral '\0' <197:16>
+      DeclStmt <200:5>
+        VarDecl grid 'int' <200:10>
+          dim: IntLiteral 3 <200:15>
+          dim: IntLiteral 3 <200:18>
+      DeclStmt <201:5>
+        VarDecl board 'char' <201:10>
+          dim: IntLiteral 2 <201:16>
+          dim: IntLiteral 2 <201:19>
+      DeclStmt <202:5>
+        VarDecl row 'int' <202:10>
+      DeclStmt <203:5>
+        VarDecl col 'int' <203:10>
+      ForStmt <204:5>
+        init: ExprStmt <204:10>
+          AssignExpr '=' <204:14>
+            target: DeclRefExpr row <204:10>
+            value: IntLiteral 0 <204:16>
+        cond: BinaryExpr '<' <204:23>
+          DeclRefExpr row <204:19>
+          IntLiteral 3 <204:25>
+        inc: UnaryExpr '++' postfix <204:31>
+          DeclRefExpr row <204:28>
+        body: CompoundStmt <204:35>
+          ForStmt <205:9>
+            init: ExprStmt <205:14>
+              AssignExpr '=' <205:18>
+                target: DeclRefExpr col <205:14>
+                value: IntLiteral 0 <205:20>
+            cond: BinaryExpr '<' <205:27>
+              DeclRefExpr col <205:23>
+              IntLiteral 3 <205:29>
+            inc: UnaryExpr '++' postfix <205:35>
+              DeclRefExpr col <205:32>
+            body: CompoundStmt <205:39>
+              ExprStmt <206:13>
+                AssignExpr '=' <206:28>
+                  target: ArraySubscriptExpr <206:22>
+                    base: ArraySubscriptExpr <206:17>
+                      base: DeclRefExpr grid <206:13>
+                      index: DeclRefExpr row <206:18>
+                    index: DeclRefExpr col <206:23>
+                  value: BinaryExpr '+' <206:38>
+                    BinaryExpr '*' <206:34>
+                      DeclRefExpr row <206:30>
+                      IntLiteral 3 <206:36>
+                    DeclRefExpr col <206:40>
+      ExprStmt <209:5>
+        AssignExpr '=' <209:17>
+          target: ArraySubscriptExpr <209:13>
+            base: ArraySubscriptExpr <209:10>
+              base: DeclRefExpr board <209:5>
+              index: IntLiteral 0 <209:11>
+            index: IntLiteral 0 <209:14>
+          value: CharLiteral 'x' <209:19>
+      ExprStmt <210:5>
+        AssignExpr '=' <210:17>
+          target: ArraySubscriptExpr <210:13>
+            base: ArraySubscriptExpr <210:10>
+              base: DeclRefExpr board <210:5>
+              index: IntLiteral 1 <210:11>
+            index: IntLiteral 1 <210:14>
+          value: CharLiteral 'o' <210:19>
+      DeclStmt <211:5>
+        VarDecl trace 'int' init=copy <211:9>
+          init: BinaryExpr '+' <211:41>
+            BinaryExpr '+' <211:28>
+              ArraySubscriptExpr <211:24>
+                base: ArraySubscriptExpr <211:21>
+                  base: DeclRefExpr grid <211:17>
+                  index: IntLiteral 0 <211:22>
+                index: IntLiteral 0 <211:25>
+              ArraySubscriptExpr <211:37>
+                base: ArraySubscriptExpr <211:34>
+                  base: DeclRefExpr grid <211:30>
+                  index: IntLiteral 1 <211:35>
+                index: IntLiteral 1 <211:38>
+            ArraySubscriptExpr <211:50>
+              base: ArraySubscriptExpr <211:47>
+                base: DeclRefExpr grid <211:43>
+                index: IntLiteral 2 <211:48>
+              index: IntLiteral 2 <211:51>
+      DeclStmt <214:5>
+        VarDecl value 'int' init=copy <214:10>
+          init: IntLiteral 99 <214:18>
+      DeclStmt <215:5>
+        VarDecl ptr 'int*' init=copy <215:10>
+          init: UnaryExpr '&' prefix <215:16>
+            DeclRefExpr value <215:17>
+      DeclStmt <216:5>
+        VarDecl read 'int' init=copy <216:10>
+          init: UnaryExpr '*' prefix <216:17>
+            DeclRefExpr ptr <216:18>
+      ExprStmt <217:5>
+        AssignExpr '=' <217:9>
+          target: DeclRefExpr ptr <217:5>
+          value: NullLiteral <217:11>
+      IfStmt <218:5>
+        cond: BinaryExpr '==' <218:13>
+          DeclRefExpr ptr <218:9>
+          NullLiteral <218:16>
+        then: CompoundStmt <218:22>
+          ExprStmt <219:9>
+            CallExpr 1 arg(s) <219:15>
+              callee: DeclRefExpr printf <219:9>
+              arg: StringLiteral ""null pointer check ok\n"" <219:16>
+      DeclStmt <223:5>
+        VarDecl alias 'int&' init=copy <223:10>
+          init: DeclRefExpr value <223:18>
+      ExprStmt <224:5>
+        AssignExpr '=' <224:11>
+          target: DeclRefExpr alias <224:5>
+          value: DeclRefExpr read <224:13>
+      DeclStmt <226:5>
+        VarDecl left 'int' init=copy <226:9>
+          init: IntLiteral 11 <226:17>
+      DeclStmt <227:5>
+        VarDecl right 'int' init=copy <227:9>
+          init: IntLiteral 22 <227:17>
+      ExprStmt <228:5>
+        CallExpr 2 arg(s) <228:9>
+          callee: DeclRefExpr swap <228:5>
+          arg: DeclRefExpr left <228:10>
+          arg: DeclRefExpr right <228:16>
+      DeclStmt <231:5>
+        VarDecl origin 'struct Point' <231:18>
+      ExprStmt <232:5>
+        AssignExpr '=' <232:14>
+          target: MemberExpr .x <232:11>
+            base: DeclRefExpr origin <232:5>
+          value: IntLiteral 0 <232:16>
+      ExprStmt <233:5>
+        AssignExpr '=' <233:14>
+          target: MemberExpr .y <233:11>
+            base: DeclRefExpr origin <233:5>
+          value: IntLiteral 0 <233:16>
+      DeclStmt <235:5>
+        VarDecl pointPtr 'struct Point*' init=copy <235:19>
+          init: UnaryExpr '&' prefix <235:30>
+            DeclRefExpr origin <235:31>
+      ExprStmt <236:5>
+        AssignExpr '=' <236:17>
+          target: MemberExpr ->x <236:13>
+            base: DeclRefExpr pointPtr <236:5>
+          value: IntLiteral 3 <236:19>
+      ExprStmt <237:5>
+        AssignExpr '=' <237:17>
+          target: MemberExpr ->y <237:13>
+            base: DeclRefExpr pointPtr <237:5>
+          value: IntLiteral 4 <237:19>
+      DeclStmt <240:5>
+        VarDecl bar 'Bar' <240:9>
+      ExprStmt <241:5>
+        CallExpr 1 arg(s) <241:14>
+          callee: MemberExpr .setId <241:8>
+            base: DeclRefExpr bar <241:5>
+          arg: IntLiteral 1 <241:15>
+      ExprStmt <242:5>
+        CallExpr 1 arg(s) <242:18>
+          callee: MemberExpr .setFilled <242:8>
+            base: DeclRefExpr bar <242:5>
+          arg: BoolLiteral true <242:19>
+      ExprStmt <243:5>
+        CallExpr 2 arg(s) <243:13>
+          callee: MemberExpr .init <243:8>
+            base: DeclRefExpr bar <243:5>
+          arg: IntLiteral 6 <243:14>
+          arg: IntLiteral 7 <243:17>
+      DeclStmt <244:5>
+        VarDecl rectArea 'int' init=copy <244:9>
+          init: CallExpr 0 arg(s) <244:28>
+            callee: MemberExpr .area <244:23>
+              base: DeclRefExpr bar <244:20>
+      DeclStmt <245:5>
+        VarDecl rectPerim 'int' init=copy <245:9>
+          init: CallExpr 0 arg(s) <245:34>
+            callee: MemberExpr .perimeter <245:24>
+              base: DeclRefExpr bar <245:21>
+      DeclStmt <248:5>
+        VarDecl barPtr 'Bar*' init=copy <248:10>
+          init: NewExpr 'Bar' plain <248:19>
+      ExprStmt <249:5>
+        CallExpr 1 arg(s) <249:18>
+          callee: MemberExpr ->setId <249:11>
+            base: DeclRefExpr barPtr <249:5>
+          arg: IntLiteral 2 <249:19>
+      ExprStmt <250:5>
+        CallExpr 2 arg(s) <250:17>
+          callee: MemberExpr ->init <250:11>
+            base: DeclRefExpr barPtr <250:5>
+          arg: IntLiteral 10 <250:18>
+          arg: IntLiteral 20 <250:22>
+      DeclStmt <251:5>
+        VarDecl heapArea 'int' init=copy <251:9>
+          init: CallExpr 0 arg(s) <251:32>
+            callee: MemberExpr ->area <251:26>
+              base: DeclRefExpr barPtr <251:20>
+      ExprStmt <252:5>
+        DeleteExpr <252:5>
+          DeclRefExpr barPtr <252:12>
+      DeclStmt <254:5>
+        VarDecl heapData 'int*' init=copy <254:10>
+          init: NewExpr 'int' array <254:21>
+            dim: IntLiteral 5 <254:29>
+      ForStmt <255:5>
+        init: ExprStmt <255:10>
+          AssignExpr '=' <255:12>
+            target: DeclRefExpr i <255:10>
+            value: IntLiteral 0 <255:14>
+        cond: BinaryExpr '<' <255:19>
+          DeclRefExpr i <255:17>
+          IntLiteral 5 <255:21>
+        inc: UnaryExpr '++' postfix <255:25>
+          DeclRefExpr i <255:24>
+        body: CompoundStmt <255:29>
+          ExprStmt <256:9>
+            AssignExpr '=' <256:21>
+              target: ArraySubscriptExpr <256:17>
+                base: DeclRefExpr heapData <256:9>
+                index: DeclRefExpr i <256:18>
+              value: BinaryExpr '*' <256:25>
+                DeclRefExpr i <256:23>
+                IntLiteral 3 <256:27>
+      DeclStmt <258:5>
+        VarDecl heapSum 'int' init=copy <258:9>
+          init: CallExpr 2 arg(s) <258:27>
+            callee: DeclRefExpr sumArray <258:19>
+            arg: DeclRefExpr heapData <258:28>
+            arg: IntLiteral 5 <258:38>
+      ExprStmt <259:5>
+        DeleteExpr <259:5>
+          DeclRefExpr heapData <259:12>
+      DeclStmt <262:5>
+        VarDecl cube 'auto' init=copy <262:10>
+          init: LambdaExpr [] <262:17>
+            param: ParamDecl v 'int' <262:24>
+            body: CompoundStmt <262:27>
+              ReturnStmt <262:29>
+                BinaryExpr '*' <262:42>
+                  BinaryExpr '*' <262:38>
+                    DeclRefExpr v <262:36>
+                    DeclRefExpr v <262:40>
+                  DeclRefExpr v <262:44>
+      DeclStmt <265:5>
+        VarDecl byValue 'auto' init=copy <265:10>
+          init: LambdaExpr [squares] <265:22>
+            param: ParamDecl v 'int' <265:36>
+            body: CompoundStmt <265:39>
+              ReturnStmt <265:41>
+                BinaryExpr '+' <265:50>
+                  DeclRefExpr v <265:48>
+                  DeclRefExpr squares <265:52>
+      DeclStmt <266:5>
+        VarDecl byRef 'auto' init=copy <266:10>
+          init: LambdaExpr [&squares] <266:22>
+            param: ParamDecl v 'int' <266:37>
+            body: CompoundStmt <266:40>
+              ReturnStmt <266:42>
+                BinaryExpr '+' <266:51>
+                  DeclRefExpr v <266:49>
+                  DeclRefExpr squares <266:53>
+      DeclStmt <267:5>
+        VarDecl allValue 'auto' init=copy <267:10>
+          init: LambdaExpr [=] <267:22>
+            param: ParamDecl v 'int' <267:30>
+            body: CompoundStmt <267:33>
+              ReturnStmt <267:35>
+                BinaryExpr '+' <267:44>
+                  DeclRefExpr v <267:42>
+                  DeclRefExpr squares <267:46>
+      DeclStmt <268:5>
+        VarDecl allRef 'auto' init=copy <268:10>
+          init: LambdaExpr [&] <268:22>
+            param: ParamDecl v 'int' <268:30>
+            body: CompoundStmt <268:33>
+              ReturnStmt <268:35>
+                BinaryExpr '+' <268:44>
+                  DeclRefExpr v <268:42>
+                  DeclRefExpr squares <268:46>
+      DeclStmt <269:5>
+        VarDecl mixed 'auto' init=copy <269:10>
+          init: LambdaExpr [squares, &trace] <269:22>
+            param: ParamDecl v 'int' <269:44>
+            body: CompoundStmt <269:47>
+              ReturnStmt <269:49>
+                BinaryExpr '+' <269:68>
+                  BinaryExpr '+' <269:58>
+                    DeclRefExpr v <269:56>
+                    DeclRefExpr squares <269:60>
+                  DeclRefExpr trace <269:70>
+      DeclStmt <270:5>
+        VarDecl cubed 'int' init=copy <270:9>
+          init: CallExpr 1 arg(s) <270:21>
+            callee: DeclRefExpr cube <270:17>
+            arg: IntLiteral 4 <270:22>
+      DeclStmt <273:5>
+        VarDecl binaryOp 'int (*)(...)' init=copy <273:11>
+          param: ParamDecl <unnamed> 'int' <273:21>
+          param: ParamDecl <unnamed> 'int' <273:26>
+          init: DeclRefExpr addOp <273:33>
+      DeclStmt <274:5>
+        VarDecl combined 'int' init=copy <274:9>
+          init: CallExpr 2 arg(s) <274:28>
+            callee: DeclRefExpr binaryOp <274:20>
+            arg: DeclRefExpr left <274:29>
+            arg: DeclRefExpr right <274:35>
+      ExprStmt <275:5>
+        AssignExpr '=' <275:14>
+          target: DeclRefExpr binaryOp <275:5>
+          value: DeclRefExpr mulOp <275:16>
+      ExprStmt <276:5>
+        AssignExpr '=' <276:14>
+          target: DeclRefExpr combined <276:5>
+          value: BinaryExpr '+' <276:25>
+            DeclRefExpr combined <276:16>
+            CallExpr 2 arg(s) <276:35>
+              callee: DeclRefExpr binaryOp <276:27>
+              arg: IntLiteral 2 <276:36>
+              arg: IntLiteral 5 <276:39>
+      DeclStmt <279:5>
+        VarDecl g 'int' init=copy <279:9>
+          init: CallExpr 2 arg(s) <279:16>
+            callee: DeclRefExpr gcd <279:13>
+            arg: IntLiteral 48 <279:17>
+            arg: IntLiteral 18 <279:21>
+      DeclStmt <280:5>
+        VarDecl f 'int' init=copy <280:9>
+          init: CallExpr 1 arg(s) <280:22>
+            callee: DeclRefExpr factorial <280:13>
+            arg: IntLiteral 6 <280:23>
+      DeclStmt <281:5>
+        VarDecl both 'int' init=copy <281:9>
+          init: CallExpr 2 arg(s) <281:19>
+            callee: DeclRefExpr add <281:16>
+            arg: DeclRefExpr g <281:20>
+            arg: DeclRefExpr f <281:23>
+      DeclStmt <284:5>
+        VarDecl typed 'int' init=copy <284:9>
+          init: IntLiteral 0 <284:17>
+      ExprStmt <285:5>
+        CallExpr 1 arg(s) <285:11>
+          callee: DeclRefExpr printf <285:5>
+          arg: StringLiteral ""enter a number: "" <285:12>
+      ExprStmt <286:5>
+        CallExpr 2 arg(s) <286:10>
+          callee: DeclRefExpr scanf <286:5>
+          arg: StringLiteral ""%d"" <286:11>
+          arg: UnaryExpr '&' prefix <286:17>
+            DeclRefExpr typed <286:18>
+      ExprStmt <287:5>
+        CallExpr 3 arg(s) <287:11>
+          callee: DeclRefExpr printf <287:5>
+          arg: StringLiteral ""you typed %d, doubled %d\n"" <287:12>
+          arg: DeclRefExpr typed <287:42>
+          arg: BinaryExpr '*' <287:55>
+            DeclRefExpr typed <287:49>
+            IntLiteral 2 <287:57>
+      DeclStmt <290:5>
+        VarDecl decNum 'int' init=copy <290:12>
+          init: IntLiteral 42 <290:23>
+      DeclStmt <291:5>
+        VarDecl hexNum 'int' init=copy <291:12>
+          init: IntLiteral 0x1F <291:23>
+      DeclStmt <292:5>
+        VarDecl octNum 'int' init=copy <292:12>
+          init: IntLiteral 0755 <292:23>
+      DeclStmt <293:5>
+        VarDecl binNum 'int' init=copy <293:12>
+          init: IntLiteral 0b1010 <293:23>
+      DeclStmt <295:5>
+        VarDecl pi 'float' init=copy <295:12>
+          init: FloatLiteral 3.14 <295:23>
+      DeclStmt <296:5>
+        VarDecl tiny 'float' init=copy <296:12>
+          init: FloatLiteral 1.5e-3 <296:23>
+      DeclStmt <297:5>
+        VarDecl half 'double' init=copy <297:12>
+          init: FloatLiteral .5 <297:23>
+      DeclStmt <298:5>
+        VarDecl two 'double' init=copy <298:12>
+          init: FloatLiteral 2. <298:23>
+      DeclStmt <299:5>
+        VarDecl huge 'double' init=copy <299:12>
+          init: FloatLiteral 1e10 <299:23>
+      DeclStmt <301:5>
+        VarDecl letter 'char' init=copy <301:12>
+          init: CharLiteral 'a' <301:23>
+      DeclStmt <302:5>
+        VarDecl newline 'char' init=copy <302:12>
+          init: CharLiteral '\n' <302:23>
+      DeclStmt <303:5>
+        VarDecl tab 'char' init=copy <303:12>
+          init: CharLiteral '\t' <303:23>
+      DeclStmt <304:5>
+        VarDecl quote 'char' init=copy <304:12>
+          init: CharLiteral '\'' <304:23>
+      DeclStmt <305:5>
+        VarDecl slash 'char' init=copy <305:12>
+          init: CharLiteral '\\' <305:23>
+      DeclStmt <306:5>
+        VarDecl hexChar 'char' init=copy <306:12>
+          init: CharLiteral '\x41' <306:23>
+      DeclStmt <307:5>
+        VarDecl nul 'char' init=copy <307:12>
+          init: CharLiteral '\0' <307:23>
+      DeclStmt <309:5>
+        VarDecl greeting 'char*' init=copy <309:12>
+          init: StringLiteral ""hello world"" <309:23>
+      DeclStmt <310:5>
+        VarDecl escaped 'char*' init=copy <310:12>
+          init: StringLiteral ""tab\there, newline\n, quote \", slash \\"" <310:23>
+      DeclStmt <311:5>
+        VarDecl tricky 'char*' init=copy <311:12>
+          init: StringLiteral ""not a comment: /* nor this */ // nor this"" <311:23>
+      DeclStmt <312:5>
+        VarDecl empty 'char*' init=copy <312:12>
+          init: StringLiteral """" <312:23>
+      DeclStmt <314:5>
+        VarDecl yes 'bool' init=copy <314:12>
+          init: BoolLiteral true <314:23>
+      DeclStmt <315:5>
+        VarDecl no 'bool' init=copy <315:12>
+          init: BoolLiteral false <315:23>
+      ExprStmt <318:5>
+        CallExpr 6 arg(s) <318:11>
+          callee: DeclRefExpr printf <318:5>
+          arg: StringLiteral ""%s squares=%d trace=%d evens=%d tries=%d\n"" <318:12>
+          arg: DeclRefExpr label <319:12>
+          arg: DeclRefExpr squares <319:19>
+          arg: DeclRefExpr trace <319:28>
+          arg: DeclRefExpr evens <319:35>
+          arg: DeclRefExpr tries <319:42>
+      ExprStmt <320:5>
+        CallExpr 6 arg(s) <320:11>
+          callee: DeclRefExpr printf <320:5>
+          arg: StringLiteral ""swapped=%d,%d alias=%d point=(%d,%d)\n"" <320:12>
+          arg: DeclRefExpr left <321:12>
+          arg: DeclRefExpr right <321:18>
+          arg: DeclRefExpr alias <321:25>
+          arg: MemberExpr .x <321:38>
+            base: DeclRefExpr origin <321:32>
+          arg: MemberExpr .y <321:48>
+            base: DeclRefExpr origin <321:42>
+      ExprStmt <322:5>
+        CallExpr 5 arg(s) <322:11>
+          callee: DeclRefExpr printf <322:5>
+          arg: StringLiteral ""rect area=%d perim=%d heap area=%d heap sum=%d\n"" <322:12>
+          arg: DeclRefExpr rectArea <323:12>
+          arg: DeclRefExpr rectPerim <323:22>
+          arg: DeclRefExpr heapArea <323:33>
+          arg: DeclRefExpr heapSum <323:43>
+      ExprStmt <324:5>
+        CallExpr 6 arg(s) <324:11>
+          callee: DeclRefExpr printf <324:5>
+          arg: StringLiteral ""cubed=%d combined=%d gcd=%d fact=%d both=%d\n"" <324:12>
+          arg: DeclRefExpr cubed <325:12>
+          arg: DeclRefExpr combined <325:19>
+          arg: DeclRefExpr g <325:29>
+          arg: DeclRefExpr f <325:32>
+          arg: DeclRefExpr both <325:35>
+      ExprStmt <326:5>
+        CallExpr 6 arg(s) <326:11>
+          callee: DeclRefExpr printf <326:5>
+          arg: StringLiteral ""mask=%d biggest=%d countdown=%d c=%d t=%d\n"" <326:12>
+          arg: DeclRefExpr mask <327:12>
+          arg: DeclRefExpr biggest <327:18>
+          arg: DeclRefExpr countdown <327:27>
+          arg: DeclRefExpr c <327:38>
+          arg: DeclRefExpr t <327:41>
+      ExprStmt <328:5>
+        CallExpr 10 arg(s) <328:11>
+          callee: DeclRefExpr printf <328:5>
+          arg: StringLiteral ""literals %d %d %d %d %f %f %f %f %f\n"" <328:12>
+          arg: DeclRefExpr decNum <329:12>
+          arg: DeclRefExpr hexNum <329:20>
+          arg: DeclRefExpr octNum <329:28>
+          arg: DeclRefExpr binNum <329:36>
+          arg: DeclRefExpr pi <329:44>
+          arg: DeclRefExpr tiny <329:48>
+          arg: DeclRefExpr half <329:54>
+          arg: DeclRefExpr two <329:60>
+          arg: DeclRefExpr huge <329:65>
+      ExprStmt <330:5>
+        CallExpr 8 arg(s) <330:11>
+          callee: DeclRefExpr printf <330:5>
+          arg: StringLiteral ""chars %c%c%c%c%c%c%c\n"" <330:12>
+          arg: DeclRefExpr letter <331:12>
+          arg: DeclRefExpr newline <331:20>
+          arg: DeclRefExpr tab <331:29>
+          arg: DeclRefExpr quote <331:34>
+          arg: DeclRefExpr slash <331:41>
+          arg: DeclRefExpr hexChar <331:48>
+          arg: DeclRefExpr nul <331:57>
+      ExprStmt <332:5>
+        CallExpr 5 arg(s) <332:11>
+          callee: DeclRefExpr printf <332:5>
+          arg: StringLiteral ""strings %s %s %s %s\n"" <332:12>
+          arg: DeclRefExpr greeting <332:37>
+          arg: DeclRefExpr escaped <332:47>
+          arg: DeclRefExpr tricky <332:56>
+          arg: DeclRefExpr empty <332:64>
+      ExprStmt <333:5>
+        CallExpr 5 arg(s) <333:11>
+          callee: DeclRefExpr printf <333:5>
+          arg: StringLiteral ""bools %d %d board %c%c\n"" <333:12>
+          arg: DeclRefExpr yes <333:40>
+          arg: DeclRefExpr no <333:45>
+          arg: ArraySubscriptExpr <333:57>
+            base: ArraySubscriptExpr <333:54>
+              base: DeclRefExpr board <333:49>
+              index: IntLiteral 0 <333:55>
+            index: IntLiteral 0 <333:58>
+          arg: ArraySubscriptExpr <333:70>
+            base: ArraySubscriptExpr <333:67>
+              base: DeclRefExpr board <333:62>
+              index: IntLiteral 1 <333:68>
+            index: IntLiteral 1 <333:71>
+      ReturnStmt <335:5>
+        IntLiteral 0 <335:12>

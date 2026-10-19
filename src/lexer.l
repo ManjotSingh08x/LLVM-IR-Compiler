@@ -42,13 +42,13 @@ static std::string g_strBuf;
 static int addToken(int id) {
     //the semantic value of every token is its position in g_tokens, which lets
     //the parser record a declared type against the right entry
-    yylval = (int)g_tokens.size();
+    yylval.tok = (int)g_tokens.size();
     g_tokens.push_back({ std::string(yytext), id, tokLine, std::string() });
     return id;
 }
 
 static int addTokenText(const std::string &text, int id) {
-    yylval = (int)g_tokens.size();
+    yylval.tok = (int)g_tokens.size();
     g_tokens.push_back({ text, id, tokLine, std::string() });
     return id;
 }

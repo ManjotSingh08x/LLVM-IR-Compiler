@@ -1,0 +1,105 @@
+Program <1:1>
+  FunctionDecl main returns 'int' <1:5>
+    body: CompoundStmt <1:12>
+      DeclStmt <3:5>
+        VarDecl dec 'int' init=copy <3:9>
+          init: IntLiteral 42 <3:15>
+      DeclStmt <4:5>
+        VarDecl hex 'int' init=copy <4:9>
+          init: IntLiteral 0x1F <4:15>
+      DeclStmt <5:5>
+        VarDecl oct 'int' init=copy <5:9>
+          init: IntLiteral 0755 <5:15>
+      DeclStmt <6:5>
+        VarDecl bin 'int' init=copy <6:9>
+          init: IntLiteral 0b1010 <6:15>
+      DeclStmt <9:5>
+        VarDecl f1 'float' init=copy <9:12>
+          init: FloatLiteral 3.14 <9:17>
+      DeclStmt <10:5>
+        VarDecl f2 'float' init=copy <10:12>
+          init: FloatLiteral 1.5e-3 <10:17>
+      DeclStmt <11:5>
+        VarDecl d1 'double' init=copy <11:12>
+          init: FloatLiteral .5 <11:17>
+      DeclStmt <12:5>
+        VarDecl d2 'double' init=copy <12:12>
+          init: FloatLiteral 2. <12:17>
+      DeclStmt <13:5>
+        VarDecl d3 'double' init=copy <13:12>
+          init: FloatLiteral 1e10 <13:17>
+      DeclStmt <16:5>
+        VarDecl c1 'char' init=copy <16:10>
+          init: CharLiteral 'a' <16:15>
+      DeclStmt <17:5>
+        VarDecl c2 'char' init=copy <17:10>
+          init: CharLiteral '\n' <17:15>
+      DeclStmt <18:5>
+        VarDecl c3 'char' init=copy <18:10>
+          init: CharLiteral '\t' <18:15>
+      DeclStmt <19:5>
+        VarDecl c4 'char' init=copy <19:10>
+          init: CharLiteral '\'' <19:15>
+      DeclStmt <20:5>
+        VarDecl c5 'char' init=copy <20:10>
+          init: CharLiteral '\\' <20:15>
+      DeclStmt <21:5>
+        VarDecl c6 'char' init=copy <21:10>
+          init: CharLiteral '\x41' <21:15>
+      DeclStmt <22:5>
+        VarDecl c7 'char' init=copy <22:10>
+          init: CharLiteral '\0' <22:15>
+      DeclStmt <25:5>
+        VarDecl s1 'char*' init=copy <25:11>
+          init: StringLiteral ""hello world"" <25:16>
+      DeclStmt <26:5>
+        VarDecl s2 'char*' init=copy <26:11>
+          init: StringLiteral ""tab\there and newline\n"" <26:16>
+      DeclStmt <27:5>
+        VarDecl s3 'char*' init=copy <27:11>
+          init: StringLiteral ""quote \" and backslash \\ inside"" <27:16>
+      DeclStmt <28:5>
+        VarDecl s4 'char*' init=copy <28:11>
+          init: StringLiteral ""not a comment: /* nor this */ // nor this"" <28:16>
+      DeclStmt <29:5>
+        VarDecl s5 'char*' init=copy <29:11>
+          init: StringLiteral """" <29:16>
+      DeclStmt <32:5>
+        VarDecl yes 'bool' init=copy <32:10>
+          init: BoolLiteral true <32:16>
+      DeclStmt <33:5>
+        VarDecl no 'bool' init=copy <33:10>
+          init: BoolLiteral false <33:16>
+      SwitchStmt <36:5>
+        cond: DeclRefExpr dec <36:13>
+        body: CompoundStmt <36:18>
+          CaseStmt <37:9>
+            value: IntLiteral 1 <37:14>
+            ExprStmt <38:13>
+              AssignExpr '=' <38:17>
+                target: DeclRefExpr dec <38:13>
+                value: IntLiteral 100 <38:19>
+          BreakStmt <39:13>
+          CaseStmt <40:9>
+            value: IntLiteral 2 <40:14>
+            ExprStmt <41:13>
+              AssignExpr '=' <41:17>
+                target: DeclRefExpr dec <41:13>
+                value: IntLiteral 200 <41:19>
+          BreakStmt <42:13>
+          CaseStmt <43:9>
+            value: IntLiteral 3 <43:14>
+            CaseStmt <44:9>
+              value: IntLiteral 4 <44:14>
+              ExprStmt <45:13>
+                AssignExpr '=' <45:17>
+                  target: DeclRefExpr dec <45:13>
+                  value: IntLiteral 300 <45:19>
+          BreakStmt <46:13>
+          DefaultStmt <47:9>
+            ExprStmt <48:13>
+              AssignExpr '=' <48:17>
+                target: DeclRefExpr dec <48:13>
+                value: IntLiteral 0 <48:19>
+      ReturnStmt <51:5>
+        IntLiteral 0 <51:12>

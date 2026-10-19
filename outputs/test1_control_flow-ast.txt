@@ -1,0 +1,269 @@
+Program <1:1>
+  FunctionDecl classify returns 'int' <2:5>
+    param: ParamDecl n 'int' <2:18>
+    body: CompoundStmt <2:21>
+      IfStmt has_else <3:5>
+        cond: BinaryExpr '<' <3:11>
+          DeclRefExpr n <3:9>
+          IntLiteral 0 <3:13>
+        then: CompoundStmt <3:16>
+          ReturnStmt <4:9>
+            UnaryExpr '-' prefix <4:16>
+              IntLiteral 1 <4:17>
+        else: IfStmt has_else <5:12>
+          cond: BinaryExpr '==' <5:18>
+            DeclRefExpr n <5:16>
+            IntLiteral 0 <5:21>
+          then: CompoundStmt <5:24>
+            ReturnStmt <6:9>
+              IntLiteral 0 <6:16>
+          else: CompoundStmt <7:12>
+            ReturnStmt <8:9>
+              IntLiteral 1 <8:16>
+  FunctionDecl main returns 'int' <12:5>
+    body: CompoundStmt <12:12>
+      DeclStmt <14:5>
+        VarDecl a 'int' init=copy <14:9>
+          init: IntLiteral 10 <14:13>
+        VarDecl b 'int' init=copy <14:17>
+          init: IntLiteral 3 <14:21>
+        VarDecl c 'int' <14:24>
+      DeclStmt <15:5>
+        VarDecl t 'bool' <15:10>
+      ExprStmt <17:5>
+        AssignExpr '=' <17:6>
+          target: DeclRefExpr c <17:5>
+          value: BinaryExpr '+' <17:9>
+            DeclRefExpr a <17:8>
+            DeclRefExpr b <17:10>
+      ExprStmt <17:15>
+        AssignExpr '=' <17:16>
+          target: DeclRefExpr c <17:15>
+          value: BinaryExpr '-' <17:19>
+            DeclRefExpr a <17:17>
+            DeclRefExpr b <17:20>
+      ExprStmt <18:5>
+        AssignExpr '=' <18:6>
+          target: DeclRefExpr c <18:5>
+          value: BinaryExpr '*' <18:8>
+            DeclRefExpr a <18:7>
+            DeclRefExpr b <18:10>
+      ExprStmt <19:5>
+        AssignExpr '=' <19:7>
+          target: DeclRefExpr c <19:5>
+          value: BinaryExpr '/' <19:11>
+            DeclRefExpr a <19:9>
+            DeclRefExpr b <19:13>
+      ExprStmt <19:18>
+        AssignExpr '=' <19:20>
+          target: DeclRefExpr c <19:18>
+          value: BinaryExpr '%' <19:24>
+            DeclRefExpr a <19:22>
+            DeclRefExpr b <19:26>
+      ExprStmt <21:5>
+        AssignExpr '+=' <21:7>
+          target: DeclRefExpr c <21:5>
+          value: DeclRefExpr a <21:10>
+      ExprStmt <21:14>
+        AssignExpr '-=' <21:16>
+          target: DeclRefExpr c <21:14>
+          value: DeclRefExpr a <21:19>
+      ExprStmt <21:23>
+        AssignExpr '*=' <21:25>
+          target: DeclRefExpr c <21:23>
+          value: DeclRefExpr a <21:28>
+      ExprStmt <21:32>
+        AssignExpr '/=' <21:34>
+          target: DeclRefExpr c <21:32>
+          value: DeclRefExpr a <21:37>
+      ExprStmt <21:41>
+        AssignExpr '%=' <21:43>
+          target: DeclRefExpr c <21:41>
+          value: DeclRefExpr a <21:46>
+      ExprStmt <23:5>
+        UnaryExpr '++' postfix <23:6>
+          DeclRefExpr a <23:5>
+      ExprStmt <23:11>
+        UnaryExpr '--' postfix <23:12>
+          DeclRefExpr a <23:11>
+      ExprStmt <23:17>
+        UnaryExpr '++' prefix <23:17>
+          DeclRefExpr a <23:19>
+      ExprStmt <23:23>
+        UnaryExpr '--' prefix <23:23>
+          DeclRefExpr a <23:25>
+      ExprStmt <26:5>
+        AssignExpr '=' <26:7>
+          target: DeclRefExpr t <26:5>
+          value: ParenExpr <26:9>
+            BinaryExpr '==' <26:12>
+              DeclRefExpr a <26:10>
+              DeclRefExpr b <26:15>
+      ExprStmt <26:20>
+        AssignExpr '=' <26:22>
+          target: DeclRefExpr t <26:20>
+          value: ParenExpr <26:24>
+            BinaryExpr '!=' <26:27>
+              DeclRefExpr a <26:25>
+              DeclRefExpr b <26:30>
+      ExprStmt <27:5>
+        AssignExpr '=' <27:7>
+          target: DeclRefExpr t <27:5>
+          value: ParenExpr <27:9>
+            BinaryExpr '<' <27:12>
+              DeclRefExpr a <27:10>
+              DeclRefExpr b <27:15>
+      ExprStmt <27:20>
+        AssignExpr '=' <27:22>
+          target: DeclRefExpr t <27:20>
+          value: ParenExpr <27:24>
+            BinaryExpr '>' <27:27>
+              DeclRefExpr a <27:25>
+              DeclRefExpr b <27:30>
+      ExprStmt <28:5>
+        AssignExpr '=' <28:7>
+          target: DeclRefExpr t <28:5>
+          value: ParenExpr <28:9>
+            BinaryExpr '<=' <28:12>
+              DeclRefExpr a <28:10>
+              DeclRefExpr b <28:15>
+      ExprStmt <28:20>
+        AssignExpr '=' <28:22>
+          target: DeclRefExpr t <28:20>
+          value: ParenExpr <28:24>
+            BinaryExpr '>=' <28:27>
+              DeclRefExpr a <28:25>
+              DeclRefExpr b <28:30>
+      ExprStmt <29:5>
+        AssignExpr '=' <29:7>
+          target: DeclRefExpr t <29:5>
+          value: ParenExpr <29:9>
+            BinaryExpr '&&' <29:12>
+              DeclRefExpr a <29:10>
+              DeclRefExpr b <29:15>
+      ExprStmt <29:20>
+        AssignExpr '=' <29:22>
+          target: DeclRefExpr t <29:20>
+          value: ParenExpr <29:24>
+            BinaryExpr '||' <29:27>
+              DeclRefExpr a <29:25>
+              DeclRefExpr b <29:30>
+      ExprStmt <29:35>
+        AssignExpr '=' <29:37>
+          target: DeclRefExpr t <29:35>
+          value: UnaryExpr '!' prefix <29:39>
+            DeclRefExpr a <29:40>
+      ExprStmt <32:5>
+        AssignExpr '=' <32:7>
+          target: DeclRefExpr c <32:5>
+          value: BinaryExpr '&' <32:11>
+            DeclRefExpr a <32:9>
+            DeclRefExpr b <32:13>
+      ExprStmt <32:18>
+        AssignExpr '=' <32:20>
+          target: DeclRefExpr c <32:18>
+          value: BinaryExpr '|' <32:24>
+            DeclRefExpr a <32:22>
+            DeclRefExpr b <32:26>
+      ExprStmt <32:31>
+        AssignExpr '=' <32:33>
+          target: DeclRefExpr c <32:31>
+          value: BinaryExpr '^' <32:37>
+            DeclRefExpr a <32:35>
+            DeclRefExpr b <32:39>
+      ExprStmt <33:5>
+        AssignExpr '=' <33:7>
+          target: DeclRefExpr c <33:5>
+          value: UnaryExpr '~' prefix <33:9>
+            DeclRefExpr a <33:10>
+      ExprStmt <33:18>
+        AssignExpr '=' <33:20>
+          target: DeclRefExpr c <33:18>
+          value: BinaryExpr '<<' <33:24>
+            DeclRefExpr a <33:22>
+            IntLiteral 2 <33:27>
+      ExprStmt <33:31>
+        AssignExpr '=' <33:33>
+          target: DeclRefExpr c <33:31>
+          value: BinaryExpr '>>' <33:37>
+            DeclRefExpr a <33:35>
+            IntLiteral 2 <33:40>
+      ExprStmt <36:5>
+        AssignExpr '=' <36:7>
+          target: DeclRefExpr c <36:5>
+          value: ConditionalExpr <36:17>
+            cond: ParenExpr <36:9>
+              BinaryExpr '>' <36:12>
+                DeclRefExpr a <36:10>
+                DeclRefExpr b <36:14>
+            true: DeclRefExpr a <36:19>
+            false: DeclRefExpr b <36:23>
+      DeclStmt <39:5>
+        VarDecl i 'int' <39:9>
+        VarDecl sum 'int' init=copy <39:12>
+          init: IntLiteral 0 <39:18>
+      ForStmt <40:5>
+        init: ExprStmt <40:10>
+          AssignExpr '=' <40:12>
+            target: DeclRefExpr i <40:10>
+            value: IntLiteral 0 <40:14>
+        cond: BinaryExpr '<' <40:19>
+          DeclRefExpr i <40:17>
+          IntLiteral 10 <40:21>
+        inc: UnaryExpr '++' postfix <40:26>
+          DeclRefExpr i <40:25>
+        body: CompoundStmt <40:30>
+          IfStmt <41:9>
+            cond: BinaryExpr '==' <41:19>
+              BinaryExpr '%' <41:15>
+                DeclRefExpr i <41:13>
+                IntLiteral 2 <41:17>
+              IntLiteral 0 <41:22>
+            then: ContinueStmt <41:25>
+          IfStmt <42:9>
+            cond: BinaryExpr '>' <42:15>
+              DeclRefExpr i <42:13>
+              IntLiteral 7 <42:17>
+            then: BreakStmt <42:20>
+          ExprStmt <43:9>
+            AssignExpr '+=' <43:13>
+              target: DeclRefExpr sum <43:9>
+              value: DeclRefExpr i <43:16>
+      WhileStmt <47:5>
+        cond: BinaryExpr '>' <47:16>
+          DeclRefExpr sum <47:12>
+          IntLiteral 0 <47:18>
+        body: CompoundStmt <47:21>
+          ExprStmt <47:23>
+            AssignExpr '-=' <47:27>
+              target: DeclRefExpr sum <47:23>
+              value: IntLiteral 1 <47:30>
+      DoStmt <50:5>
+        body: CompoundStmt <50:8>
+          ExprStmt <50:10>
+            AssignExpr '+=' <50:14>
+              target: DeclRefExpr sum <50:10>
+              value: IntLiteral 2 <50:17>
+        cond: BinaryExpr '<' <50:33>
+          DeclRefExpr sum <50:29>
+          IntLiteral 10 <50:35>
+      ExprStmt <53:5>
+        AssignExpr '=' <53:7>
+          target: DeclRefExpr i <53:5>
+          value: IntLiteral 0 <53:9>
+      LabelStmt top <54:1>
+        ExprStmt <55:5>
+          AssignExpr '=' <55:7>
+            target: DeclRefExpr i <55:5>
+            value: BinaryExpr '+' <55:11>
+              DeclRefExpr i <55:9>
+              IntLiteral 1 <55:13>
+      IfStmt <56:5>
+        cond: BinaryExpr '<' <56:11>
+          DeclRefExpr i <56:9>
+          IntLiteral 3 <56:13>
+        then: GotoStmt top <56:16>
+      ReturnStmt <59:5>
+        CallExpr 1 arg(s) <59:20>
+          callee: DeclRefExpr classify <59:12>
+          arg: DeclRefExpr sum <59:21>

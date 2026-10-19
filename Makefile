@@ -9,6 +9,8 @@ TARGET   := $(BUILD)/parser
 PARSER   := $(BUILD)/parser.tab.cpp
 PSTAMP   := $(BUILD)/parser.stamp
 SCANNER  := $(BUILD)/lex.yy.cpp
+AST_SRCS := $(wildcard $(SRC)/ast/*.cpp)
+AST_HDRS := $(wildcard $(SRC)/ast/*.h)
 
 .PHONY: all clean test
 
@@ -25,8 +27,8 @@ $(PSTAMP): $(SRC)/parser.y | $(BUILD)
 $(SCANNER): $(SRC)/lexer.l $(SRC)/token_types.h $(PSTAMP) | $(BUILD)
 	$(FLEX) -o $(SCANNER) $(SRC)/lexer.l
 
-$(TARGET): $(PSTAMP) $(SCANNER)
-	$(CXX) $(CXXFLAGS) $(PARSER) $(SCANNER) -o $(TARGET)
+$(TARGET): $(PSTAMP) $(SCANNER) $(AST_SRCS) $(AST_HDRS)
+	$(CXX) $(CXXFLAGS) $(PARSER) $(SCANNER) $(AST_SRCS) -o $(TARGET)
 
 # run.sh builds first, so this target does not depend on $(TARGET)
 test:

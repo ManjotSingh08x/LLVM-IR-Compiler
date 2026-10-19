@@ -4,6 +4,7 @@
 #include <cctype>
 #include <string>
 #include <unordered_map>
+#include "ast/ast.h"  //the token value union refers to ast types
 #include "parser.tab.h"
 
 inline std::string tokenCategory(int tok) {

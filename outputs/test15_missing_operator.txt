@@ -1,0 +1,2 @@
+test/test15_missing_operator.ckp line: 4 col: 13 syntax error: unexpected TOK_IDENTIFIER, expecting TOK_SEMI
+1 syntax error(s) found.

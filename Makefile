@@ -1,17 +1,14 @@
-# Makefile — CSC-305 Assignment 1, Lexical Analyzer
-#
-# Recipes:
-#   make          build the lexer executable
-#   make test     build (if needed) and run all test cases
-#   make clean    remove build artifacts
-
 CXX      := g++
-CXXFLAGS := -std=c++17 -Wall -Isrc
+CXXFLAGS := -std=c++17 -Wall -Isrc -Ibuild
 FLEX     := flex
+BISON    := bison
 
 BUILD    := build
 SRC      := src
-TARGET   := $(BUILD)/lexer
+TARGET   := $(BUILD)/parser
+PARSER   := $(BUILD)/parser.tab.cpp
+PSTAMP   := $(BUILD)/parser.stamp
+SCANNER  := $(BUILD)/lex.yy.cpp
 
 .PHONY: all clean test
 
@@ -20,14 +17,20 @@ all: $(TARGET)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/lex.yy.cpp: $(SRC)/lexer.l $(SRC)/token_types.h | $(BUILD)
-	$(FLEX) -o $(BUILD)/lex.yy.cpp $(SRC)/lexer.l
+$(PSTAMP): $(SRC)/parser.y | $(BUILD)
+	$(BISON) -d -v -b $(BUILD)/parser $(SRC)/parser.y
+	mv $(BUILD)/parser.tab.c $(PARSER)
+	touch $(PSTAMP)
 
-$(TARGET): $(BUILD)/lex.yy.cpp
-	$(CXX) $(CXXFLAGS) $(BUILD)/lex.yy.cpp -o $(TARGET)
+$(SCANNER): $(SRC)/lexer.l $(SRC)/token_types.h $(PSTAMP) | $(BUILD)
+	$(FLEX) -o $(SCANNER) $(SRC)/lexer.l
 
-test: $(TARGET)
-	bash run.sh
+$(TARGET): $(PSTAMP) $(SCANNER)
+	$(CXX) $(CXXFLAGS) $(PARSER) $(SCANNER) -o $(TARGET)
+
+# run.sh builds first, so this target does not depend on $(TARGET)
+test:
+	@bash run.sh
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) outputs

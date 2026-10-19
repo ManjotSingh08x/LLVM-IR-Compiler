@@ -1,0 +1,6 @@
+// Tests : missing operator
+int missingoperator(){
+    int x,y;
+    int z=x y;
+    return z;
+}

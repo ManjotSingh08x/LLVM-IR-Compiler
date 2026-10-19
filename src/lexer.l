@@ -1,148 +1,21 @@
 %{
-/*
- * lexer.l -- Lexical Analyzer for a C-like source language
- * CSC-305 Compiler Design, Assignment 1
- *
- * LANGUAGE FEATURES TOKENIZED:
- * ============================================================================
- *
- * BASIC FEATURES:
- *   - All arithmetic operators:       +  -  *  /  %
- *   - All logical operators:          &&  ||  !
- *   - All relational operators:       ==  !=  <  >  <=  >=
- *   - All bitwise operators:          &  |  ^  ~  <<  >>
- *   - Compound assignment:            +=  -=  *=  /=  %=
- *   - Increment / decrement:          ++  --
- *   - Ternary operator:               ?  :
- *   - if-else                         keywords: if, else
- *   - for loop                        keywords: for
- *   - while loop                      keywords: while
- *   - do-while loop                   keywords: do, while
- *   - switch / case / default         keywords: switch, case, default
- *   - Arrays (integer and char)       tokens: [ ]  and identifiers
- *   - Pointers                        tokens: *  &  ->
- *   - Structures                      keywords: struct, .  ->
- *   - printf and scanf                identifiers (not keywords -- they
- *                                     become built-in declarations later)
- *   - Function call with arguments    tokens: (  )  ,  and identifiers
- *   - goto, break, continue           keywords: goto, break, continue
- *
- * ADVANCED FEATURES:
- *   - Recursive function call         (same tokens as regular calls)
- *   - Class and object                keywords: class, new, delete
- *   - Inheritance                     token: :  after class name
- *   - Dynamic memory allocation       keywords: new, delete
- *   - Lambda function                 tokens: [ ] ( ) { }  keyword: auto
- *   - Function pointer                tokens: ( * ) ( )
- *   - Command line input              main(int argc, char *argv[])
- *   - public / private / protected    keywords: public, private, protected
- *   - Reference                       token: &  (parser distinguishes)
- *   - Multi-dimensional arrays        tokens: [ ] [ ] [ ] …
- *   - Scope resolution                token: ::
- *   - this pointer                    keyword: this
- *   - Boolean literals                keywords: true, false
- *   - null pointer                    keyword: null
- *
- * LITERAL FORMS:
- *   - Decimal integers                42, 0
- *   - Hexadecimal integers            0x1F, 0XAB
- *   - Octal integers                  0755
- *   - Binary integers                 0b1010, 0B110
- *   - Floating point                  3.14, .5, 2., 1e10, 1.5e-3
- *   - Character literals              'a', '\n', '\t', '\\', '\'', '\0',
- *                                     '\x41'
- *   - String literals                 "hello", "tab\there", "" (empty)
- *     with full escape handling and unterminated-string detection
- *
- * COMMENTS:
- *   - Line comments                   // ...
- *   - Block comments                  slash-star ... star-slash  (with unterminated detect)
- *
- * ERROR DETECTION:
- *   - Illegal characters              @  $  #  `
- *   - Malformed numeric literals      123abc, 1.2.3, 0x (no digits), 1e
- *   - Integer literal out of range    99999999999999999999
- *   - Empty character literal         ''
- *   - Multi-character literal         'ab'
- *   - Unterminated character literal  'q  (no closing quote)
- *   - Invalid escape sequence         '\q'
- *   - Unterminated string literal     "abc\n  or  "abc<<EOF>>
- *   - Unterminated block comment      slash-star ... <<EOF>>
- *
- * REGEX PATTERNS EXPLAINED:
- * ============================================================================
- *
- * {LETTER}{IDCHAR}*
- *   Matches identifiers: must start with [a-zA-Z_] then zero or more
- *   [a-zA-Z0-9_].  This single rule handles BOTH identifiers AND keywords
- *   by looking up the matched text in keywordTable().
- *
- * {DIGIT}+"."{DIGIT}*{EXPONENT}?
- *   Matches floats like 3.14, 2., 1.5e-3.  Requires digits before the dot.
- *
- * "."{DIGIT}+{EXPONENT}?
- *   Matches floats like .5, .25e3.  Dot-first form.
- *
- * {DIGIT}+{EXPONENT}
- *   Matches floats like 1e10.  No dot, mandatory exponent.
- *
- * 0[xX]{HEXDIGIT}+
- *   Matches hex integers: 0x prefix then one or more [0-9a-fA-F].
- *
- * 0[bB][01]+
- *   Matches binary integers: 0b prefix then one or more binary digits.
- *
- * 0[0-7]+
- *   Matches octal integers: leading 0 then octal digits.
- *
- * {DIGIT}+
- *   Matches plain decimal integers.  Also checks for ERANGE overflow.
- *
- * ({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*
- *   Catch-all for malformed numbers.  Starts like a number but has trailing
- *   junk.  Placed LAST among number rules so flex's longest-match picks
- *   valid rules first.
- *
- * '\\x{HEXDIGIT}{1,2}'
- *   Matches hex character escapes: '\x41', '\x7'.
- *
- * '{CHARBODY}'
- *   Matches single-character literals including simple escapes.
- *   CHARBODY = ([^'\\\\\\n]|\\\\.)  -- either a non-special char or a
- *   backslash-escape pair.
- *
- * DESIGN FOR FUTURE COMPILER STAGES:
- * ============================================================================
- *   This file ONLY recognizes lexemes and classifies them via token_types.h.
- *   It does not know about grammar, so it stays reusable as-is once a bison
- *   parser is added in Assignment 2 -- at that point:
- *     1. change addToken(TOK_X); to addToken(TOK_X); return TOK_X;
- *     2. delete main()/printTable() and let bison's yyparse() drive yylex()
- *     3. nothing in the rules section below needs to change
- *   Keep it that way: don't hardcode assignment-1-only behavior into the
- *   rules, keep it in main()/printTable() instead.
- *
- * Two things every reader should know about how flex picks a rule:
- *   LONGEST MATCH  -- of all rules that match at the current position, flex
- *                    takes the one matching the MOST characters.
- *   FIRST LISTED   -- if two rules match the SAME number of characters, the
- *                    one written earlier in this file wins.
- *   Several rules below depend on that ordering. They are marked ORDER.
- */
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
 #include <string>
 #include <vector>
+#include <map>
 #include <iostream>
 #include <iomanip>
 #include "token_types.h"
 
+//structs
 struct TokenRecord {
     std::string lexeme;
     int         id;
     int         line;
+    std::string declType;   //what an identifier was declared as, filled by the parser
 };
 
 struct LexError {
@@ -151,29 +24,33 @@ struct LexError {
     int         col;
 };
 
+//globals
 static std::vector<TokenRecord> g_tokens;
 static std::vector<LexError>    g_errors;
 
-// Column tracking. yylineno gives us the line for free; flex has no built-in
-// column counter, so we advance one ourselves in YY_USER_ACTION below.
-static int g_col     = 1;   // column of the next character to be read
-static int tokLine   = 1;   // line   where the current lexeme started
-static int tokCol    = 1;   // column where the current lexeme started
-static int litLine   = 1;   // where an unterminated string literal opened
+static int g_col     = 1;
+static int tokLine   = 1;
+static int tokCol    = 1;
+static int litLine   = 1;
 static int litCol    = 1;
-static int cmtLine   = 1;   // where an unterminated block comment opened
+static int cmtLine   = 1;
 static int cmtCol    = 1;
 
-static std::string g_strBuf;   // accumulates a string literal across rules
+static std::string g_strBuf;
 
-static void addToken(int id) {
-    g_tokens.push_back({ std::string(yytext), id, tokLine });
+//helpers
+static int addToken(int id) {
+    //the semantic value of every token is its position in g_tokens, which lets
+    //the parser record a declared type against the right entry
+    yylval = (int)g_tokens.size();
+    g_tokens.push_back({ std::string(yytext), id, tokLine, std::string() });
+    return id;
 }
 
-// Used for string literals, whose text is built up across several rules and
-// therefore is not simply yytext.
-static void addTokenText(const std::string &text, int id) {
-    g_tokens.push_back({ text, id, tokLine });
+static int addTokenText(const std::string &text, int id) {
+    yylval = (int)g_tokens.size();
+    g_tokens.push_back({ text, id, tokLine, std::string() });
+    return id;
 }
 
 static void addError(const std::string &message) {
@@ -184,12 +61,10 @@ static void addErrorAt(int line, int col, const std::string &message) {
     g_errors.push_back({ message, line, col });
 }
 
-// The escapes our language accepts after a backslash.
 static bool isValidEscape(char c) {
     return strchr("\\\\'\"0abfnrtv", c) != NULL;
 }
 
-// Render a byte for an error message; non-printable bytes shown as \xNN.
 static std::string showChar(char c) {
     if (c >= 32 && c < 127) return std::string(1, c);
     char buf[8];
@@ -197,456 +72,228 @@ static std::string showChar(char c) {
     return buf;
 }
 
-// YY_USER_ACTION runs automatically before EVERY rule action below.
-// It remembers where this lexeme started, then walks the matched text to
-// advance the column counter (resetting to 1 after each newline).
+//column and parser location tracking
 #define YY_USER_ACTION                                    \
     tokLine = yylineno;                                   \
     tokCol  = g_col;                                      \
+    yylloc.first_line = tokLine;                          \
+    yylloc.first_column = tokCol;                         \
     for (int i = 0; i < yyleng; ++i) {                    \
         if (yytext[i] == '\n') g_col = 1; else ++g_col;   \
-    }
+    }                                                     \
+    yylloc.last_line = yylineno;                          \
+    yylloc.last_column = (g_col > 1) ? g_col - 1 : 1;
 %}
 
 %option noyywrap
 %option yylineno
 %option nounput noinput
 
-/* ------------------------------------------------------------------------
- * Named patterns. Each one is substituted wherever {NAME} appears below.
- * ------------------------------------------------------------------------ */
 
 DIGIT       [0-9]
-                              /* a single decimal digit */
 HEXDIGIT    [0-9a-fA-F]
-                              /* a single hexadecimal digit */
 LETTER      [a-zA-Z_]
-                              /* legal FIRST character of an identifier */
 IDCHAR      [a-zA-Z0-9_]
-                              /* legal LATER character of an identifier */
 EXPONENT    [eE][+-]?{DIGIT}+
-                              /* exponent suffix of a float: e10, E+10, e-3 */
 CHARBODY    ([^'\\\n]|\\.)
-                              /* one unit inside '...': either any character
-                                 that is not a quote/backslash/newline, or a
-                                 backslash followed by any one character */
 
-/* Exclusive start conditions. "Exclusive" (%x) means that while we are inside
- * one, ONLY rules tagged with it can match -- the normal rules are switched
- * off. We use them so an unterminated string or comment can report the line
- * where it OPENED, which a single regex cannot do. */
+
 %x BLOCK_COMMENT
 %x STRING_LIT
 
 %%
 
-    /* =====================================================================
-     * COMMENTS AND WHITESPACE
-     *
-     * Block comments use exclusive start condition BLOCK_COMMENT so we can
-     * report the opening line if the comment is never closed.
-     *
-     * Regex logic:
-     *   slash-star          -- opens a block comment
-     *   BLOCK_COMMENT state star-slash -- closes the block comment
-     *   BLOCK_COMMENT [^*\n]+  -- consume non-star, non-newline runs (speed)
-     *   BLOCK_COMMENT "*"   -- lone star not followed by slash (longest-match
-     *                          ensures star-slash beats lone star)
-     *   BLOCK_COMMENT \n    -- newline inside comment (yylineno counts it)
-     *   BLOCK_COMMENT EOF   -- unterminated comment error
-     *
-     *   "//"[^\n]*          -- line comment: // then everything to end of line
-     *   [ \t\r]+            -- whitespace (spaces, tabs, carriage returns)
-     *   \n                  -- newline (yylineno auto-increments)
-     * ===================================================================== */
 
-"/*"                    { /* opens a block comment */
-                          cmtLine = tokLine; cmtCol = tokCol;
-                          BEGIN(BLOCK_COMMENT); }
-<BLOCK_COMMENT>"*/"     { /* closes the block comment */
-                          BEGIN(INITIAL); }
-<BLOCK_COMMENT>[^*\n]+  { /* a run of characters that are neither '*' nor a
-                             newline -- the bulk of the comment body, matched
-                             in one go for speed */ }
-<BLOCK_COMMENT>"*"      { /* a lone '*' not followed by '/' */ }
-<BLOCK_COMMENT>\n       { /* newline inside the comment; yylineno auto-counts */ }
-<BLOCK_COMMENT><<EOF>>  { /* end of file while still inside the comment */
-                          addErrorAt(cmtLine, cmtCol,
+"/*"                    { cmtLine = tokLine; cmtCol = tokCol;
+                          BEGIN(BLOCK_COMMENT); }                  // opening block comment
+<BLOCK_COMMENT>"*/"     { BEGIN(INITIAL); }                       // closing block comment
+<BLOCK_COMMENT>[^*\n]+  { }                                       // comment body chars (not * or newline)
+<BLOCK_COMMENT>"*"      { }                                       // lone * not followed by /
+<BLOCK_COMMENT>\n        { }                                      // newline inside block comment
+<BLOCK_COMMENT><<EOF>>   { addErrorAt(cmtLine, cmtCol,
                                      "unterminated block comment");
-                          BEGIN(INITIAL); yyterminate(); }
+                          BEGIN(INITIAL); yyterminate(); }         // EOF inside block comment
 
-"//"[^\n]*              { /* '//' followed by any run of non-newline
-                             characters -- a line comment, discarded */ }
+"//"[^\n]*              { }                                       // line comment
 
-[ \t\r]+                { /* one or more spaces, tabs or carriage returns */ }
-\n                      { /* a newline; yylineno tracks it automatically */ }
+[ \t\r]+                { }                                       // horizontal whitespace
+\n                      { }                                       // newline
 
-    /* =====================================================================
-     * IDENTIFIERS AND KEYWORDS
-     *
-     * Regex: {LETTER}{IDCHAR}*
-     *   Expands to: [a-zA-Z_][a-zA-Z0-9_]*
-     *   Must start with letter or underscore, then any alphanumeric or _.
-     *
-     * A keyword is just an identifier that happens to be in keywordTable(),
-     * so there is ONE rule here, not thirty.  This keeps the lexer small
-     * and makes adding keywords a one-line change in token_types.h.
-     *
-     * Keywords recognized (see token_types.h for full list):
-     *   Type keywords:    int, char, float, double, void, bool, auto
-     *   Control flow:     if, else, for, while, do, switch, case, default,
-     *                     break, continue, goto, return
-     *   OOP keywords:     struct, class, public, private, protected,
-     *                     new, delete, this
-     *   Literal keywords: true, false, null
-     *
-     * Everything else matching this pattern is classified as TOK_IDENTIFIER:
-     *   variable names, function names (including printf, scanf -- they are
-     *   NOT keywords; they become built-in declarations in later stages),
-     *   class names, labels (the label-colon is a separate token).
-     * ===================================================================== */
 
-{LETTER}{IDCHAR}*       { /* a letter or underscore, then any number of
-                             letters/digits/underscores: foo, _x, arr2 */
-                          auto it = keywordTable().find(yytext);
-                          if (it != keywordTable().end()) addToken(it->second);
-                          else                            addToken(TOK_IDENTIFIER);
-                        }
+{LETTER}{IDCHAR}*       { auto it = keywordTable().find(yytext);
+                          if (it != keywordTable().end()) return addToken(it->second);
+                          else                            return addToken(TOK_IDENTIFIER);
+                        }                                         // letter or underscore followed by alphanumerics
 
-    /* =====================================================================
-     * NUMERIC LITERALS
-     *
-     * ORDER: every valid form must appear ABOVE the malformed-number rule at
-     * the end of this block. On an equal-length match flex takes the rule
-     * listed first, so putting the malformed rule last keeps it from
-     * swallowing valid numbers.
-     *
-     * FLOAT PATTERNS:
-     *   {DIGIT}+"."{DIGIT}*{EXPONENT}?
-     *     Expands to: [0-9]+"."[0-9]*([eE][+-]?[0-9]+)?
-     *     Matches: 3.14, 2., 1.5e-3, 100.0E+2
-     *     Logic: digits, mandatory dot, optional fractional digits, optional
-     *            exponent.
-     *
-     *   "."{DIGIT}+{EXPONENT}?
-     *     Expands to: "."[0-9]+([eE][+-]?[0-9]+)?
-     *     Matches: .5, .25e3
-     *     Logic: dot-first float (no leading digits).
-     *
-     *   {DIGIT}+{EXPONENT}
-     *     Expands to: [0-9]+[eE][+-]?[0-9]+
-     *     Matches: 1e10, 5E-3
-     *     Logic: no dot, mandatory exponent makes it a float.
-     *
-     * INTEGER PATTERNS:
-     *   0[xX]{HEXDIGIT}+
-     *     Expands to: 0[xX][0-9a-fA-F]+
-     *     Matches: 0x1F, 0XAB
-     *     Logic: hex prefix then hex digits.
-     *
-     *   0[bB][01]+
-     *     Matches: 0b1010, 0B110
-     *     Logic: binary prefix then binary digits.
-     *
-     *   0[0-7]+
-     *     Matches: 0755, 077
-     *     Logic: leading zero then octal digits.
-     *
-     *   {DIGIT}+
-     *     Expands to: [0-9]+
-     *     Matches: 0, 42, 1000
-     *     Logic: plain decimal.  Also checks strtoll for ERANGE overflow.
-     *
-     * MALFORMED CATCH-ALL:
-     *   ({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*
-     *     Starts like a number then has trailing junk: 123abc, 1.2.3, 0x
-     *     Only wins over valid rules when junk chars extend the match
-     *     (longest-match principle).
-     * ===================================================================== */
+{DIGIT}+"."{DIGIT}*{EXPONENT}?   { return addToken(TOK_FLOAT_LITERAL); }  // digits, dot, optional digits and exponent
+"."{DIGIT}+{EXPONENT}?           { return addToken(TOK_FLOAT_LITERAL); }  // dot then digits, optional exponent
+{DIGIT}+{EXPONENT}               { return addToken(TOK_FLOAT_LITERAL); }  // digits with mandatory exponent
 
-{DIGIT}+"."{DIGIT}*{EXPONENT}?   { /* digits, a dot, optional digits, optional
-                                      exponent: 3.14, 2., 1.5e-3 */
-                                   addToken(TOK_FLOAT_LITERAL); }
-"."{DIGIT}+{EXPONENT}?           { /* a dot then digits: .5, .25e3 */
-                                   addToken(TOK_FLOAT_LITERAL); }
-{DIGIT}+{EXPONENT}               { /* digits then a mandatory exponent: 1e10 */
-                                   addToken(TOK_FLOAT_LITERAL); }
-
-0[xX]{HEXDIGIT}+        { /* 0x or 0X then one or more hex digits: 0x1F */
-                          addToken(TOK_INT_LITERAL); }
-0[bB][01]+              { /* 0b or 0B then one or more binary digits: 0b1010 */
-                          addToken(TOK_INT_LITERAL); }
-0[0-7]+                 { /* a leading 0 then octal digits: 0755 */
-                          addToken(TOK_INT_LITERAL); }
-{DIGIT}+                { /* a plain run of decimal digits: 0, 42, 1000 */
-                          errno = 0;
+0[xX]{HEXDIGIT}+        { return addToken(TOK_INT_LITERAL); }     // hexadecimal integer
+0[bB][01]+              { return addToken(TOK_INT_LITERAL); }     // binary integer
+0[0-7]+                 { return addToken(TOK_INT_LITERAL); }     // octal integer
+{DIGIT}+                { errno = 0;
                           strtoll(yytext, NULL, 10);
                           if (errno == ERANGE)
                               addError(std::string("integer literal out of range: ")
                                        + yytext);
                           else
-                              addToken(TOK_INT_LITERAL);
-                        }
+                              return addToken(TOK_INT_LITERAL);
+                        }                                         // decimal integer with range check
 
-({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*  { /* ORDER: last of the number rules.
-                                         Starts like a number (a digit, or a
-                                         dot followed by a digit) and then
-                                         runs on through letters, digits,
-                                         underscores and dots. Longest match
-                                         means this beats the valid rules only
-                                         when there IS trailing junk:
-                                         123abc, 1.2.3, 0x, 1e */
-                                      addError(std::string("malformed numeric literal: ")
-                                               + yytext); }
+({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*  { addError(std::string("malformed numeric literal: ")
+                                               + yytext); }      // starts like a number but has trailing junk
 
-    /* =====================================================================
-     * CHARACTER LITERALS
-     *
-     * Regex logic:
-     *   '\\x{HEXDIGIT}{1,2}'  -- hex escape char: '\x41', '\x7'
-     *     Must come FIRST (ORDER) so '\x41' is not split into multiple
-     *     CHARBODY units triggering multi-char error.
-     *
-     *   '{CHARBODY}'          -- single-char literal: 'a', '\n', '\0'
-     *     CHARBODY = ([^'\\\n]|\\.)
-     *     Matches: one char that is not quote/backslash/newline, OR
-     *     a backslash followed by any char.
-     *     After matching, we validate the escape is in our set.
-     *
-     *   ''                    -- empty char literal (two quotes, nothing inside)
-     *
-     *   '{CHARBODY}{2,}'      -- two or more body units: 'ab' multi-char error
-     *
-     *   '{CHARBODY}*          -- opening quote with no close: unterminated
-     *     ORDER: last, so closing-quote variants match longer and win.
-     * ===================================================================== */
 
-'\\x{HEXDIGIT}{1,2}'    { /* quote, backslash-x, one or two hex digits, quote:
-                             '\x41', '\x7' */
-                          addToken(TOK_CHAR_LITERAL); }
-'{CHARBODY}'            { /* quote, exactly ONE body unit, quote: 'a', '\n' */
-                          if (yytext[1] == '\\' && !isValidEscape(yytext[2]))
+'\\x{HEXDIGIT}{1,2}'    { return addToken(TOK_CHAR_LITERAL); }   // hex escape char literal
+'{CHARBODY}'            { if (yytext[1] == '\\' && !isValidEscape(yytext[2]))
                               addError(std::string("invalid escape sequence: ")
                                        + yytext);
                           else
-                              addToken(TOK_CHAR_LITERAL); }
-''                      { /* two quotes with nothing between them */
-                          addError("empty character literal"); }
-'{CHARBODY}{2,}'        { /* quote, TWO OR MORE body units, quote: 'ab' */
-                          addError(std::string("multi-character literal: ")
-                                   + yytext); }
-'{CHARBODY}*            { /* ORDER: last. A quote and any number of body
-                             units with NO closing quote -- the earlier rules
-                             all match longer when a closing quote exists */
-                          addError("unterminated character literal"); }
+                              return addToken(TOK_CHAR_LITERAL); } // single character or escape sequence
+''                      { addError("empty character literal"); }  // empty quotes
+'{CHARBODY}{2,}'        { addError(std::string("multi-character literal: ")
+                                   + yytext); }                   // two or more chars between quotes
+'{CHARBODY}*            { addError("unterminated character literal"); }  // opening quote with no closing quote
 
-    /* =====================================================================
-     * STRING LITERALS
-     *
-     * Handled with exclusive start condition STRING_LIT rather than one big
-     * regex so that an unterminated string can be reported at the line where
-     * it OPENED.
-     *
-     * Regex logic:
-     *   \"                         -- opening double quote, enters STRING_LIT
-     *   <STRING_LIT>\"             -- closing double quote, emits token
-     *   <STRING_LIT>\\x{HEXDIGIT}{1,2} -- hex escape inside string: \x41
-     *   <STRING_LIT>\\(.|\n)       -- backslash + any char (validates escape)
-     *   <STRING_LIT>[^\\\n"]+      -- run of ordinary chars (not \ or " or \n)
-     *   <STRING_LIT>\n             -- newline before close = unterminated
-     *   <STRING_LIT><<EOF>>        -- EOF before close = unterminated
-     * ===================================================================== */
 
-\"                      { /* an opening double quote */
-                          g_strBuf = "\"";
+\"                      { g_strBuf = "\"";
                           litLine = tokLine; litCol = tokCol;
-                          BEGIN(STRING_LIT); }
-<STRING_LIT>\"          { /* the closing double quote */
-                          g_strBuf += '"';
-                          addTokenText(g_strBuf, TOK_STRING_LITERAL);
-                          BEGIN(INITIAL); }
-<STRING_LIT>\\x{HEXDIGIT}{1,2}  { /* a hex escape inside the string: \x41 */
-                                  g_strBuf += yytext; }
-<STRING_LIT>\\(.|\n)    { /* a backslash and the one character after it,
-                             newline included, so we can flag bad escapes */
-                          if (!isValidEscape(yytext[1]))
+                          BEGIN(STRING_LIT); }                     // opening double quote
+<STRING_LIT>\"          { g_strBuf += '"';
+                          yylloc.first_line = litLine;
+                          yylloc.first_column = litCol;
+                          BEGIN(INITIAL);
+                          return addTokenText(g_strBuf, TOK_STRING_LITERAL); } // closing double quote
+<STRING_LIT>\\x{HEXDIGIT}{1,2}  { g_strBuf += yytext; }          // hex escape inside string
+<STRING_LIT>\\(.|\n)    { if (!isValidEscape(yytext[1]))
                               addError(std::string("invalid escape sequence: ")
                                        + yytext);
-                          g_strBuf += yytext; }
-<STRING_LIT>[^\\\n"]+   { /* a run of ordinary string characters -- anything
-                             that is not a backslash, newline or quote */
-                          g_strBuf += yytext; }
-<STRING_LIT>\n          { /* a newline before the closing quote */
-                          addErrorAt(litLine, litCol,
+                          g_strBuf += yytext; }                   // backslash escape inside string
+<STRING_LIT>[^\\\n"]+   { g_strBuf += yytext; }                  // run of ordinary string characters
+<STRING_LIT>\n          { addErrorAt(litLine, litCol,
                                      "unterminated string literal");
-                          BEGIN(INITIAL); }
-<STRING_LIT><<EOF>>     { /* end of file before the closing quote */
-                          addErrorAt(litLine, litCol,
+                          BEGIN(INITIAL); }                        // newline before closing quote
+<STRING_LIT><<EOF>>     { addErrorAt(litLine, litCol,
                                      "unterminated string literal at end of file");
-                          BEGIN(INITIAL); yyterminate(); }
+                          BEGIN(INITIAL); yyterminate(); }         // EOF before closing quote
 
-    /* =====================================================================
-     * OPERATORS
-     *
-     * Two-character operators are listed before one-character ones. Strictly
-     * this is unnecessary -- flex's longest-match rule already prefers "+=" to
-     * "+" -- but reading them grouped this way makes the set easy to audit.
-     *
-     * Regex logic: each is a literal string match (no regex metacharacters).
-     *
-     * Multi-char operators (must win over single-char via longest match):
-     *   "++"  increment          "+="  add-assign
-     *   "--"  decrement          "-="  sub-assign
-     *   "*="  mul-assign         "/="  div-assign
-     *   "%="  mod-assign         "=="  equality
-     *   "!="  not-equal          "<="  less-or-equal
-     *   ">="  greater-or-equal   "&&"  logical AND
-     *   "||"  logical OR         "<<"  left shift
-     *   ">>"  right shift        "->"  member-via-pointer
-     *   "::"  scope resolution
-     *
-     * Single-char operators:
-     *   +  -  *  /  %  =  <  >  !  &  |  ^  ~  .  ?  :
-     *
-     * NOTE on * and &: the lexer emits TOK_STAR and TOK_BITAND. Whether *
-     * means multiply, dereference, or pointer-declarator (and whether &
-     * means bitwise-and, address-of, or reference-declarator) is decided
-     * by the parser -- the lexer does not disambiguate.
-     * ===================================================================== */
 
-"++"    { /* increment */                addToken(TOK_INC); }
-"--"    { /* decrement */                addToken(TOK_DEC); }
-"+="    { /* add and assign */           addToken(TOK_PLUS_ASSIGN); }
-"-="    { /* subtract and assign */      addToken(TOK_MINUS_ASSIGN); }
-"*="    { /* multiply and assign */      addToken(TOK_STAR_ASSIGN); }
-"/="    { /* divide and assign */        addToken(TOK_SLASH_ASSIGN); }
-"%="    { /* modulo and assign */        addToken(TOK_PERCENT_ASSIGN); }
-"=="    { /* equality */                 addToken(TOK_EQ); }
-"!="    { /* inequality */               addToken(TOK_NEQ); }
-"<="    { /* less or equal */            addToken(TOK_LE); }
-">="    { /* greater or equal */         addToken(TOK_GE); }
-"&&"    { /* logical and */              addToken(TOK_AND); }
-"||"    { /* logical or */               addToken(TOK_OR); }
-"<<"    { /* left shift */               addToken(TOK_SHL); }
-">>"    { /* right shift */              addToken(TOK_SHR); }
-"->"    { /* member access via pointer */addToken(TOK_ARROW); }
-"::"    { /* scope resolution */         addToken(TOK_SCOPE); }
+"++"    { return addToken(TOK_INC); }             
+"--"    { return addToken(TOK_DEC); }             
+"+="    { return addToken(TOK_PLUS_ASSIGN); }      
+"-="    { return addToken(TOK_MINUS_ASSIGN); }     
+"*="    { return addToken(TOK_STAR_ASSIGN); }      
+"/="    { return addToken(TOK_SLASH_ASSIGN); }     
+"%="    { return addToken(TOK_PERCENT_ASSIGN); }   
+"=="    { return addToken(TOK_EQ); }               
+"!="    { return addToken(TOK_NEQ); }              
+"<="    { return addToken(TOK_LE); }               
+">="    { return addToken(TOK_GE); }               
+"&&"    { return addToken(TOK_AND); }              
+"||"    { return addToken(TOK_OR); }               
+"<<"    { return addToken(TOK_SHL); }              
+">>"    { return addToken(TOK_SHR); }              
+"->"    { return addToken(TOK_ARROW); }            
+"::"    { return addToken(TOK_SCOPE); }            
 
-"+"     { /* add */                      addToken(TOK_PLUS); }
-"-"     { /* subtract or negate */       addToken(TOK_MINUS); }
-"*"     { /* multiply, dereference, or pointer declarator -- telling these
-             apart is the parser's job, not ours */
-                                         addToken(TOK_STAR); }
-"/"     { /* divide */                   addToken(TOK_SLASH); }
-"%"     { /* modulo */                   addToken(TOK_PERCENT); }
-"="     { /* assignment */               addToken(TOK_ASSIGN); }
-"<"     { /* less than */                addToken(TOK_LT); }
-">"     { /* greater than */             addToken(TOK_GT); }
-"!"     { /* logical not */              addToken(TOK_NOT); }
-"&"     { /* bitwise and, address-of, or reference declarator -- again the
-             parser decides which */
-                                         addToken(TOK_BITAND); }
-"|"     { /* bitwise or */               addToken(TOK_BITOR); }
-"^"     { /* bitwise xor */              addToken(TOK_BITXOR); }
-"~"     { /* bitwise not */              addToken(TOK_BITNOT); }
-"."     { /* member access */            addToken(TOK_DOT); }
-"?"     { /* ternary conditional */      addToken(TOK_QUESTION); }
-":"     { /* ternary branch, case label, access specifier, base class */
-                                         addToken(TOK_COLON); }
+"+"     { return addToken(TOK_PLUS); }             
+"-"     { return addToken(TOK_MINUS); }            
+"*"     { return addToken(TOK_STAR); }             
+"/"     { return addToken(TOK_SLASH); }            
+"%"     { return addToken(TOK_PERCENT); }          
+"="     { return addToken(TOK_ASSIGN); }           
+"<"     { return addToken(TOK_LT); }               
+">"     { return addToken(TOK_GT); }               
+"!"     { return addToken(TOK_NOT); }              
+"&"     { return addToken(TOK_BITAND); }           
+"|"     { return addToken(TOK_BITOR); }            
+"^"     { return addToken(TOK_BITXOR); }           
+"~"     { return addToken(TOK_BITNOT); }           
+"."     { return addToken(TOK_DOT); }              
+"?"     { return addToken(TOK_QUESTION); }         
+":"     { return addToken(TOK_COLON); }            
 
-    /* =====================================================================
-     * PUNCTUATION
-     *
-     * Each is a single literal character. These delimit expressions,
-     * function argument lists, array subscripts, and blocks.
-     *
-     * ( )  -- function calls, grouping, lambda parameter lists
-     * { }  -- compound statements, class bodies, lambda bodies
-     * [ ]  -- array subscripts, multi-dimensional arrays, lambda captures
-     * ;    -- statement terminator
-     * ,    -- separator in argument lists, declarations, initializers
-     * ===================================================================== */
 
-"("     { addToken(TOK_LPAREN); }
-")"     { addToken(TOK_RPAREN); }
-"{"     { addToken(TOK_LBRACE); }
-"}"     { addToken(TOK_RBRACE); }
-"["     { addToken(TOK_LBRACKET); }
-"]"     { addToken(TOK_RBRACKET); }
-";"     { addToken(TOK_SEMI); }
-","     { addToken(TOK_COMMA); }
+"("     { return addToken(TOK_LPAREN); }          
+")"     { return addToken(TOK_RPAREN); }          
+"{"     { return addToken(TOK_LBRACE); }          
+"}"     { return addToken(TOK_RBRACE); }          
+"["     { return addToken(TOK_LBRACKET); }        
+"]"     { return addToken(TOK_RBRACKET); }        
+";"     { return addToken(TOK_SEMI); }            
+","     { return addToken(TOK_COMMA); }          
 
-    /* =====================================================================
-     * ANYTHING ELSE
-     *
-     * Regex: .  (matches any single character not matched above)
-     * Records illegal character and keeps scanning -- the assignment asks
-     * for ALL lexical errors, not just the first.
-     * ===================================================================== */
 
-.       { /* a single character no rule above accepted: @, $, #, backtick.
-             We record it and keep scanning, because the assignment asks for
-             ALL lexical errors, not just the first */
-          addError("illegal character '" + showChar(yytext[0]) + "'"); }
+.       { addError("illegal character '" + showChar(yytext[0]) + "'"); }  // any unrecognized character
 
 %%
-
-/* =========================================================================
- * USER CODE SECTION -- printTable(), printErrors(), main()
- *
- * This section is ONLY for Assignment 1 standalone mode.  When integrating
- * with bison (Assignment 2), delete main()/printTable() and let yyparse()
- * drive yylex() -- the rules section above stays unchanged.
- * ========================================================================= */
-
-static void printTable() {
-    // Size the Lexeme column to the widest lexeme so a long string literal
-    // cannot push the Token column out of alignment.
-    size_t width = 6;                       // length of the word "Lexeme"
-    for (auto &t : g_tokens)
-        if (t.lexeme.size() > width) width = t.lexeme.size();
-    width += 2;                             // gap between the columns
-
-    std::cout << std::left << std::setw((int)width) << "Lexeme" << "Token\n";
-    std::cout << std::string(width + 16, '-') << "\n";
-    for (auto &t : g_tokens)
-        std::cout << std::left << std::setw((int)width) << t.lexeme
-                  << tokenCategory(t.id) << "\n";
-    std::cout << std::string(width + 16, '-') << "\n";
-    std::cout << g_tokens.size() << " tokens.\n";
+//output
+using namespace std;
+void setDeclType(int index, const std::string &type){
+    if(index >= 0 && index < (int)g_tokens.size() && g_tokens[index].declType.empty()){
+        g_tokens[index].declType = type;
+    }
 }
 
-static void printErrors(const char *filename) {
-    for (auto &e : g_errors)
-        std::cout << filename << ":" << e.line << ":" << e.col
-                  << ": error: " << e.message << "\n";
-    std::cout << g_errors.size() << " lexical error(s) found.\n";
+std::string lexemeAt(int index){
+    if(index >= 0 && index < (int)g_tokens.size()){
+        return g_tokens[index].lexeme;
+    }
+    return std::string();
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        std::cerr << "usage: " << argv[0] << " <source-file>\n";
-        return 1;
+void printTable(){
+    map<string, string> declaredTypes;
+    for(size_t i = 0; i < g_tokens.size(); i++){
+        if(g_tokens[i].id == TOK_IDENTIFIER && !g_tokens[i].declType.empty()){
+            if(declaredTypes.find(g_tokens[i].lexeme) == declaredTypes.end()){
+                declaredTypes[g_tokens[i].lexeme] = g_tokens[i].declType;
+            }
+        }
     }
-    FILE *f = fopen(argv[1], "r");
-    if (!f) {
-        std::cerr << "error: cannot open " << argv[1] << "\n";
-        return 1;
+    for(size_t i = 0; i < g_tokens.size(); i++){
+        if(g_tokens[i].id == TOK_IDENTIFIER && g_tokens[i].declType.empty()){
+            map<string, string>::const_iterator it = declaredTypes.find(g_tokens[i].lexeme);
+            if(it != declaredTypes.end()){
+                g_tokens[i].declType = it->second;
+            }
+        }
     }
-    yyin = f;
 
-    // No rule above executes `return`, so this single call scans the whole
-    // file -- every token and error is recorded by addToken()/addError() as
-    // it goes -- and then returns 0 at end of input.
-    yylex();
-    fclose(f);
+    vector<string> firstColumn;
+    firstColumn.reserve(g_tokens.size());
 
-    // The assignment asks for the table only when the program is clean, and
-    // for the full error list otherwise.
-    if (!g_errors.empty()) {
-        printErrors(argv[1]);
-        return 1;
+    size_t width = 6;
+    for(size_t i = 0; i < g_tokens.size(); i++){
+        string entry = g_tokens[i].lexeme;
+        if(entry.size() > width){
+            width = entry.size();
+        }
+        firstColumn.push_back(entry);
     }
-    printTable();
-    return 0;
+    width += 2;
+
+    cout << left << setw(width) << "Token" << "| Token_Type" << endl;
+    cout << string(width, '-') << "+" << string(15, '-') << endl;
+    for(size_t i = 0; i < g_tokens.size(); i++){
+        cout << left << setw(width) << firstColumn[i] << "| "
+             << tokenDisplayType(g_tokens[i].id, g_tokens[i].declType) << endl;
+    }
+    cout << endl;
+    cout << "Total Tokens: " << g_tokens.size() << endl;
+}
+
+void printErrors(const char *filename) {
+    for(size_t i = 0; i < g_errors.size(); i++){
+        int line = g_errors[i].line;
+        int col = g_errors[i].col;
+        string message = g_errors[i].message;
+        cout << filename << " line: " << line << " col: " << col << " error: " << message << endl;
+    }
+    cout << g_errors.size() << " lexical error(s) found." << endl;
+}
+
+size_t lexicalErrorCount() {
+    return g_errors.size();
 }

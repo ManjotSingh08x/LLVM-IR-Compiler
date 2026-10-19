@@ -1,0 +1,7 @@
+test/test16_brackets.ckp line: 4 col: 8 syntax error: unexpected TOK_IDENTIFIER, expecting TOK_LPAREN
+test/test16_brackets.ckp line: 8 col: 6 syntax error: unexpected TOK_DEC, expecting TOK_IDENTIFIER or TOK_STAR or TOK_BITAND
+test/test16_brackets.ckp line: 9 col: 5 syntax error: unexpected TOK_RETURN
+test/test16_brackets.ckp line: 10 col: 1 syntax error: unexpected TOK_RBRACE
+test/test16_brackets.ckp line: 16 col: 1 syntax error: unexpected TOK_RBRACE
+test/test16_brackets.ckp line: 20 col: 1 syntax error: unexpected TOK_RBRACE
+6 syntax error(s) found.

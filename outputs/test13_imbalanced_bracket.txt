@@ -1,0 +1,3 @@
+test/test13_imbalanced_bracket.ckp line: 4 col: 11 syntax error: unexpected TOK_LBRACE, expecting TOK_RPAREN
+test/test13_imbalanced_bracket.ckp line: 7 col: 1 syntax error: unexpected TOK_RBRACE
+2 syntax error(s) found.

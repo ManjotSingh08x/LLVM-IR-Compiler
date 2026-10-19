@@ -1,0 +1,2 @@
+test/test10_missing_operand.ckp line: 4 col: 21 syntax error: unexpected TOK_SEMI
+1 syntax error(s) found.

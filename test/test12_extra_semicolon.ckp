@@ -1,0 +1,5 @@
+// Tests : extra semicolon
+int extracolon(){
+    int x=3;;
+    return x;
+}

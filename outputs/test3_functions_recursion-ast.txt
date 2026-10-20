@@ -33,7 +33,7 @@ Program <1:1>
           IntLiteral 2 <13:16>
   FunctionDecl main returns 'int' <17:5>
     param: ParamDecl argc 'int' <17:14>
-    param: ParamDecl argv 'char*' <17:26>
+    param: ParamDecl argv 'char*[]' <17:26>
       dim: <unsized>
     body: CompoundStmt <17:34>
       DeclStmt <19:5>
@@ -41,7 +41,8 @@ Program <1:1>
       ExprStmt <20:5>
         CallExpr 2 arg(s) <20:10>
           callee: DeclRefExpr scanf <20:5>
-          arg: StringLiteral ""%d"" <20:11>
+          arg: ImplicitCastExpr array-to-pointer <20:11>
+            StringLiteral ""%d"" <20:11>
           arg: UnaryExpr '&' prefix <20:17>
             DeclRefExpr input <20:18>
       DeclStmt <23:5>
@@ -56,9 +57,10 @@ Program <1:1>
             arg: DeclRefExpr f <24:17>
             arg: IntLiteral 10 <24:20>
       DeclStmt <27:5>
-        VarDecl fp 'int (*)(...)' init=copy <27:11>
+        VarDecl fp 'int (*)(int)' init=copy <27:11>
           param: ParamDecl <unnamed> 'int' <27:15>
-          init: DeclRefExpr twice <27:22>
+          init: ImplicitCastExpr function-to-pointer <27:22>
+            DeclRefExpr twice <27:22>
       ExprStmt <28:5>
         AssignExpr '=' <28:7>
           target: DeclRefExpr s <28:5>
@@ -102,7 +104,8 @@ Program <1:1>
       ExprStmt <43:5>
         CallExpr 4 arg(s) <43:11>
           callee: DeclRefExpr printf <43:5>
-          arg: StringLiteral ""%d %d %s\n"" <43:12>
+          arg: ImplicitCastExpr array-to-pointer <43:12>
+            StringLiteral ""%d %d %s\n"" <43:12>
           arg: DeclRefExpr s <43:26>
           arg: DeclRefExpr argc <43:29>
           arg: ArraySubscriptExpr <43:39>

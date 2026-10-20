@@ -5,6 +5,16 @@
 #include <string>
 #include <vector>
 
+//semantic analysis writes its results into the tree. the ast only holds
+//pointers to these, so it does not depend on the semantic headers
+namespace sema {
+class Type;
+class Symbol;
+class FunctionSymbol;
+class RecordSymbol;
+class Scope;
+} // namespace sema
+
 namespace ast {
 
 //every concrete node has its own kind, which is how a node is told apart from
@@ -66,7 +76,8 @@ enum class ASTKind {
     DeleteExpr,
     InitListExpr,
     LambdaExpr,
-    LastExpr = LambdaExpr
+    ImplicitCastExpr,
+    LastExpr = ImplicitCastExpr
 };
 
 //an owning list of child nodes
@@ -109,29 +120,15 @@ protected:
     using ASTNode::ASTNode;
 };
 
+//the type checker fills in the type of every expression and whether it names
+//an object (an lvalue) or is only a value
 class Expr : public ASTNode {
+public:
+    const sema::Type *type = nullptr;
+    bool              isLValue = false;
+
 protected:
     using ASTNode::ASTNode;
-};
-
-//the written type in front of a declarator: int, Dog, struct Node
-enum class TypeSpecKind { Builtin, Named, Struct };
-
-class TypeSpec : public ASTNode {
-public:
-    TypeSpec(TypeSpecKind specKind, std::string name, int tokIndex, int line, int col)
-        : ASTNode(ASTKind::TypeSpec, line, col), specKind(specKind),
-          name(std::move(name)), tokIndex(tokIndex) {}
-
-
-    //one declaration line shares its type between declarators, each gets a copy
-    std::unique_ptr<TypeSpec> clone() const {
-        return std::unique_ptr<TypeSpec>(new TypeSpec(specKind, name, tokIndex, line, col));
-    }
-
-    TypeSpecKind specKind;
-    std::string  name;
-    int          tokIndex;  //index of the naming token in the token table
 };
 
 //the whole translation unit
@@ -142,6 +139,7 @@ public:
 
 
     NodeList<Decl> decls;
+    sema::Scope   *scope = nullptr;  //the global scope
 };
 
 } // namespace ast

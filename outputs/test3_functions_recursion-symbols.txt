@@ -1,0 +1,26 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  function factorial : int (int) [global_9factorial_i] llvm: i32 (i32)
+  function add : int (int, int) [global_3add_ii] llvm: i32 (i32, i32)
+  function twice : int (int) [global_5twice_i] llvm: i32 (i32)
+  function main : int (int, char**) [main] llvm: i32 (i32, ptr)
+  scope function factorial <2:5>
+    parameter n : int llvm: i32
+  scope function add <8:5>
+    parameter a : int llvm: i32
+    parameter b : int llvm: i32
+  scope function twice <12:5>
+    parameter x : int llvm: i32
+  scope function main <17:5>
+    parameter argc : int llvm: i32
+    parameter argv : char** llvm: ptr
+    variable input : int llvm: i32
+    variable f : int llvm: i32
+    variable s : int llvm: i32
+    variable fp : int (*)(int) llvm: ptr
+    variable square : lambda <31:19> llvm: {}
+    variable buffer : int* llvm: ptr
+    variable d : double* llvm: ptr
+    scope lambda <31:19>
+      parameter x : int llvm: i32

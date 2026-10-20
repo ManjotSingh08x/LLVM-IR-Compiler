@@ -50,6 +50,7 @@ const char *kindName(ASTKind kind) {
     case ASTKind::DeleteExpr:         return "DeleteExpr";
     case ASTKind::InitListExpr:       return "InitListExpr";
     case ASTKind::LambdaExpr:         return "LambdaExpr";
+    case ASTKind::ImplicitCastExpr:   return "ImplicitCastExpr";
     }
     return "Unknown";
 }
@@ -116,31 +117,57 @@ const char *accessName(AccessKind access) {
     return "";
 }
 
-std::string typeSpelling(const TypeSpec *type) {
-    if (type == nullptr) return "?";
-    return type->specKind == TypeSpecKind::Struct ? "struct " + type->name : type->name;
+std::string typeString(const TypeSpec *type, const std::string &inside);
+
+bool isArrayOrFunction(const TypeSpec *type) {
+    return type != nullptr
+        && (type->specKind == TypeSpecKind::Array || type->specKind == TypeSpecKind::Function);
 }
 
-//int*&, struct Node*, int (*)(..)
-std::string typeString(const TypeSpec *type, const Declarator &declarator) {
-    std::string out = typeSpelling(type);
-    switch (declarator.form) {
-    case DeclaratorForm::Plain:
-        out += std::string(declarator.pointerDepth, '*');
-        if (declarator.isReference) out += "&";
-        break;
-    case DeclaratorForm::FunctionPointer:
-        out += " (*)(...)";
-        break;
-    case DeclaratorForm::PointerToArray:
-        out += " (*)[]";
-        break;
-    case DeclaratorForm::ReferenceToArray:
-        out += " (&)[]";
-        break;
+std::string paramList(const TypeSpec *fn) {
+    std::string out = "(";
+    for (size_t i = 0; i < fn->params.size(); i++) {
+        if (i > 0) out += ", ";
+        out += typeString(fn->params[i]->type.get(), "");
     }
-    return out;
+    return out + ")";
 }
+
+//spells a written type the way C does, built from the outside in: inside is
+//what has been spelled so far around the name. int **(*)[10], int (*)(int)
+std::string typeString(const TypeSpec *type, const std::string &inside) {
+    if (type == nullptr) return "?" + inside;
+    switch (type->specKind) {
+    case TypeSpecKind::Builtin:
+    case TypeSpecKind::Named:
+    case TypeSpecKind::Struct: {
+        std::string name = type->specKind == TypeSpecKind::Struct ? "struct " + type->name : type->name;
+        if (inside.empty()) return name;
+        if (inside[0] == '*' || inside[0] == '&') return name + inside;
+        return name + " " + inside;
+    }
+    case TypeSpecKind::Pointer:
+    case TypeSpecKind::Reference: {
+        std::string mark = type->specKind == TypeSpecKind::Pointer ? "*" : "&";
+        if (isArrayOrFunction(type->inner.get())) return typeString(type->inner.get(), "(" + mark + inside + ")");
+        return typeString(type->inner.get(), mark + inside);
+    }
+    case TypeSpecKind::Array: {
+        std::string size;
+        if (type->size && type->size->getKind() == ASTKind::IntLiteral) {
+            size = static_cast<const IntLiteral *>(type->size.get())->spelling;
+        } else if (type->size) {
+            size = "expr";
+        }
+        return typeString(type->inner.get(), inside + "[" + size + "]");
+    }
+    case TypeSpecKind::Function:
+        return typeString(type->inner.get(), inside + paramList(type));
+    }
+    return "?";
+}
+
+std::string typeString(const TypeSpec *type) { return typeString(type, ""); }
 
 const char *initStyleName(InitStyle style) {
     switch (style) {
@@ -159,6 +186,22 @@ const char *newFormName(NewForm form) {
     case NewForm::InitList:  return "initlist";
     case NewForm::Array:     return "array";
     case NewForm::ArrayInit: return "array+initlist";
+    }
+    return "";
+}
+
+const char *castKindName(CastKind kind) {
+    switch (kind) {
+    case CastKind::IntegralCast:       return "integral";
+    case CastKind::IntegralToFloating: return "integral-to-floating";
+    case CastKind::FloatingToIntegral: return "floating-to-integral";
+    case CastKind::FloatingCast:       return "floating";
+    case CastKind::ToBool:             return "to-bool";
+    case CastKind::ArrayToPointer:     return "array-to-pointer";
+    case CastKind::FunctionToPointer:  return "function-to-pointer";
+    case CastKind::NullToPointer:      return "null-to-pointer";
+    case CastKind::DerivedToBase:      return "derived-to-base";
+    case CastKind::PointerToVoid:      return "pointer-to-void";
     }
     return "";
 }
@@ -184,17 +227,22 @@ void ASTPrinter::child(const char *childRole, ASTNode *node) {
     depth--;
 }
 
-void ASTPrinter::declaratorChildren(const Declarator &declarator) {
-    for (const auto &dim : declarator.dims) {
-        if (dim) {
-            child("dim", dim.get());
-        } else {
-            out << std::string((depth + 1) * 2, ' ') << "dim: <unsized>\n";
+void ASTPrinter::typeChildren(const TypeSpec *type) {
+    for (; type != nullptr; type = type->inner.get()) {
+        if (type->specKind == TypeSpecKind::Array) {
+            if (type->size) {
+                child("dim", type->size.get());
+            } else {
+                out << std::string((depth + 1) * 2, ' ') << "dim: <unsized>\n";
+            }
         }
+        if (type->specKind == TypeSpecKind::Function) children("param", type->params);
     }
-    children("param", declarator.fnParams);
-    child("init", declarator.init.get());
-    children("arg", declarator.ctorArgs);
+}
+
+void ASTPrinter::initChildren(VarDecl *node) {
+    child("init", node->init.get());
+    children("arg", node->ctorArgs);
 }
 
 //program and type
@@ -205,25 +253,26 @@ void ASTPrinter::visitProgram(Program *node) {
 }
 
 void ASTPrinter::visitTypeSpec(TypeSpec *node) {
-    line(*node, quoted(typeSpelling(node)));
+    line(*node, quoted(typeString(node)));
 }
 
 //declarations
 
 void ASTPrinter::visitVarDecl(VarDecl *node) {
-    std::string attrs = node->declarator.name.str() + " " + quoted(typeString(node->type.get(), node->declarator));
+    std::string attrs = node->name.str() + " " + quoted(typeString(node->type.get()));
     if (node->isStatic) attrs += " static";
-    if (node->declarator.initStyle != InitStyle::None) {
-        attrs += std::string(" init=") + initStyleName(node->declarator.initStyle);
+    if (node->initStyle != InitStyle::None) {
+        attrs += std::string(" init=") + initStyleName(node->initStyle);
     }
     line(*node, attrs);
-    declaratorChildren(node->declarator);
+    typeChildren(node->type.get());
+    initChildren(node);
 }
 
 void ASTPrinter::visitParamDecl(ParamDecl *node) {
-    std::string name = node->declarator.name.empty() ? "<unnamed>" : node->declarator.name.str();
-    line(*node, name + " " + quoted(typeString(node->type.get(), node->declarator)));
-    declaratorChildren(node->declarator);
+    std::string name = node->name.empty() ? "<unnamed>" : node->name;
+    line(*node, name + " " + quoted(typeString(node->type.get())));
+    typeChildren(node->type.get());
 }
 
 void ASTPrinter::functionBody(FunctionDecl *node) {
@@ -232,7 +281,7 @@ void ASTPrinter::functionBody(FunctionDecl *node) {
 }
 
 void ASTPrinter::visitFunctionDecl(FunctionDecl *node) {
-    std::string attrs = node->name.str() + " returns " + quoted(typeSpelling(node->returnType.get()));
+    std::string attrs = node->name.str() + " returns " + quoted(typeString(node->returnType.get()));
     if (node->isStatic) attrs += " static";
     if (!node->isDefinition()) attrs += " declaration";
     line(*node, attrs);
@@ -416,7 +465,7 @@ void ASTPrinter::visitMemberExpr(MemberExpr *node) {
 }
 
 void ASTPrinter::visitNewExpr(NewExpr *node) {
-    line(*node, quoted(typeSpelling(node->type.get())) + " " + newFormName(node->form));
+    line(*node, quoted(typeString(node->type.get())) + " " + newFormName(node->form));
     children("dim", node->dims);
     children("arg", node->args);
     child("init", node->init.get());
@@ -445,6 +494,11 @@ void ASTPrinter::visitLambdaExpr(LambdaExpr *node) {
     line(*node, "[" + captures + "]");
     children("param", node->params);
     child("body", node->body.get());
+}
+
+void ASTPrinter::visitImplicitCastExpr(ImplicitCastExpr *node) {
+    line(*node, castKindName(node->castKind));
+    child(nullptr, node->sub.get());
 }
 
 } // namespace ast

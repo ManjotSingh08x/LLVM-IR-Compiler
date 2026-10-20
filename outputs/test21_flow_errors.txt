@@ -1,0 +1,16 @@
+test/test21_flow_errors.ckp line: 11 col: 5 semantic error: 'break' outside a loop or switch
+test/test21_flow_errors.ckp line: 12 col: 5 semantic error: 'continue' outside a loop
+test/test21_flow_errors.ckp line: 15 col: 5 semantic error: use of undeclared label 'nowhere'
+test/test21_flow_errors.ckp line: 23 col: 1 semantic error: label 'here' is already defined in this function
+test/test21_flow_errors.ckp line: 27 col: 13 semantic error: a switch condition must be an integer, not 'Point'
+test/test21_flow_errors.ckp line: 33 col: 13 semantic error: a switch condition must be an integer, not 'double'
+test/test21_flow_errors.ckp line: 42 col: 9 semantic error: duplicate case value 1
+test/test21_flow_errors.ckp line: 44 col: 14 semantic error: a case value must be an integer constant
+test/test21_flow_errors.ckp line: 50 col: 9 semantic error: a switch can only have one 'default'
+test/test21_flow_errors.ckp line: 55 col: 5 semantic error: 'case' outside a switch
+test/test21_flow_errors.ckp line: 57 col: 5 semantic error: 'default' outside a switch
+test/test21_flow_errors.ckp line: 61 col: 9 semantic error: a value of type 'Point' cannot be used as an if condition
+test/test21_flow_errors.ckp line: 64 col: 12 semantic error: a value of type 'Point' cannot be used as a while condition
+test/test21_flow_errors.ckp line: 67 col: 21 semantic error: a value of type 'Point' cannot be used as a for condition
+test/test21_flow_errors.ckp line: 81 col: 9 semantic error: use of undeclared identifier 'k'
+15 semantic error(s) found.

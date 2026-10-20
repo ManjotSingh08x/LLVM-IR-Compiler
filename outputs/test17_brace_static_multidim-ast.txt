@@ -29,11 +29,11 @@ Program <1:1>
     member: VarDecl start 'int' init=brace <22:9>
       init: InitListExpr 1 item(s) <22:14>
         IntLiteral 0 <22:15>
-    member: VarDecl cells 'int' <23:9>
+    member: VarDecl cells 'int [2][3]' <23:9>
       dim: IntLiteral 2 <23:15>
       dim: IntLiteral 3 <23:18>
   FunctionDecl sumGrid returns 'int' <27:5>
-    param: ParamDecl m 'int' <27:17>
+    param: ParamDecl m 'int [][3]' <27:17>
       dim: <unsized>
       dim: IntLiteral 3 <27:21>
     param: ParamDecl rows 'int' <27:29>
@@ -66,9 +66,10 @@ Program <1:1>
                 AssignExpr '+=' <31:15>
                   target: DeclRefExpr s <31:13>
                   value: ArraySubscriptExpr <31:22>
-                    base: ArraySubscriptExpr <31:19>
-                      base: DeclRefExpr m <31:18>
-                      index: DeclRefExpr i <31:20>
+                    base: ImplicitCastExpr array-to-pointer <31:19>
+                      ArraySubscriptExpr <31:19>
+                        base: DeclRefExpr m <31:18>
+                        index: DeclRefExpr i <31:20>
                     index: DeclRefExpr j <31:23>
       ReturnStmt <34:5>
         DeclRefExpr s <34:12>
@@ -78,7 +79,7 @@ Program <1:1>
         VarDecl calls 'int' static init=copy <39:16>
           init: IntLiteral 0 <39:24>
       DeclStmt <40:5>
-        VarDecl seen 'int' static init=brace <40:16>
+        VarDecl seen 'int [4]' static init=brace <40:16>
           dim: IntLiteral 4 <40:21>
           init: InitListExpr 0 item(s) <40:23>
       ExprStmt <41:5>
@@ -92,14 +93,14 @@ Program <1:1>
         VarDecl b 'int' init=brace <45:9>
           init: InitListExpr 0 item(s) <45:10>
       DeclStmt <46:5>
-        VarDecl arr 'int' init=brace <46:9>
+        VarDecl arr 'int [3]' init=brace <46:9>
           dim: IntLiteral 3 <46:13>
           init: InitListExpr 3 item(s) <46:15>
             IntLiteral 1 <46:16>
             IntLiteral 2 <46:19>
             IntLiteral 3 <46:22>
       DeclStmt <47:5>
-        VarDecl grid 'int' init=brace <47:9>
+        VarDecl grid 'int [2][3]' init=brace <47:9>
           dim: IntLiteral 2 <47:14>
           dim: IntLiteral 3 <47:17>
           init: InitListExpr 2 item(s) <47:19>
@@ -112,7 +113,7 @@ Program <1:1>
               IntLiteral 5 <47:35>
               IntLiteral 6 <47:38>
       DeclStmt <48:5>
-        VarDecl word 'char' init=brace <48:10>
+        VarDecl word 'char [3]' init=brace <48:10>
           dim: IntLiteral 3 <48:15>
           init: InitListExpr 3 item(s) <48:17>
             CharLiteral 'h' <48:18>
@@ -153,7 +154,7 @@ Program <1:1>
               IntLiteral 5 <56:27>
               IntLiteral 6 <56:30>
       DeclStmt <57:5>
-        VarDecl m 'int (*)[]' init=copy <57:11>
+        VarDecl m 'int (*)[3]' init=copy <57:11>
           dim: IntLiteral 3 <57:14>
           init: NewExpr 'int' array+initlist <57:19>
             dim: IntLiteral 2 <57:27>
@@ -168,77 +169,95 @@ Program <1:1>
                 IntLiteral 5 <57:48>
                 IntLiteral 6 <57:51>
       DeclStmt <60:5>
-        VarDecl cube 'int' <60:9>
+        VarDecl cube 'int [2][2][2]' <60:9>
           dim: IntLiteral 2 <60:14>
           dim: IntLiteral 2 <60:17>
           dim: IntLiteral 2 <60:20>
       ExprStmt <61:5>
         AssignExpr '=' <61:19>
           target: ArraySubscriptExpr <61:15>
-            base: ArraySubscriptExpr <61:12>
-              base: ArraySubscriptExpr <61:9>
-                base: DeclRefExpr cube <61:5>
-                index: IntLiteral 1 <61:10>
-              index: IntLiteral 0 <61:13>
+            base: ImplicitCastExpr array-to-pointer <61:12>
+              ArraySubscriptExpr <61:12>
+                base: ImplicitCastExpr array-to-pointer <61:9>
+                  ArraySubscriptExpr <61:9>
+                    base: ImplicitCastExpr array-to-pointer <61:5>
+                      DeclRefExpr cube <61:5>
+                    index: IntLiteral 1 <61:10>
+                index: IntLiteral 0 <61:13>
             index: IntLiteral 1 <61:16>
           value: BinaryExpr '+' <61:32>
             ArraySubscriptExpr <61:28>
-              base: ArraySubscriptExpr <61:25>
-                base: DeclRefExpr grid <61:21>
-                index: IntLiteral 1 <61:26>
+              base: ImplicitCastExpr array-to-pointer <61:25>
+                ArraySubscriptExpr <61:25>
+                  base: ImplicitCastExpr array-to-pointer <61:21>
+                    DeclRefExpr grid <61:21>
+                  index: IntLiteral 1 <61:26>
               index: IntLiteral 2 <61:29>
             ArraySubscriptExpr <61:38>
-              base: ArraySubscriptExpr <61:35>
-                base: DeclRefExpr m <61:34>
-                index: IntLiteral 0 <61:36>
+              base: ImplicitCastExpr array-to-pointer <61:35>
+                ArraySubscriptExpr <61:35>
+                  base: DeclRefExpr m <61:34>
+                  index: IntLiteral 0 <61:36>
               index: IntLiteral 1 <61:39>
       ExprStmt <62:5>
         AssignExpr '+=' <62:20>
           target: ArraySubscriptExpr <62:16>
-            base: ArraySubscriptExpr <62:9>
-              base: DeclRefExpr grid <62:5>
-              index: BinaryExpr '-' <62:12>
-                DeclRefExpr a <62:10>
-                IntLiteral 4 <62:14>
+            base: ImplicitCastExpr array-to-pointer <62:9>
+              ArraySubscriptExpr <62:9>
+                base: ImplicitCastExpr array-to-pointer <62:5>
+                  DeclRefExpr grid <62:5>
+                index: BinaryExpr '-' <62:12>
+                  DeclRefExpr a <62:10>
+                  IntLiteral 4 <62:14>
             index: DeclRefExpr b <62:17>
           value: ArraySubscriptExpr <62:33>
-            base: ArraySubscriptExpr <62:30>
-              base: ArraySubscriptExpr <62:27>
-                base: DeclRefExpr cube <62:23>
-                index: IntLiteral 0 <62:28>
-              index: IntLiteral 0 <62:31>
+            base: ImplicitCastExpr array-to-pointer <62:30>
+              ArraySubscriptExpr <62:30>
+                base: ImplicitCastExpr array-to-pointer <62:27>
+                  ArraySubscriptExpr <62:27>
+                    base: ImplicitCastExpr array-to-pointer <62:23>
+                      DeclRefExpr cube <62:23>
+                    index: IntLiteral 0 <62:28>
+                index: IntLiteral 0 <62:31>
             index: IntLiteral 0 <62:34>
       ExprStmt <63:5>
         UnaryExpr '++' postfix <63:12>
           ArraySubscriptExpr <63:9>
-            base: ArraySubscriptExpr <63:6>
-              base: DeclRefExpr m <63:5>
-              index: IntLiteral 1 <63:7>
+            base: ImplicitCastExpr array-to-pointer <63:6>
+              ArraySubscriptExpr <63:6>
+                base: DeclRefExpr m <63:5>
+                index: IntLiteral 1 <63:7>
             index: IntLiteral 2 <63:10>
       ExprStmt <64:5>
         UnaryExpr '--' prefix <64:5>
           ArraySubscriptExpr <64:14>
-            base: ArraySubscriptExpr <64:11>
-              base: DeclRefExpr grid <64:7>
-              index: IntLiteral 0 <64:12>
+            base: ImplicitCastExpr array-to-pointer <64:11>
+              ArraySubscriptExpr <64:11>
+                base: ImplicitCastExpr array-to-pointer <64:7>
+                  DeclRefExpr grid <64:7>
+                index: IntLiteral 0 <64:12>
             index: IntLiteral 0 <64:15>
       DeclStmt <65:5>
         VarDecl cell 'int*' init=copy <65:10>
           init: UnaryExpr '&' prefix <65:17>
             ArraySubscriptExpr <65:25>
-              base: ArraySubscriptExpr <65:22>
-                base: DeclRefExpr grid <65:18>
-                index: IntLiteral 1 <65:23>
+              base: ImplicitCastExpr array-to-pointer <65:22>
+                ArraySubscriptExpr <65:22>
+                  base: ImplicitCastExpr array-to-pointer <65:18>
+                    DeclRefExpr grid <65:18>
+                  index: IntLiteral 1 <65:23>
               index: IntLiteral 1 <65:26>
       DeclStmt <66:5>
         VarDecl c 'Counter' <66:13>
       ExprStmt <67:5>
         AssignExpr '=' <67:19>
           target: ArraySubscriptExpr <67:15>
-            base: ArraySubscriptExpr <67:12>
-              base: MemberExpr .cells <67:6>
-                base: DeclRefExpr c <67:5>
-              index: IntLiteral 1 <67:13>
+            base: ImplicitCastExpr array-to-pointer <67:12>
+              ArraySubscriptExpr <67:12>
+                base: ImplicitCastExpr array-to-pointer <67:6>
+                  MemberExpr .cells <67:6>
+                    base: DeclRefExpr c <67:5>
+                index: IntLiteral 1 <67:13>
             index: IntLiteral 2 <67:16>
           value: IntLiteral 4 <67:21>
       DeclStmt <68:5>
@@ -248,17 +267,21 @@ Program <1:1>
       ExprStmt <69:5>
         AssignExpr '=' <69:21>
           target: ArraySubscriptExpr <69:17>
-            base: ArraySubscriptExpr <69:14>
-              base: MemberExpr ->cells <69:7>
-                base: DeclRefExpr cp <69:5>
-              index: IntLiteral 0 <69:15>
+            base: ImplicitCastExpr array-to-pointer <69:14>
+              ArraySubscriptExpr <69:14>
+                base: ImplicitCastExpr array-to-pointer <69:7>
+                  MemberExpr ->cells <69:7>
+                    base: DeclRefExpr cp <69:5>
+                index: IntLiteral 0 <69:15>
             index: IntLiteral 1 <69:18>
           value: BinaryExpr '*' <69:39>
             ArraySubscriptExpr <69:35>
-              base: ArraySubscriptExpr <69:32>
-                base: MemberExpr ->cells <69:25>
-                  base: DeclRefExpr cp <69:23>
-                index: IntLiteral 1 <69:33>
+              base: ImplicitCastExpr array-to-pointer <69:32>
+                ArraySubscriptExpr <69:32>
+                  base: ImplicitCastExpr array-to-pointer <69:25>
+                    MemberExpr ->cells <69:25>
+                      base: DeclRefExpr cp <69:23>
+                  index: IntLiteral 1 <69:33>
               index: IntLiteral 2 <69:36>
             IntLiteral 2 <69:41>
       DeclStmt <70:5>
@@ -267,17 +290,22 @@ Program <1:1>
             BinaryExpr '+' <70:34>
               CallExpr 2 arg(s) <70:24>
                 callee: DeclRefExpr sumGrid <70:17>
-                arg: DeclRefExpr grid <70:25>
+                arg: ImplicitCastExpr array-to-pointer <70:25>
+                  DeclRefExpr grid <70:25>
                 arg: IntLiteral 2 <70:31>
               ArraySubscriptExpr <70:40>
-                base: DeclRefExpr seen <70:36>
+                base: ImplicitCastExpr array-to-pointer <70:36>
+                  DeclRefExpr seen <70:36>
                 index: IntLiteral 0 <70:41>
             ArraySubscriptExpr <70:49>
-              base: DeclRefExpr arr <70:46>
+              base: ImplicitCastExpr array-to-pointer <70:46>
+                DeclRefExpr arr <70:46>
               index: ArraySubscriptExpr <70:57>
-                base: ArraySubscriptExpr <70:54>
-                  base: DeclRefExpr grid <70:50>
-                  index: IntLiteral 0 <70:55>
+                base: ImplicitCastExpr array-to-pointer <70:54>
+                  ArraySubscriptExpr <70:54>
+                    base: ImplicitCastExpr array-to-pointer <70:50>
+                      DeclRefExpr grid <70:50>
+                    index: IntLiteral 0 <70:55>
                 index: IntLiteral 0 <70:58>
       ExprStmt <72:5>
         DeleteExpr array <72:5>
@@ -307,9 +335,11 @@ Program <1:1>
                     CallExpr 0 arg(s) <75:58>
                       callee: MemberExpr .next <75:53>
                         base: DeclRefExpr c <75:52>
-                  ArraySubscriptExpr <75:67>
-                    base: DeclRefExpr word <75:63>
-                    index: IntLiteral 0 <75:68>
+                  ImplicitCastExpr integral <75:67>
+                    ArraySubscriptExpr <75:67>
+                      base: ImplicitCastExpr array-to-pointer <75:63>
+                        DeclRefExpr word <75:63>
+                      index: IntLiteral 0 <75:68>
                 UnaryExpr '*' prefix <75:73>
                   DeclRefExpr cell <75:74>
               MemberExpr ->x <75:83>

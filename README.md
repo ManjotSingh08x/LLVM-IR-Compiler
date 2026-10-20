@@ -1,4 +1,4 @@
-# CSC-305 Assignment 2: Syntax Analyzer
+# CSC-305 Assignment 3: Semantic Analyzer
 
 Team members:
 
@@ -9,7 +9,7 @@ Team members:
 
 Source language: submitted C++ subset
 
-Implementation language: C++17 with Flex and Bison
+Implementation language: C++17 with Flex, Bison and the LLVM type API
 
 The test files keep the `.ckp` name used in Phase 1. This is only our file
 naming convention. The analyzer reads source text from any file path and does
@@ -17,7 +17,19 @@ not check its extension.
 
 ## Build
 
-The project requires `g++`, `flex`, and `bison`.
+The project requires `flex`, `bison`, a C++17 compiler, and LLVM 18 or newer.
+
+LLVM is found through `llvm-config`. On macOS the Makefile looks for Homebrew's
+copy, which is not on the `PATH`, and uses `clang++`, because Homebrew's LLVM is
+built against libc++ and its headers must be compiled by the matching compiler.
+On Linux it uses `llvm-config` from the `PATH` and `g++`. Both can be overridden:
+
+```bash
+make CXX=g++-14 LLVM_CONFIG=/usr/bin/llvm-config-20
+```
+
+Only the type API is linked (`llvm-config --libs core support`), to lower our
+types to LLVM types. No IR is generated yet.
 
 ```bash
 make clean && make
@@ -44,17 +56,18 @@ make test                          # builds, then runs every test case
 Passing an executable path skips the build and uses the executable given.
 
 `run.sh` runs every `.ckp` file in `test/` and reports what happened to each:
-either the file parsed and a token table was produced, or the analyzer reported
-errors, in which case the errors are shown with a count. No test case is named
+either the file was accepted and a token table was produced, or the analyzer
+reported errors, in which case the errors are shown with a count. No test case is named
 in the script and no outcome is assumed in advance, so adding a test case means
 only adding the file. The full output for every file is written to `outputs/`.
 
 ## Output
 
-A file that parses prints `Parsing successful.` followed by the token table:
+A file that is accepted prints both phases, then the token table:
 
 ```text
 Parsing successful.
+Semantic analysis successful.
 
 Token                | Token_Type
 ---------------------+---------------
@@ -80,22 +93,38 @@ is what the declaration said about it, which only the parser can know:
 | Declared as | Token_Type |
 | --- | --- |
 | a variable or parameter | the type specifier of its declaration, upper cased: `INT`, `CHAR`, `DOUBLE`, or `DOG` for a class type |
-| a variable or parameter whose declarator carries `*`, `&` or `[]` | that type marked as a class specifier: `INT_CLASSSPECIFIER`, `CHAR_CLASSSPECIFIER` |
 | a function, constructor, destructor, or function pointer | `PROCEDURE` |
 | a structure tag | `STRUCT` |
 | a class name | `CLASS` |
 | a statement label, and the target of a `goto` | `LABEL` |
 | never declared in the file | `IDENTIFIER` |
 
-A declarator carrying a star, an ampersand or brackets does not have the
-declared type itself, so it reports that type marked as a class specifier:
-`char *argv[]` gives `CHAR_CLASSSPECIFIER` rather than `CHAR`. 
+The token table reports the written type specifier, so `int **p` and
+`char *argv[]` report `INT` and `CHAR`. The full type of every name, pointers,
+arrays and all, is in the symbol table dump described below.
+
+### Semantic output
+
+Every accepted file also produces two files under `outputs/`:
+
+- `<name>-ast.txt`, the syntax tree, which after semantic analysis also shows
+  the `ImplicitCastExpr` nodes the type checker inserted;
+- `<name>-symbols.txt`, the scope tree with every symbol, its full type, its
+  mangled name, and the LLVM type it lowers to.
+
+A file with a semantic error reports it in the same form as a syntax error and
+exits non-zero:
+
+```text
+test/test18_type_errors.ckp line: 33 col: 15 semantic error: cannot dereference a value of type 'int'
+25 semantic error(s) found.
+```
 
 
 ## Test coverage
 
-There are seventeen test cases. Eight parse and produce a token table; nine are
-rejected and report errors.
+There are twenty-two test cases. Nine are accepted and produce a token table;
+thirteen are rejected and report errors.
 
 Feature coverage:
 
@@ -112,12 +141,34 @@ Feature coverage:
 - **test17** `static` variables, functions and members, list initialisation
   without `=` (`int a{5};`, `Point p{1, 2};`, `new int[3]{1, 2, 3}`), and
   multi-dimensional element access through arrays, pointers and members.
+- **test22** the recursive type system: pointers of several levels, pointers to
+  arrays, pointers to function pointers, references to arrays, `new` with a
+  pointer element type, pointer arithmetic, and `null` and `void *` conversions.
 
 Cases that must be rejected:
 
 - **test6** the Phase 1 lexical errors, reported by the scanner.
 - **test8** constructs left unticked on the feature form, which the grammar
   deliberately does not accept.
+
+Semantic errors, one class of error per file:
+
+- **test18** undeclared and redeclared names, use before declaration,
+  incompatible initialisation and assignment, assignment to something that is
+  not a variable, bad dereference, index, member access and `delete`, array
+  sizes that are not positive constants, and `this` outside a member function.
+- **test19** access control: `private` and `protected` members from outside the
+  class, a private base member from a derived class, and members reached
+  through a privately inherited base.
+- **test20** calls: wrong argument counts, arguments that do not convert,
+  overload resolution with no match, calling a value that is not a function, a
+  function pointer that does not match, a member function without an object,
+  and a member function used as a value instead of being called.
+- **test21** control flow: `break` and `continue` outside a loop, `goto` to a
+  label that does not exist, a duplicate label, a `switch` on a non-integer,
+  duplicate and non-constant `case` values, two `default` labels, `case` and
+  `default` outside a `switch`, conditions that are not scalars, and a `for`
+  variable used after its loop.
 
 One malformed construct per file, so that it is clear which construct produced
 which message:
@@ -138,10 +189,17 @@ confirms the analyzer does not reject valid input.
 
 The grammar has no shift/reduce or reduce/reduce conflicts.
 
-`parenthesized_declarator` covers both suffixes that may follow `(*name)`: a
-parameter list gives a pointer to function, and a dimension list gives a pointer
-to array, which is the declarator required to hold a multi-dimensional
-allocation such as `new int[3][5]`.
+`pointer` is one or more stars, so a declarator may carry any number of
+pointer levels. `paren_suffix` covers both suffixes that may follow `(*name)`:
+a parameter list gives a pointer to function, and a dimension list gives a
+pointer to array, which is the declarator required to hold a multi-dimensional
+allocation such as `new int[3][5]`. Stars may appear on both sides of the
+parentheses, which is what `int **(*p)[10]` needs.
+
+A class type followed directly by a parenthesised declarator is offered only at
+file scope, through `named_parenthesized_declaration`. Inside a class `Dog (`
+would begin a constructor, and inside a block it has the shape of a call, so
+`struct Dog (*dogs)[2]` is written there instead.
 
 `parenthesized_parameter_declarator` allows the same shape in a parameter list,
 so a pointer to function, a pointer to array or a reference to array can be
@@ -153,13 +211,78 @@ of the form `a * b;` has the same token sequence as the declaration `Dog * p;`,
 and `%nonassoc IDENTIFIER_EXPRESSION` together with `%nonassoc TOK_STAR
 TOK_BITAND` resolves it toward the declaration reading. 
 
+## Semantic analysis
+
+After a successful parse the analyzer builds a symbol table and type checks the
+tree. Both passes live in `src/semantic/` and share the visitor in
+`src/semantic/visitor.h`:
+
+- `types.h` holds the recursive type system. A compound type points at the type
+  it is built from, so `int **(*p)[10]` is a pointer to an array of ten
+  pointers to a pointer to `int`. It also holds the helpers the type checker
+  needs, such as `isSameType`, `decay` and `findConversion`, and `toLLVM`,
+  which lowers a type to an `llvm::Type`.
+- `symbols.h` holds the symbols and the scope tree. Every scope is kept after
+  it is built, and the tree nodes that open a scope point at theirs, so later
+  passes walk back into the same scopes. The `SymbolTable` at the root owns
+  both the scopes and every compound type, because types are shared: the type
+  of `&x` points at the type of `x`.
+- `symbolbuilder.h` declares every name and resolves every written type. It
+  runs in two passes over the file, because a class body sees all of its
+  members at once: first every record with its members and every function
+  signature and global, then the bodies with their parameters and locals.
+- `typecheck.h` works out the type of every expression and checks each use. It
+  writes its results into the tree: the type and value category of every
+  expression, the symbol every name resolves to, an `ImplicitCastExpr` around
+  every silent conversion, and the constructor each declaration runs.
+
+Methods become global functions that take the object as a `this` parameter.
+Each function symbol keeps both signatures: the one callers are checked
+against, and the lowered one with `this` in front.
+
+`docs/semantic-phase.md` explains all of this in full: the type system and why
+it is not `llvm::Type`, who owns the types, the declarator rewrite, the scope
+tree, the mangling scheme, and the edge cases behind each semantic field on the
+tree.
+
+Names are mangled with each part written as its length followed by the name,
+so overloads and names containing underscores cannot collide:
+
+| Source | Mangled |
+| --- | --- |
+| `int add(int, int)` | `global_3add_ii` |
+| `void Animal::setAge(int)` | `class_6Animal_6setAge_i` |
+| `Animal()` and `Animal(int)` | `class_6Animal_C_v`, `class_6Animal_C_i` |
+| `Animal::~Animal()` | `class_6Animal_D_v` |
+| `int Outer::Inner::f()` | `class_5Outer5Inner_1f_v` |
+| `static int Counter::total` | `class_7Counter_5total` |
+
+`main`, `printf` and `scanf` keep their own names so that the program links.
+Parameter types are written as `v b c i f d` for the builtins, `P` for a
+pointer, `R` for a reference, `A<n>_` for an array, `F..E` for a function, and
+a length-prefixed name for a record.
+
 ## Layout
 
 ```text
+docs/
+  semantic-phase.md
 src/
   lexer.l
   parser.y
   token_types.h
+  declarator.h
+  ast/
+    ast.h base.h statements.h declarations.h expressions.h
+    ast_printer.h ast_printer.cpp
+  semantic/
+    visitor.h
+    types.h types.cpp
+    symbols.h symbols.cpp
+    symbolbuilder.h symbolbuilder.cpp
+    typecheck.h typecheck.cpp
+    constants.h constants.cpp
+    diagnostics.h
 test/
   test1_control_flow.ckp
   test2_arrays_pointers_struct.ckp
@@ -178,6 +301,11 @@ test/
   test15_missing_operator.ckp
   test16_brackets.ckp
   test17_brace_static_multidim.ckp
+  test18_type_errors.ckp
+  test19_access_errors.ckp
+  test20_call_errors.ckp
+  test21_flow_errors.ckp
+  test22_pointer_types.ckp
 Makefile
 run.sh
 README.md
@@ -194,8 +322,9 @@ build/lex.yy.cpp
 build/parser
 ```
 
-`run.sh` saves one output file for each test under `outputs/` and reports the
-result of each without assuming what it should be.
+`run.sh` saves the token table, the syntax tree and the symbol table dump for
+each test under `outputs/` and reports the result of each without assuming what
+it should be.
 
 ## Supported syntax
 
@@ -208,9 +337,10 @@ The grammar covers the features selected for our submission:
 - `goto`, labels, `break`, `continue`, and `return`;
 - typed functions, calls with arguments, recursive call syntax, and
   `main(int argc, char *argv[])`;
-- integer and character arrays, multi-dimensional arrays, one-level pointers,
-  references, function pointers as variables and as parameters, and pointers to
-  arrays written as `int (*p)[3]`;
+- integer and character arrays, multi-dimensional arrays, pointers of any
+  number of levels such as `int ***p`, references, function pointers as
+  variables and as parameters, pointers to arrays written as `int (*p)[3]`,
+  and the two combined as `int **(*p)[10]`;
 - brace initialisers, both `= { ... }` and the list form without `=` such as
   `int a{5};`, `int g[2][2]{{1, 2}, {3, 4}};` or `Point p{1, 2};`, including
   nested ones for multi-dimensional arrays and structures, and after `new`
@@ -235,7 +365,6 @@ following was checked against the built parser and is rejected:
 - `typedef`, `using`, `enum`, or `union`
 - variadic `...` parameters
 - `until` loops
-- multi-level pointer declarators such as `int **p`
 - `sizeof` expressions, although the scanner still recognizes `sizeof` as a
   Phase 1 keyword token
 - `<<=`, `>>=`, `&=`, `|=`, or `^=`

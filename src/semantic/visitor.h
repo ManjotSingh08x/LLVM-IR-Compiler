@@ -1,11 +1,12 @@
-#ifndef AST_VISITOR_H
-#define AST_VISITOR_H
+#ifndef SEMANTIC_VISITOR_H
+#define SEMANTIC_VISITOR_H
 
 #include "ast/ast.h"
 
 namespace ast {
 
-//llvm StmtVisitor style visitor. visit() switches on the node's kind and calls
+//llvm StmtVisitor style visitor, shared by every pass over the tree: the
+//semantic passes and the ast printer. visit() switches on the node's kind and calls
 //the matching visitX of the derived class, so every pass picks its own return
 //type: a printer returns void, a type checker could return a Type *.
 //
@@ -71,6 +72,7 @@ public:
         case ASTKind::DeleteExpr:         return derived().visitDeleteExpr(static_cast<DeleteExpr *>(node));
         case ASTKind::InitListExpr:       return derived().visitInitListExpr(static_cast<InitListExpr *>(node));
         case ASTKind::LambdaExpr:         return derived().visitLambdaExpr(static_cast<LambdaExpr *>(node));
+        case ASTKind::ImplicitCastExpr:   return derived().visitImplicitCastExpr(static_cast<ImplicitCastExpr *>(node));
         }
         return RetTy();
     }
@@ -127,6 +129,7 @@ public:
     RetTy visitDeleteExpr(DeleteExpr *node) { return derived().visitExpr(node); }
     RetTy visitInitListExpr(InitListExpr *node) { return derived().visitExpr(node); }
     RetTy visitLambdaExpr(LambdaExpr *node) { return derived().visitExpr(node); }
+    RetTy visitImplicitCastExpr(ImplicitCastExpr *node) { return derived().visitExpr(node); }
 
 private:
     Derived &derived() { return *static_cast<Derived *>(this); }

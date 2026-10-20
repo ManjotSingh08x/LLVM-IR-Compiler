@@ -139,20 +139,25 @@ Program <1:1>
           target: DeclRefExpr t <29:5>
           value: ParenExpr <29:9>
             BinaryExpr '&&' <29:12>
-              DeclRefExpr a <29:10>
-              DeclRefExpr b <29:15>
+              ImplicitCastExpr to-bool <29:10>
+                DeclRefExpr a <29:10>
+              ImplicitCastExpr to-bool <29:15>
+                DeclRefExpr b <29:15>
       ExprStmt <29:20>
         AssignExpr '=' <29:22>
           target: DeclRefExpr t <29:20>
           value: ParenExpr <29:24>
             BinaryExpr '||' <29:27>
-              DeclRefExpr a <29:25>
-              DeclRefExpr b <29:30>
+              ImplicitCastExpr to-bool <29:25>
+                DeclRefExpr a <29:25>
+              ImplicitCastExpr to-bool <29:30>
+                DeclRefExpr b <29:30>
       ExprStmt <29:35>
         AssignExpr '=' <29:37>
           target: DeclRefExpr t <29:35>
           value: UnaryExpr '!' prefix <29:39>
-            DeclRefExpr a <29:40>
+            ImplicitCastExpr to-bool <29:40>
+              DeclRefExpr a <29:40>
       ExprStmt <32:5>
         AssignExpr '=' <32:7>
           target: DeclRefExpr c <32:5>

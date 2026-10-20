@@ -1,0 +1,21 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  function classify : int (int) [global_8classify_i] llvm: i32 (i32)
+  function main : int () [main] llvm: i32 ()
+  scope function classify <2:5>
+    parameter n : int llvm: i32
+    scope block <3:16>
+    scope block <5:24>
+    scope block <7:12>
+  scope function main <12:5>
+    variable a : int llvm: i32
+    variable b : int llvm: i32
+    variable c : int llvm: i32
+    variable t : bool llvm: i1
+    variable i : int llvm: i32
+    variable sum : int llvm: i32
+    scope block <40:5>
+      scope block <40:30>
+    scope block <47:21>
+    scope block <50:8>

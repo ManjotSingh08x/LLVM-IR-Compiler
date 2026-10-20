@@ -3,9 +3,13 @@ class Animal {
 public:
     int age;
 
+    // Tests: static member, defined outside the class below
+    static int created;
+
     // Tests: constructor and destructor declarations
     Animal();
     Animal(int a);
+    Animal(int a, int l);
     ~Animal();
 
     void setAge(int a) {
@@ -52,8 +56,8 @@ private:
     bool quiet;
 };
 
-// Tests: additional scope resolution operator
-int Animal::age = 0;
+// Tests: additional scope resolution operator; definition of a static member
+int Animal::created = 0;
 
 int main() {
     // Tests: class and object; dynamic memory allocation

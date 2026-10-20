@@ -1,0 +1,38 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  class Base [Base] llvm: %class.Base { i32, i32, i32 }
+  class Derived [Derived] llvm: %class.Derived { %class.Base }
+  class Hidden [Hidden] llvm: %class.Hidden { %class.Base }
+  class FromHidden [FromHidden] llvm: %class.FromHidden { %class.Hidden }
+  class WithMethods [WithMethods] llvm: %class.WithMethods {  }
+  function main : int () [main] llvm: i32 ()
+  scope record Base <2:1>
+    field open : int public llvm: i32
+    method readOpen : int () public [class_4Base_8readOpen_v] this-lowered: int (Base*) llvm: i32 (ptr)
+    field guarded : int protected llvm: i32
+    field shut : int private llvm: i32
+    scope function readOpen <5:9>
+  scope record Derived <13:1>
+    method readInherited : int () public [class_7Derived_13readInherited_v] this-lowered: int (Derived*) llvm: i32 (ptr)
+    method readPrivate : int () public [class_7Derived_11readPrivate_v] this-lowered: int (Derived*) llvm: i32 (ptr)
+    scope function readInherited <15:9>
+    scope function readPrivate <18:9>
+  scope record Hidden <25:1>
+    method readOwn : int () public [class_6Hidden_7readOwn_v] this-lowered: int (Hidden*) llvm: i32 (ptr)
+    scope function readOwn <27:9>
+  scope record FromHidden <30:1>
+    method reach : int () public [class_10FromHidden_5reach_v] this-lowered: int (FromHidden*) llvm: i32 (ptr)
+    scope function reach <32:9>
+  scope record WithMethods <38:1>
+    method visible : int () public [class_11WithMethods_7visible_v] this-lowered: int (WithMethods*) llvm: i32 (ptr)
+    method invisible : int () private [class_11WithMethods_9invisible_v] this-lowered: int (WithMethods*) llvm: i32 (ptr)
+    scope function visible <40:9>
+    scope function invisible <42:9>
+  scope function main <45:5>
+    variable b : Base llvm: %class.Base = type { i32, i32, i32 }
+    variable d : Derived llvm: %class.Derived = type { %class.Base }
+    variable w : WithMethods llvm: %class.WithMethods = type {}
+    variable ok : int llvm: i32
+    variable viaDerived : int llvm: i32
+    variable called : int llvm: i32

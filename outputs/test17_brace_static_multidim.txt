@@ -1,4 +1,5 @@
 Parsing successful.
+Semantic analysis successful.
 
 Token      | Token_Type
 -----------+---------------
@@ -77,7 +78,7 @@ start      | INT
 }          | PUNCTUATOR
 ;          | PUNCTUATOR
 int        | KEYWORD
-cells      | INT_CLASSSPECIFIER
+cells      | INT
 [          | PUNCTUATOR
 2          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -91,7 +92,7 @@ int        | KEYWORD
 sumGrid    | PROCEDURE
 (          | PUNCTUATOR
 int        | KEYWORD
-m          | INT_CLASSSPECIFIER
+m          | INT
 [          | PUNCTUATOR
 ]          | PUNCTUATOR
 [          | PUNCTUATOR
@@ -140,7 +141,7 @@ j          | INT
 {          | PUNCTUATOR
 s          | INT
 +=         | OPERATOR
-m          | INT_CLASSSPECIFIER
+m          | INT
 [          | PUNCTUATOR
 i          | INT
 ]          | PUNCTUATOR
@@ -167,7 +168,7 @@ calls      | INT
 ;          | PUNCTUATOR
 static     | KEYWORD
 int        | KEYWORD
-seen       | INT_CLASSSPECIFIER
+seen       | INT
 [          | PUNCTUATOR
 4          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -189,7 +190,7 @@ b          | INT
 }          | PUNCTUATOR
 ;          | PUNCTUATOR
 int        | KEYWORD
-arr        | INT_CLASSSPECIFIER
+arr        | INT
 [          | PUNCTUATOR
 3          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -202,7 +203,7 @@ arr        | INT_CLASSSPECIFIER
 }          | PUNCTUATOR
 ;          | PUNCTUATOR
 int        | KEYWORD
-grid       | INT_CLASSSPECIFIER
+grid       | INT
 [          | PUNCTUATOR
 2          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -228,7 +229,7 @@ grid       | INT_CLASSSPECIFIER
 }          | PUNCTUATOR
 ;          | PUNCTUATOR
 char       | KEYWORD
-word       | CHAR_CLASSSPECIFIER
+word       | CHAR
 [          | PUNCTUATOR
 3          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -268,7 +269,7 @@ q          | POINT
 ;          | PUNCTUATOR
 Point      | STRUCT
 *          | OPERATOR
-pp         | POINT_CLASSSPECIFIER
+pp         | POINT
 {          | PUNCTUATOR
 &          | OPERATOR
 p          | POINT
@@ -276,7 +277,7 @@ p          | POINT
 ;          | PUNCTUATOR
 int        | KEYWORD
 *          | OPERATOR
-heap       | INT_CLASSSPECIFIER
+heap       | INT
 =          | OPERATOR
 new        | KEYWORD
 int        | KEYWORD
@@ -293,7 +294,7 @@ int        | KEYWORD
 ;          | PUNCTUATOR
 Point      | STRUCT
 *          | OPERATOR
-np         | POINT_CLASSSPECIFIER
+np         | POINT
 =          | OPERATOR
 new        | KEYWORD
 Point      | STRUCT
@@ -306,7 +307,7 @@ Point      | STRUCT
 int        | KEYWORD
 (          | PUNCTUATOR
 *          | OPERATOR
-m          | INT_CLASSSPECIFIER
+m          | INT
 )          | PUNCTUATOR
 [          | PUNCTUATOR
 3          | INTEGER_LITERAL
@@ -339,7 +340,7 @@ int        | KEYWORD
 }          | PUNCTUATOR
 ;          | PUNCTUATOR
 int        | KEYWORD
-cube       | INT_CLASSSPECIFIER
+cube       | INT
 [          | PUNCTUATOR
 2          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -350,7 +351,7 @@ cube       | INT_CLASSSPECIFIER
 2          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 ;          | PUNCTUATOR
-cube       | INT_CLASSSPECIFIER
+cube       | INT
 [          | PUNCTUATOR
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -361,7 +362,7 @@ cube       | INT_CLASSSPECIFIER
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 =          | OPERATOR
-grid       | INT_CLASSSPECIFIER
+grid       | INT
 [          | PUNCTUATOR
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -369,7 +370,7 @@ grid       | INT_CLASSSPECIFIER
 2          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 +          | OPERATOR
-m          | INT_CLASSSPECIFIER
+m          | INT
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -377,7 +378,7 @@ m          | INT_CLASSSPECIFIER
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 ;          | PUNCTUATOR
-grid       | INT_CLASSSPECIFIER
+grid       | INT
 [          | PUNCTUATOR
 a          | INT
 -          | OPERATOR
@@ -387,7 +388,7 @@ a          | INT
 b          | INT
 ]          | PUNCTUATOR
 +=         | OPERATOR
-cube       | INT_CLASSSPECIFIER
+cube       | INT
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -398,7 +399,7 @@ cube       | INT_CLASSSPECIFIER
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 ;          | PUNCTUATOR
-m          | INT_CLASSSPECIFIER
+m          | INT
 [          | PUNCTUATOR
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -408,7 +409,7 @@ m          | INT_CLASSSPECIFIER
 ++         | OPERATOR
 ;          | PUNCTUATOR
 --         | OPERATOR
-grid       | INT_CLASSSPECIFIER
+grid       | INT
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -418,10 +419,10 @@ grid       | INT_CLASSSPECIFIER
 ;          | PUNCTUATOR
 int        | KEYWORD
 *          | OPERATOR
-cell       | INT_CLASSSPECIFIER
+cell       | INT
 =          | OPERATOR
 &          | OPERATOR
-grid       | INT_CLASSSPECIFIER
+grid       | INT
 [          | PUNCTUATOR
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -434,7 +435,7 @@ c          | COUNTER
 ;          | PUNCTUATOR
 c          | COUNTER
 .          | OPERATOR
-cells      | INT_CLASSSPECIFIER
+cells      | INT
 [          | PUNCTUATOR
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -446,14 +447,14 @@ cells      | INT_CLASSSPECIFIER
 ;          | PUNCTUATOR
 Counter    | CLASS
 *          | OPERATOR
-cp         | COUNTER_CLASSSPECIFIER
+cp         | COUNTER
 =          | OPERATOR
 &          | OPERATOR
 c          | COUNTER
 ;          | PUNCTUATOR
-cp         | COUNTER_CLASSSPECIFIER
+cp         | COUNTER
 ->         | OPERATOR
-cells      | INT_CLASSSPECIFIER
+cells      | INT
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -461,9 +462,9 @@ cells      | INT_CLASSSPECIFIER
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 =          | OPERATOR
-cp         | COUNTER_CLASSSPECIFIER
+cp         | COUNTER
 ->         | OPERATOR
-cells      | INT_CLASSSPECIFIER
+cells      | INT
 [          | PUNCTUATOR
 1          | INTEGER_LITERAL
 ]          | PUNCTUATOR
@@ -478,39 +479,39 @@ total      | INT
 =          | OPERATOR
 sumGrid    | PROCEDURE
 (          | PUNCTUATOR
-grid       | INT_CLASSSPECIFIER
+grid       | INT
 ,          | PUNCTUATOR
 2          | INTEGER_LITERAL
 )          | PUNCTUATOR
 +          | OPERATOR
-seen       | INT_CLASSSPECIFIER
+seen       | INT
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 +          | OPERATOR
-arr        | INT_CLASSSPECIFIER
+arr        | INT
 [          | PUNCTUATOR
-grid       | INT_CLASSSPECIFIER
-[          | PUNCTUATOR
-0          | INTEGER_LITERAL
-]          | PUNCTUATOR
+grid       | INT
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
+[          | PUNCTUATOR
+0          | INTEGER_LITERAL
+]          | PUNCTUATOR
 ]          | PUNCTUATOR
 ;          | PUNCTUATOR
 delete     | KEYWORD
 [          | PUNCTUATOR
 ]          | PUNCTUATOR
-heap       | INT_CLASSSPECIFIER
+heap       | INT
 ;          | PUNCTUATOR
 delete     | KEYWORD
 [          | PUNCTUATOR
 ]          | PUNCTUATOR
-m          | INT_CLASSSPECIFIER
+m          | INT
 ;          | PUNCTUATOR
 delete     | KEYWORD
-np         | POINT_CLASSSPECIFIER
+np         | POINT
 ;          | PUNCTUATOR
 return     | KEYWORD
 total      | INT
@@ -530,15 +531,15 @@ next       | PROCEDURE
 (          | PUNCTUATOR
 )          | PUNCTUATOR
 +          | OPERATOR
-word       | CHAR_CLASSSPECIFIER
+word       | CHAR
 [          | PUNCTUATOR
 0          | INTEGER_LITERAL
 ]          | PUNCTUATOR
 +          | OPERATOR
 *          | OPERATOR
-cell       | INT_CLASSSPECIFIER
+cell       | INT
 +          | OPERATOR
-pp         | POINT_CLASSSPECIFIER
+pp         | POINT
 ->         | OPERATOR
 x          | INT
 +          | OPERATOR

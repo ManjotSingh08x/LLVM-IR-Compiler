@@ -1,4 +1,5 @@
 Parsing successful.
+Semantic analysis successful.
 
 Token                                        | Token_Type
 ---------------------------------------------+---------------
@@ -89,31 +90,31 @@ c7                                           | CHAR
 ;                                            | PUNCTUATOR
 char                                         | KEYWORD
 *                                            | OPERATOR
-s1                                           | CHAR_CLASSSPECIFIER
+s1                                           | CHAR
 =                                            | OPERATOR
 "hello world"                                | STRING_LITERAL
 ;                                            | PUNCTUATOR
 char                                         | KEYWORD
 *                                            | OPERATOR
-s2                                           | CHAR_CLASSSPECIFIER
+s2                                           | CHAR
 =                                            | OPERATOR
 "tab\there and newline\n"                    | STRING_LITERAL
 ;                                            | PUNCTUATOR
 char                                         | KEYWORD
 *                                            | OPERATOR
-s3                                           | CHAR_CLASSSPECIFIER
+s3                                           | CHAR
 =                                            | OPERATOR
 "quote \" and backslash \\ inside"           | STRING_LITERAL
 ;                                            | PUNCTUATOR
 char                                         | KEYWORD
 *                                            | OPERATOR
-s4                                           | CHAR_CLASSSPECIFIER
+s4                                           | CHAR
 =                                            | OPERATOR
 "not a comment: /* nor this */ // nor this"  | STRING_LITERAL
 ;                                            | PUNCTUATOR
 char                                         | KEYWORD
 *                                            | OPERATOR
-s5                                           | CHAR_CLASSSPECIFIER
+s5                                           | CHAR
 =                                            | OPERATOR
 ""                                           | STRING_LITERAL
 ;                                            | PUNCTUATOR

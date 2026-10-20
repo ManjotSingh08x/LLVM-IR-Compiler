@@ -81,7 +81,8 @@ public:
         : Expr(ASTKind::DeclRefExpr, line, col), name(std::move(name)) {}
 
 
-    std::string name;
+    std::string   name;
+    sema::Symbol *symbol = nullptr;  //what the name refers to, set by the type checker
 };
 
 class ParenExpr : public Expr {
@@ -150,6 +151,10 @@ public:
 
     std::unique_ptr<Expr> callee;
     NodeList<Expr>        args;
+
+    //the function called by name, null for a call through a function pointer
+    //or a lambda
+    sema::FunctionSymbol *function = nullptr;
 };
 
 class ArraySubscriptExpr : public Expr {
@@ -173,6 +178,7 @@ public:
     std::unique_ptr<Expr> base;
     std::string           member;
     bool                  isArrow;
+    sema::Symbol         *symbol = nullptr;  //the field or method, set by the type checker
 };
 
 //new T, new T(args), new T{...}, new T[n], new T[n]{...}
@@ -184,10 +190,11 @@ public:
 
 
     NewForm                   form;
-    std::unique_ptr<TypeSpec> type;
+    std::unique_ptr<TypeSpec> type;  //the element type for the array forms
     NodeList<Expr>            args;  //for Args
     NodeList<Expr>            dims;  //for Array and ArrayInit
     std::unique_ptr<Expr>     init;  //an InitListExpr, for InitList and ArrayInit
+    sema::FunctionSymbol     *constructor = nullptr;  //the constructor that runs, if any
 };
 
 class DeleteExpr : public Expr {
@@ -207,7 +214,8 @@ public:
         : Expr(ASTKind::InitListExpr, line, col), inits(std::move(inits)) {}
 
 
-    NodeList<Expr> inits;
+    NodeList<Expr>        inits;
+    sema::FunctionSymbol *constructor = nullptr;  //when the list is a class's constructor arguments
 };
 
 enum class CaptureDefault { None, ByCopy, ByRef };
@@ -215,8 +223,9 @@ enum class CaptureDefault { None, ByCopy, ByRef };
 struct LambdaCapture {
     enum class Kind { ByCopy, ByRef, This };
 
-    Kind        kind = Kind::ByCopy;
-    std::string name;  //empty for this
+    Kind          kind = Kind::ByCopy;
+    std::string   name;  //empty for this
+    sema::Symbol *symbol = nullptr;  //the captured variable, set by the type checker
 };
 
 class LambdaExpr : public Expr {
@@ -231,6 +240,39 @@ public:
     std::vector<LambdaCapture>    captures;
     NodeList<ParamDecl>           params;
     std::unique_ptr<CompoundStmt> body;
+
+    sema::Scope                  *scope = nullptr;  //holds the parameters
+    //every variable the body uses from the enclosing function, both the listed
+    //ones and the ones taken by a [=] or [&] default
+    std::vector<LambdaCapture>    usedCaptures;
+};
+
+//a conversion the source leaves implicit. the type checker wraps the converted
+//expression in one of these, so later passes see every conversion
+enum class CastKind {
+    IntegralCast,       //between bool, char and int
+    IntegralToFloating,
+    FloatingToIntegral,
+    FloatingCast,       //float and double
+    ToBool,             //an arithmetic value or a pointer tested as bool
+    ArrayToPointer,
+    FunctionToPointer,
+    NullToPointer,
+    DerivedToBase,      //a derived class pointer or object used as its base
+    PointerToVoid       //any object pointer to void *
+};
+
+class ImplicitCastExpr : public Expr {
+public:
+    ImplicitCastExpr(CastKind castKind, std::unique_ptr<Expr> sub, const sema::Type *toType)
+        : Expr(ASTKind::ImplicitCastExpr, sub->line, sub->col), castKind(castKind),
+          sub(std::move(sub)) {
+        type = toType;
+    }
+
+
+    CastKind              castKind;
+    std::unique_ptr<Expr> sub;
 };
 
 } // namespace ast

@@ -1,0 +1,63 @@
+// Access control. Every line marked is a semantic error.
+class Base {
+public:
+    int open;
+    int readOpen() { return open + guarded + shut; }
+protected:
+    int guarded;
+private:
+    int shut;
+};
+
+// Tests: a derived class reaches public and protected, but not private
+class Derived : public Base {
+public:
+    int readInherited() {
+        return open + guarded;
+    }
+    int readPrivate() {
+        // Tests: a private member of the base is not reachable
+        return shut;
+    }
+};
+
+// Tests: private inheritance hides the base members from further derivation
+class Hidden : private Base {
+public:
+    int readOwn() { return open; }
+};
+
+class FromHidden : public Hidden {
+public:
+    int reach() {
+        // Tests: Hidden inherits Base privately, so open is not reachable here
+        return open;
+    }
+};
+
+class WithMethods {
+public:
+    int visible() { return 1; }
+private:
+    int invisible() { return 2; }
+};
+
+int main() {
+    Base b;
+    Derived d;
+    WithMethods w;
+
+    // Tests: public access from outside is allowed
+    b.open = 1;
+    int ok = b.open + d.open + w.visible();
+
+    // Tests: protected and private members are not reachable from outside
+    b.guarded = 2;
+    b.shut = 3;
+    int viaDerived = d.guarded;
+
+    // Tests: a private member function is not callable from outside
+    int called = w.invisible();
+
+    return ok + viaDerived + called;
+}

@@ -15,10 +15,12 @@ Program <1:1>
           init: IntLiteral 0b1010 <6:15>
       DeclStmt <9:5>
         VarDecl f1 'float' init=copy <9:12>
-          init: FloatLiteral 3.14 <9:17>
+          init: ImplicitCastExpr floating <9:17>
+            FloatLiteral 3.14 <9:17>
       DeclStmt <10:5>
         VarDecl f2 'float' init=copy <10:12>
-          init: FloatLiteral 1.5e-3 <10:17>
+          init: ImplicitCastExpr floating <10:17>
+            FloatLiteral 1.5e-3 <10:17>
       DeclStmt <11:5>
         VarDecl d1 'double' init=copy <11:12>
           init: FloatLiteral .5 <11:17>
@@ -51,19 +53,24 @@ Program <1:1>
           init: CharLiteral '\0' <22:15>
       DeclStmt <25:5>
         VarDecl s1 'char*' init=copy <25:11>
-          init: StringLiteral ""hello world"" <25:16>
+          init: ImplicitCastExpr array-to-pointer <25:16>
+            StringLiteral ""hello world"" <25:16>
       DeclStmt <26:5>
         VarDecl s2 'char*' init=copy <26:11>
-          init: StringLiteral ""tab\there and newline\n"" <26:16>
+          init: ImplicitCastExpr array-to-pointer <26:16>
+            StringLiteral ""tab\there and newline\n"" <26:16>
       DeclStmt <27:5>
         VarDecl s3 'char*' init=copy <27:11>
-          init: StringLiteral ""quote \" and backslash \\ inside"" <27:16>
+          init: ImplicitCastExpr array-to-pointer <27:16>
+            StringLiteral ""quote \" and backslash \\ inside"" <27:16>
       DeclStmt <28:5>
         VarDecl s4 'char*' init=copy <28:11>
-          init: StringLiteral ""not a comment: /* nor this */ // nor this"" <28:16>
+          init: ImplicitCastExpr array-to-pointer <28:16>
+            StringLiteral ""not a comment: /* nor this */ // nor this"" <28:16>
       DeclStmt <29:5>
         VarDecl s5 'char*' init=copy <29:11>
-          init: StringLiteral """" <29:16>
+          init: ImplicitCastExpr array-to-pointer <29:16>
+            StringLiteral """" <29:16>
       DeclStmt <32:5>
         VarDecl yes 'bool' init=copy <32:10>
           init: BoolLiteral true <32:16>

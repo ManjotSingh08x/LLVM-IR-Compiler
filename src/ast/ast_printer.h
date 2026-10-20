@@ -4,7 +4,7 @@
 #include <ostream>
 #include <string>
 
-#include "ast/visitor.h"
+#include "semantic/visitor.h"
 
 namespace ast {
 
@@ -64,6 +64,7 @@ public:
     void visitDeleteExpr(DeleteExpr *node);
     void visitInitListExpr(InitListExpr *node);
     void visitLambdaExpr(LambdaExpr *node);
+    void visitImplicitCastExpr(ImplicitCastExpr *node);
 
 private:
     //writes the line for a node, attrs may be empty
@@ -78,7 +79,9 @@ private:
         for (const auto &item : list) child(role, item.get());
     }
 
-    void declaratorChildren(const Declarator &declarator);
+    //the array sizes and function pointer parameters inside a written type
+    void typeChildren(const TypeSpec *type);
+    void initChildren(VarDecl *node);
     void functionBody(FunctionDecl *node);
 
     std::ostream &out;

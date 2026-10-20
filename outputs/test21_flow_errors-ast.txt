@@ -1,0 +1,121 @@
+Program <1:1>
+  RecordDecl struct Point <2:1>
+    member: VarDecl x 'int' <3:9>
+  FunctionDecl main returns 'int' <6:5>
+    body: CompoundStmt <6:12>
+      DeclStmt <7:5>
+        VarDecl i 'int' init=copy <7:9>
+          init: IntLiteral 0 <7:13>
+      DeclStmt <8:5>
+        VarDecl p 'Point' <8:11>
+      BreakStmt <11:5>
+      ContinueStmt <12:5>
+      GotoStmt nowhere <15:5>
+      GotoStmt here <18:5>
+      LabelStmt here <19:1>
+        ExprStmt <20:5>
+          UnaryExpr '++' postfix <20:6>
+            DeclRefExpr i <20:5>
+      LabelStmt here <23:1>
+        ExprStmt <24:5>
+          UnaryExpr '++' postfix <24:6>
+            DeclRefExpr i <24:5>
+      SwitchStmt <27:5>
+        cond: DeclRefExpr p <27:13>
+        body: CompoundStmt <27:16>
+          CaseStmt <28:9>
+            value: IntLiteral 1 <28:14>
+            BreakStmt <29:13>
+      DeclStmt <32:5>
+        VarDecl d 'double' init=copy <32:12>
+          init: FloatLiteral 1.5 <32:16>
+      SwitchStmt <33:5>
+        cond: DeclRefExpr d <33:13>
+        body: CompoundStmt <33:16>
+          CaseStmt <34:9>
+            value: IntLiteral 1 <34:14>
+            BreakStmt <35:13>
+      SwitchStmt <39:5>
+        cond: DeclRefExpr i <39:13>
+        body: CompoundStmt <39:16>
+          CaseStmt <40:9>
+            value: IntLiteral 1 <40:14>
+            BreakStmt <41:13>
+          CaseStmt <42:9>
+            value: IntLiteral 1 <42:14>
+            BreakStmt <43:13>
+          CaseStmt <44:9>
+            value: DeclRefExpr i <44:14>
+            BreakStmt <45:13>
+          CaseStmt <46:9>
+            value: BinaryExpr '+' <46:16>
+              IntLiteral 2 <46:14>
+              IntLiteral 3 <46:18>
+            BreakStmt <47:13>
+          DefaultStmt <48:9>
+            BreakStmt <49:13>
+          DefaultStmt <50:9>
+            BreakStmt <51:13>
+      CaseStmt <55:5>
+        value: IntLiteral 7 <55:10>
+        ExprStmt <56:9>
+          UnaryExpr '++' postfix <56:10>
+            DeclRefExpr i <56:9>
+      DefaultStmt <57:5>
+        ExprStmt <58:9>
+          UnaryExpr '++' postfix <58:10>
+            DeclRefExpr i <58:9>
+      IfStmt <61:5>
+        cond: DeclRefExpr p <61:9>
+        then: CompoundStmt <61:12>
+          ExprStmt <62:9>
+            UnaryExpr '++' postfix <62:10>
+              DeclRefExpr i <62:9>
+      WhileStmt <64:5>
+        cond: DeclRefExpr p <64:12>
+        body: CompoundStmt <64:15>
+          ExprStmt <65:9>
+            UnaryExpr '++' postfix <65:10>
+              DeclRefExpr i <65:9>
+      ForStmt <67:5>
+        init: DeclStmt <67:10>
+          VarDecl j 'int' init=copy <67:14>
+            init: IntLiteral 0 <67:18>
+        cond: DeclRefExpr p <67:21>
+        inc: UnaryExpr '++' postfix <67:25>
+          DeclRefExpr j <67:24>
+        body: CompoundStmt <67:29>
+          ExprStmt <68:9>
+            UnaryExpr '++' postfix <68:10>
+              DeclRefExpr i <68:9>
+      DeclStmt <72:5>
+        VarDecl ptr 'int*' init=copy <72:10>
+          init: UnaryExpr '&' prefix <72:16>
+            DeclRefExpr i <72:17>
+      IfStmt <73:5>
+        cond: ImplicitCastExpr to-bool <73:9>
+          DeclRefExpr ptr <73:9>
+        then: CompoundStmt <73:14>
+          ExprStmt <74:9>
+            UnaryExpr '++' postfix <74:10>
+              DeclRefExpr i <74:9>
+      ForStmt <78:5>
+        init: DeclStmt <78:10>
+          VarDecl k 'int' init=copy <78:14>
+            init: IntLiteral 0 <78:18>
+        cond: BinaryExpr '<' <78:23>
+          DeclRefExpr k <78:21>
+          IntLiteral 3 <78:25>
+        inc: UnaryExpr '++' postfix <78:29>
+          DeclRefExpr k <78:28>
+        body: CompoundStmt <78:33>
+          ExprStmt <79:9>
+            AssignExpr '+=' <79:11>
+              target: DeclRefExpr i <79:9>
+              value: DeclRefExpr k <79:14>
+      ExprStmt <81:5>
+        AssignExpr '=' <81:7>
+          target: DeclRefExpr i <81:5>
+          value: DeclRefExpr k <81:9>
+      ReturnStmt <83:5>
+        DeclRefExpr i <83:12>

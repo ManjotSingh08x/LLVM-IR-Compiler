@@ -2,153 +2,157 @@ Program <1:1>
   RecordDecl class Animal <2:1>
     member: AccessSpecDecl public <3:1>
     member: VarDecl age 'int' <4:9>
-    member: ConstructorDecl Animal declaration <7:5>
-    member: ConstructorDecl Animal declaration <8:5>
-      param: ParamDecl a 'int' <8:16>
-    member: DestructorDecl ~Animal declaration <9:5>
-    member: FunctionDecl setAge returns 'void' <11:10>
-      param: ParamDecl a 'int' <11:21>
-      body: CompoundStmt <11:24>
-        ExprStmt <12:9>
-          AssignExpr '=' <12:19>
-            target: MemberExpr ->age <12:13>
-              base: ThisExpr <12:9>
-            value: DeclRefExpr a <12:21>
-    member: AccessSpecDecl protected <15:1>
-    member: VarDecl legs 'int' <16:9>
-    member: AccessSpecDecl private <18:1>
-    member: VarDecl secretId 'int' <19:9>
-    member: FunctionDecl hidden returns 'int' <21:9>
-      body: CompoundStmt <21:18>
-        ReturnStmt <22:9>
-          BinaryExpr '+' <22:25>
-            DeclRefExpr secretId <22:16>
-            DeclRefExpr legs <22:27>
-  RecordDecl class Dog : public Animal <27:1>
-    member: AccessSpecDecl public <28:1>
-    member: VarDecl loud 'bool' <29:10>
-    member: ConstructorDecl Dog <32:5>
-      body: CompoundStmt <32:11>
-        ExprStmt <33:9>
-          AssignExpr '=' <33:20>
-            target: MemberExpr ->loud <33:13>
-              base: ThisExpr <33:9>
-            value: BoolLiteral false <33:22>
+    member: VarDecl created 'int' static <7:16>
+    member: ConstructorDecl Animal declaration <10:5>
+    member: ConstructorDecl Animal declaration <11:5>
+      param: ParamDecl a 'int' <11:16>
+    member: ConstructorDecl Animal declaration <12:5>
+      param: ParamDecl a 'int' <12:16>
+      param: ParamDecl l 'int' <12:23>
+    member: DestructorDecl ~Animal declaration <13:5>
+    member: FunctionDecl setAge returns 'void' <15:10>
+      param: ParamDecl a 'int' <15:21>
+      body: CompoundStmt <15:24>
+        ExprStmt <16:9>
+          AssignExpr '=' <16:19>
+            target: MemberExpr ->age <16:13>
+              base: ThisExpr <16:9>
+            value: DeclRefExpr a <16:21>
+    member: AccessSpecDecl protected <19:1>
+    member: VarDecl legs 'int' <20:9>
+    member: AccessSpecDecl private <22:1>
+    member: VarDecl secretId 'int' <23:9>
+    member: FunctionDecl hidden returns 'int' <25:9>
+      body: CompoundStmt <25:18>
+        ReturnStmt <26:9>
+          BinaryExpr '+' <26:25>
+            DeclRefExpr secretId <26:16>
+            DeclRefExpr legs <26:27>
+  RecordDecl class Dog : public Animal <31:1>
+    member: AccessSpecDecl public <32:1>
+    member: VarDecl loud 'bool' <33:10>
     member: ConstructorDecl Dog <36:5>
-      param: ParamDecl l 'bool' <36:14>
-      body: CompoundStmt <36:17>
+      body: CompoundStmt <36:11>
         ExprStmt <37:9>
           AssignExpr '=' <37:20>
             target: MemberExpr ->loud <37:13>
               base: ThisExpr <37:9>
-            value: DeclRefExpr l <37:22>
-    member: DestructorDecl ~Dog <40:5>
-      body: CompoundStmt <40:12>
+            value: BoolLiteral false <37:22>
+    member: ConstructorDecl Dog <40:5>
+      param: ParamDecl l 'bool' <40:14>
+      body: CompoundStmt <40:17>
         ExprStmt <41:9>
           AssignExpr '=' <41:20>
             target: MemberExpr ->loud <41:13>
               base: ThisExpr <41:9>
-            value: BoolLiteral false <41:22>
-    member: FunctionDecl bark returns 'void' <44:10>
-      body: CompoundStmt <44:17>
+            value: DeclRefExpr l <41:22>
+    member: DestructorDecl ~Dog <44:5>
+      body: CompoundStmt <44:12>
         ExprStmt <45:9>
           AssignExpr '=' <45:20>
             target: MemberExpr ->loud <45:13>
               base: ThisExpr <45:9>
-            value: BoolLiteral true <45:22>
-  RecordDecl class Cat : protected Animal <50:1>
-    member: AccessSpecDecl private <51:1>
-    member: VarDecl quiet 'bool' <52:10>
-  VarDecl Animal::age 'int' init=copy <56:5>
-    init: IntLiteral 0 <56:19>
-  FunctionDecl main returns 'int' <58:5>
-    body: CompoundStmt <58:12>
-      DeclStmt <60:5>
-        VarDecl a 'Animal*' init=copy <60:13>
-          init: NewExpr 'Animal' args <60:17>
-      ExprStmt <61:5>
-        CallExpr 1 arg(s) <61:14>
-          callee: MemberExpr ->setAge <61:6>
-            base: DeclRefExpr a <61:5>
-          arg: IntLiteral 3 <61:15>
-      ExprStmt <62:5>
-        DeleteExpr <62:5>
-          DeclRefExpr a <62:12>
-      DeclStmt <65:5>
-        VarDecl d 'Dog' <65:9>
+            value: BoolLiteral false <45:22>
+    member: FunctionDecl bark returns 'void' <48:10>
+      body: CompoundStmt <48:17>
+        ExprStmt <49:9>
+          AssignExpr '=' <49:20>
+            target: MemberExpr ->loud <49:13>
+              base: ThisExpr <49:9>
+            value: BoolLiteral true <49:22>
+  RecordDecl class Cat : protected Animal <54:1>
+    member: AccessSpecDecl private <55:1>
+    member: VarDecl quiet 'bool' <56:10>
+  VarDecl Animal::created 'int' init=copy <60:5>
+    init: IntLiteral 0 <60:23>
+  FunctionDecl main returns 'int' <62:5>
+    body: CompoundStmt <62:12>
+      DeclStmt <64:5>
+        VarDecl a 'Animal*' init=copy <64:13>
+          init: NewExpr 'Animal' args <64:17>
+      ExprStmt <65:5>
+        CallExpr 1 arg(s) <65:14>
+          callee: MemberExpr ->setAge <65:6>
+            base: DeclRefExpr a <65:5>
+          arg: IntLiteral 3 <65:15>
       ExprStmt <66:5>
-        CallExpr 0 arg(s) <66:11>
-          callee: MemberExpr .bark <66:6>
-            base: DeclRefExpr d <66:5>
-      ExprStmt <67:5>
-        CallExpr 1 arg(s) <67:13>
-          callee: MemberExpr .setAge <67:6>
-            base: DeclRefExpr d <67:5>
-          arg: IntLiteral 5 <67:14>
+        DeleteExpr <66:5>
+          DeclRefExpr a <66:12>
       DeclStmt <69:5>
-        VarDecl c 'Cat' <69:9>
-      ReturnStmt <70:5>
-        IntLiteral 0 <70:12>
-  RecordDecl class Trackable <74:1>
-    member: AccessSpecDecl public <74:19>
-    member: VarDecl serial 'int' <74:31>
-  RecordDecl class Tagged : Animal <76:1>
-    member: AccessSpecDecl public <76:25>
-    member: VarDecl tag 'int' <76:37>
-  RecordDecl class Registered : public Animal, public Trackable <78:1>
-    member: AccessSpecDecl public <78:54>
-    member: VarDecl slot 'int' <78:66>
-  RecordDecl struct BaseRec <81:1>
-    member: VarDecl first 'int' <81:22>
-  RecordDecl struct DerivedRec : BaseRec <82:1>
-    member: VarDecl second 'int' <82:35>
-  RecordDecl class Outer <85:1>
-    member: AccessSpecDecl public <86:1>
-    member: RecordDecl struct Inner <87:5>
-      member: VarDecl value 'int' <87:24>
-    member: RecordDecl class Nested <88:5>
-      member: AccessSpecDecl public <88:20>
-      member: VarDecl depth 'int' <88:32>
-    member: VarDecl inner 'Inner' <89:13>
-    member: VarDecl nested 'Nested' <90:13>
-  FunctionDecl buildObjects returns 'int' <94:5>
-    body: CompoundStmt <94:20>
-      DeclStmt <95:5>
-        VarDecl plain 'Animal' <95:12>
-      DeclStmt <96:5>
-        VarDecl withOne 'Animal' init=ctor <96:12>
-          arg: IntLiteral 3 <96:20>
-      DeclStmt <97:5>
-        VarDecl withTwo 'Animal' init=ctor <97:12>
-          arg: IntLiteral 3 <97:20>
-          arg: IntLiteral 4 <97:23>
-      DeclStmt <98:5>
-        VarDecl tagged 'Tagged' <98:12>
+        VarDecl d 'Dog' <69:9>
+      ExprStmt <70:5>
+        CallExpr 0 arg(s) <70:11>
+          callee: MemberExpr .bark <70:6>
+            base: DeclRefExpr d <70:5>
+      ExprStmt <71:5>
+        CallExpr 1 arg(s) <71:13>
+          callee: MemberExpr .setAge <71:6>
+            base: DeclRefExpr d <71:5>
+          arg: IntLiteral 5 <71:14>
+      DeclStmt <73:5>
+        VarDecl c 'Cat' <73:9>
+      ReturnStmt <74:5>
+        IntLiteral 0 <74:12>
+  RecordDecl class Trackable <78:1>
+    member: AccessSpecDecl public <78:19>
+    member: VarDecl serial 'int' <78:31>
+  RecordDecl class Tagged : Animal <80:1>
+    member: AccessSpecDecl public <80:25>
+    member: VarDecl tag 'int' <80:37>
+  RecordDecl class Registered : public Animal, public Trackable <82:1>
+    member: AccessSpecDecl public <82:54>
+    member: VarDecl slot 'int' <82:66>
+  RecordDecl struct BaseRec <85:1>
+    member: VarDecl first 'int' <85:22>
+  RecordDecl struct DerivedRec : BaseRec <86:1>
+    member: VarDecl second 'int' <86:35>
+  RecordDecl class Outer <89:1>
+    member: AccessSpecDecl public <90:1>
+    member: RecordDecl struct Inner <91:5>
+      member: VarDecl value 'int' <91:24>
+    member: RecordDecl class Nested <92:5>
+      member: AccessSpecDecl public <92:20>
+      member: VarDecl depth 'int' <92:32>
+    member: VarDecl inner 'Inner' <93:13>
+    member: VarDecl nested 'Nested' <94:13>
+  FunctionDecl buildObjects returns 'int' <98:5>
+    body: CompoundStmt <98:20>
       DeclStmt <99:5>
-        VarDecl registered 'Registered' <99:16>
+        VarDecl plain 'Animal' <99:12>
       DeclStmt <100:5>
-        VarDecl outer 'Outer' <100:11>
-      ExprStmt <102:5>
-        AssignExpr '=' <102:23>
-          target: MemberExpr .value <102:16>
-            base: MemberExpr .inner <102:10>
-              base: DeclRefExpr outer <102:5>
-          value: IntLiteral 1 <102:25>
-      ExprStmt <103:5>
-        AssignExpr '=' <103:24>
-          target: MemberExpr .depth <103:17>
-            base: MemberExpr .nested <103:10>
-              base: DeclRefExpr outer <103:5>
-          value: IntLiteral 2 <103:26>
-      ReturnStmt <104:5>
-        BinaryExpr '+' <104:51>
-          BinaryExpr '+' <104:38>
-            BinaryExpr '+' <104:24>
-              MemberExpr .age <104:19>
-                base: DeclRefExpr withOne <104:12>
-              MemberExpr .age <104:33>
-                base: DeclRefExpr withTwo <104:26>
-            MemberExpr .tag <104:46>
-              base: DeclRefExpr tagged <104:40>
-          MemberExpr .slot <104:63>
-            base: DeclRefExpr registered <104:53>
+        VarDecl withOne 'Animal' init=ctor <100:12>
+          arg: IntLiteral 3 <100:20>
+      DeclStmt <101:5>
+        VarDecl withTwo 'Animal' init=ctor <101:12>
+          arg: IntLiteral 3 <101:20>
+          arg: IntLiteral 4 <101:23>
+      DeclStmt <102:5>
+        VarDecl tagged 'Tagged' <102:12>
+      DeclStmt <103:5>
+        VarDecl registered 'Registered' <103:16>
+      DeclStmt <104:5>
+        VarDecl outer 'Outer' <104:11>
+      ExprStmt <106:5>
+        AssignExpr '=' <106:23>
+          target: MemberExpr .value <106:16>
+            base: MemberExpr .inner <106:10>
+              base: DeclRefExpr outer <106:5>
+          value: IntLiteral 1 <106:25>
+      ExprStmt <107:5>
+        AssignExpr '=' <107:24>
+          target: MemberExpr .depth <107:17>
+            base: MemberExpr .nested <107:10>
+              base: DeclRefExpr outer <107:5>
+          value: IntLiteral 2 <107:26>
+      ReturnStmt <108:5>
+        BinaryExpr '+' <108:51>
+          BinaryExpr '+' <108:38>
+            BinaryExpr '+' <108:24>
+              MemberExpr .age <108:19>
+                base: DeclRefExpr withOne <108:12>
+              MemberExpr .age <108:33>
+                base: DeclRefExpr withTwo <108:26>
+            MemberExpr .tag <108:46>
+              base: DeclRefExpr tagged <108:40>
+          MemberExpr .slot <108:63>
+            base: DeclRefExpr registered <108:53>

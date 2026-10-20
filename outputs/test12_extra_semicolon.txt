@@ -1,4 +1,5 @@
 Parsing successful.
+Semantic analysis successful.
 
 Token       | Token_Type
 ------------+---------------

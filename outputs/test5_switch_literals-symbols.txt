@@ -1,0 +1,29 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  function main : int () [main] llvm: i32 ()
+  scope function main <1:5>
+    variable dec : int llvm: i32
+    variable hex : int llvm: i32
+    variable oct : int llvm: i32
+    variable bin : int llvm: i32
+    variable f1 : float llvm: float
+    variable f2 : float llvm: float
+    variable d1 : double llvm: double
+    variable d2 : double llvm: double
+    variable d3 : double llvm: double
+    variable c1 : char llvm: i8
+    variable c2 : char llvm: i8
+    variable c3 : char llvm: i8
+    variable c4 : char llvm: i8
+    variable c5 : char llvm: i8
+    variable c6 : char llvm: i8
+    variable c7 : char llvm: i8
+    variable s1 : char* llvm: ptr
+    variable s2 : char* llvm: ptr
+    variable s3 : char* llvm: ptr
+    variable s4 : char* llvm: ptr
+    variable s5 : char* llvm: ptr
+    variable yes : bool llvm: i1
+    variable no : bool llvm: i1
+    scope block <36:18>

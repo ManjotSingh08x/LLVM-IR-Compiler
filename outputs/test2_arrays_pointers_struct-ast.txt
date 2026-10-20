@@ -5,48 +5,55 @@ Program <1:1>
   FunctionDecl main returns 'int' <7:5>
     body: CompoundStmt <7:12>
       DeclStmt <9:5>
-        VarDecl arr 'int' <9:10>
+        VarDecl arr 'int [5]' <9:10>
           dim: IntLiteral 5 <9:14>
       DeclStmt <10:5>
-        VarDecl name 'char' <10:10>
+        VarDecl name 'char [20]' <10:10>
           dim: IntLiteral 20 <10:15>
       DeclStmt <13:5>
-        VarDecl grid 'int' <13:10>
+        VarDecl grid 'int [3][4]' <13:10>
           dim: IntLiteral 3 <13:15>
           dim: IntLiteral 4 <13:18>
       DeclStmt <14:5>
-        VarDecl cube 'int' <14:10>
+        VarDecl cube 'int [2][3][4]' <14:10>
           dim: IntLiteral 2 <14:15>
           dim: IntLiteral 3 <14:18>
           dim: IntLiteral 4 <14:21>
       ExprStmt <16:5>
         AssignExpr '=' <16:12>
           target: ArraySubscriptExpr <16:8>
-            base: DeclRefExpr arr <16:5>
+            base: ImplicitCastExpr array-to-pointer <16:5>
+              DeclRefExpr arr <16:5>
             index: IntLiteral 0 <16:9>
           value: IntLiteral 1 <16:14>
       ExprStmt <17:5>
         AssignExpr '=' <17:13>
           target: ArraySubscriptExpr <17:9>
-            base: DeclRefExpr name <17:5>
+            base: ImplicitCastExpr array-to-pointer <17:5>
+              DeclRefExpr name <17:5>
             index: IntLiteral 0 <17:10>
           value: CharLiteral 'A' <17:15>
       ExprStmt <18:5>
         AssignExpr '=' <18:16>
           target: ArraySubscriptExpr <18:12>
-            base: ArraySubscriptExpr <18:9>
-              base: DeclRefExpr grid <18:5>
-              index: IntLiteral 1 <18:10>
+            base: ImplicitCastExpr array-to-pointer <18:9>
+              ArraySubscriptExpr <18:9>
+                base: ImplicitCastExpr array-to-pointer <18:5>
+                  DeclRefExpr grid <18:5>
+                index: IntLiteral 1 <18:10>
             index: IntLiteral 2 <18:13>
           value: IntLiteral 7 <18:18>
       ExprStmt <19:5>
         AssignExpr '=' <19:19>
           target: ArraySubscriptExpr <19:15>
-            base: ArraySubscriptExpr <19:12>
-              base: ArraySubscriptExpr <19:9>
-                base: DeclRefExpr cube <19:5>
-                index: IntLiteral 1 <19:10>
-              index: IntLiteral 2 <19:13>
+            base: ImplicitCastExpr array-to-pointer <19:12>
+              ArraySubscriptExpr <19:12>
+                base: ImplicitCastExpr array-to-pointer <19:9>
+                  ArraySubscriptExpr <19:9>
+                    base: ImplicitCastExpr array-to-pointer <19:5>
+                      DeclRefExpr cube <19:5>
+                    index: IntLiteral 1 <19:10>
+                index: IntLiteral 2 <19:13>
             index: IntLiteral 3 <19:16>
           value: IntLiteral 9 <19:21>
       DeclStmt <22:5>
@@ -95,6 +102,7 @@ Program <1:1>
           value: IntLiteral 4 <38:13>
       DeclStmt <41:5>
         VarDecl nothing 'void*' init=copy <41:11>
-          init: NullLiteral <41:21>
+          init: ImplicitCastExpr null-to-pointer <41:21>
+            NullLiteral <41:21>
       ReturnStmt <42:5>
         IntLiteral 0 <42:12>

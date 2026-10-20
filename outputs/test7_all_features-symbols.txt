@@ -1,0 +1,175 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  struct Point [Point] llvm: %struct.Point { i32, i32 }
+  class Foo [Foo] llvm: %class.Foo { i32, i32, i1, i32 }
+  class Bar [Bar] llvm: %class.Bar { %class.Foo, i32, i32 }
+  function add : int (int, int) [global_3add_ii] llvm: i32 (i32, i32)
+  function gcd : int (int, int) [global_3gcd_ii] llvm: i32 (i32, i32)
+  function factorial : int (int) [global_9factorial_i] llvm: i32 (i32)
+  function swap : void (int&, int&) [global_4swap_RiRi] llvm: void (ptr, ptr)
+  function sumArray : int (int*, int) [global_8sumArray_Pii] llvm: i32 (ptr, i32)
+  function addOp : int (int, int) [global_5addOp_ii] llvm: i32 (i32, i32)
+  function mulOp : int (int, int) [global_5mulOp_ii] llvm: i32 (i32, i32)
+  function main : int (int, char**) [main] llvm: i32 (i32, ptr)
+  scope record Point <2:1>
+    field x : int public llvm: i32
+    field y : int public llvm: i32
+  scope record Foo <8:1>
+    field m_id : int public llvm: i32
+    method setId : void (int) public [class_3Foo_5setId_i] this-lowered: void (Foo*, int) llvm: void (ptr, i32)
+    method getId : int () public [class_3Foo_5getId_v] this-lowered: int (Foo*) llvm: i32 (ptr)
+    method setFilled : void (bool) public [class_3Foo_9setFilled_b] this-lowered: void (Foo*, bool) llvm: void (ptr, i1)
+    method isFilled : bool () public [class_3Foo_8isFilled_v] this-lowered: bool (Foo*) llvm: i1 (ptr)
+    field m_level : int protected llvm: i32
+    field m_filled : bool protected llvm: i1
+    field m_serial : int private llvm: i32
+    method checksum : int () private [class_3Foo_8checksum_v] this-lowered: int (Foo*) llvm: i32 (ptr)
+    scope function setId <11:10>
+      parameter v : int llvm: i32
+    scope function getId <12:10>
+    scope function setFilled <13:10>
+      parameter f : bool llvm: i1
+    scope function isFilled <14:10>
+    scope function checksum <20:10>
+  scope record Bar <24:1>
+    field m_width : int private llvm: i32
+    field m_height : int private llvm: i32
+    method init : void (int, int) public [class_3Bar_4init_ii] this-lowered: void (Bar*, int, int) llvm: void (ptr, i32, i32)
+    method area : int () public [class_3Bar_4area_v] this-lowered: int (Bar*) llvm: i32 (ptr)
+    method perimeter : int () public [class_3Bar_9perimeter_v] this-lowered: int (Bar*) llvm: i32 (ptr)
+    scope function init <29:10>
+      parameter a : int llvm: i32
+      parameter b : int llvm: i32
+    scope function area <30:10>
+    scope function perimeter <31:10>
+  scope function add <35:5>
+    parameter a : int llvm: i32
+    parameter b : int llvm: i32
+  scope function gcd <40:5>
+    parameter a : int llvm: i32
+    parameter b : int llvm: i32
+  scope function factorial <46:5>
+    parameter n : int llvm: i32
+  scope function swap <52:6>
+    parameter a : int& llvm: ptr
+    parameter b : int& llvm: ptr
+    variable t : int llvm: i32
+  scope function sumArray <59:5>
+    parameter data : int* llvm: ptr
+    parameter count : int llvm: i32
+    variable total : int llvm: i32
+    variable i : int llvm: i32
+    scope block <62:5>
+      scope block <62:33>
+  scope function addOp <69:5>
+    parameter a : int llvm: i32
+    parameter b : int llvm: i32
+  scope function mulOp <70:5>
+    parameter a : int llvm: i32
+    parameter b : int llvm: i32
+  scope function main <73:5>
+    parameter argc : int llvm: i32
+    parameter argv : char** llvm: ptr
+    variable mode : int llvm: i32
+    variable a : int llvm: i32
+    variable b : int llvm: i32
+    variable c : int llvm: i32
+    variable t : bool llvm: i1
+    variable biggest : int llvm: i32
+    variable mask : int llvm: i32
+    variable sum : int llvm: i32
+    variable i : int llvm: i32
+    variable countdown : int llvm: i32
+    variable evens : int llvm: i32
+    variable tries : int llvm: i32
+    variable values : int [8] llvm: [8 x i32]
+    variable squares : int llvm: i32
+    variable label : char [8] llvm: [8 x i8]
+    variable grid : int [3][3] llvm: [3 x [3 x i32]]
+    variable board : char [2][2] llvm: [2 x [2 x i8]]
+    variable row : int llvm: i32
+    variable col : int llvm: i32
+    variable trace : int llvm: i32
+    variable value : int llvm: i32
+    variable ptr : int* llvm: ptr
+    variable read : int llvm: i32
+    variable alias : int& llvm: ptr
+    variable left : int llvm: i32
+    variable right : int llvm: i32
+    variable origin : Point llvm: %struct.Point = type { i32, i32 }
+    variable pointPtr : Point* llvm: ptr
+    variable bar : Bar llvm: %class.Bar = type { %class.Foo, i32, i32 }
+    variable rectArea : int llvm: i32
+    variable rectPerim : int llvm: i32
+    variable barPtr : Bar* llvm: ptr
+    variable heapArea : int llvm: i32
+    variable heapData : int* llvm: ptr
+    variable heapSum : int llvm: i32
+    variable cube : lambda <262:17> llvm: {}
+    variable byValue : lambda <265:22> llvm: { i32 }
+    variable byRef : lambda <266:22> llvm: { ptr }
+    variable allValue : lambda <267:22> llvm: { i32 }
+    variable allRef : lambda <268:22> llvm: { ptr }
+    variable mixed : lambda <269:22> llvm: { i32, ptr }
+    variable cubed : int llvm: i32
+    variable binaryOp : int (*)(int, int) llvm: ptr
+    variable combined : int llvm: i32
+    variable g : int llvm: i32
+    variable f : int llvm: i32
+    variable both : int llvm: i32
+    variable typed : int llvm: i32
+    variable decNum : int llvm: i32
+    variable hexNum : int llvm: i32
+    variable octNum : int llvm: i32
+    variable binNum : int llvm: i32
+    variable pi : float llvm: float
+    variable tiny : float llvm: float
+    variable half : double llvm: double
+    variable two : double llvm: double
+    variable huge : double llvm: double
+    variable letter : char llvm: i8
+    variable newline : char llvm: i8
+    variable tab : char llvm: i8
+    variable quote : char llvm: i8
+    variable slash : char llvm: i8
+    variable hexChar : char llvm: i8
+    variable nul : char llvm: i8
+    variable greeting : char* llvm: ptr
+    variable escaped : char* llvm: ptr
+    variable tricky : char* llvm: ptr
+    variable empty : char* llvm: ptr
+    variable yes : bool llvm: i1
+    variable no : bool llvm: i1
+    scope block <76:19>
+    scope block <131:22>
+    scope block <133:30>
+    scope block <135:12>
+    scope block <142:5>
+      scope block <142:30>
+    scope block <147:22>
+    scope block <153:8>
+    scope block <158:19>
+    scope block <171:5>
+      scope block <171:30>
+    scope block <184:5>
+      scope block <184:29>
+    scope block <204:5>
+      scope block <204:35>
+        scope block <205:9>
+          scope block <205:39>
+    scope block <218:22>
+    scope block <255:5>
+      scope block <255:29>
+    scope lambda <262:17>
+      parameter v : int llvm: i32
+    scope lambda <265:22>
+      parameter v : int llvm: i32
+    scope lambda <266:22>
+      parameter v : int llvm: i32
+    scope lambda <267:22>
+      parameter v : int llvm: i32
+    scope lambda <268:22>
+      parameter v : int llvm: i32
+    scope lambda <269:22>
+      parameter v : int llvm: i32

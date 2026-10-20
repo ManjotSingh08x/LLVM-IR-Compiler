@@ -13,6 +13,7 @@ public:
 
 
     NodeList<Stmt> body;
+    sema::Scope   *scope = nullptr;
 };
 
 //a local declaration, one Decl per declarator: int a = 1, *b;
@@ -78,7 +79,8 @@ public:
     std::unique_ptr<Expr> cond;
 };
 
-//every part but the body may be null
+//every part but the body may be null. the init declarations live in their own
+//scope around the body
 class ForStmt : public Stmt {
 public:
     ForStmt(std::unique_ptr<Stmt> init, std::unique_ptr<Expr> cond, std::unique_ptr<Expr> inc,
@@ -91,6 +93,7 @@ public:
     std::unique_ptr<Expr> cond;
     std::unique_ptr<Expr> inc;
     std::unique_ptr<Stmt> body;
+    sema::Scope          *scope = nullptr;
 };
 
 class ReturnStmt : public Stmt {
@@ -114,6 +117,8 @@ public:
 
 };
 
+class LabelStmt;
+
 class GotoStmt : public Stmt {
 public:
     GotoStmt(std::string label, int line, int col)
@@ -121,6 +126,7 @@ public:
 
 
     std::string label;
+    LabelStmt  *target = nullptr;  //resolved by the type checker
 };
 
 //label: statement
@@ -142,6 +148,7 @@ public:
 
     std::unique_ptr<Expr> value;
     std::unique_ptr<Stmt> sub;
+    long long             constant = 0;  //the value of the label, worked out by the type checker
 };
 
 class DefaultStmt : public Stmt {

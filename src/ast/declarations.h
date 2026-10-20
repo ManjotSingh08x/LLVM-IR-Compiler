@@ -25,65 +25,88 @@ struct QualifiedName {
     }
 };
 
-//what sits between a parenthesis and the name: int (*f)(int), int (*p)[3]
-enum class DeclaratorForm { Plain, FunctionPointer, PointerToArray, ReferenceToArray };
+//a type as it is written in the source, kept as a tree read from the inside
+//out. int **(*p)[10] is
+//  Pointer -> Array [10] -> Pointer -> Pointer -> Builtin int
+//the first three kinds are names and have no inner type, the others wrap inner:
+//the pointee, the referred type, the element type or the return type
+enum class TypeSpecKind { Builtin, Named, Struct, Pointer, Reference, Array, Function };
+
+class TypeSpec : public ASTNode {
+public:
+    //a type name: int, Dog, struct Node
+    TypeSpec(TypeSpecKind specKind, std::string name, int tokIndex, int line, int col);
+
+    //a pointer, reference, array or function around inner. the parser builds
+    //declarators before it knows the base type, so inner may start out null
+    TypeSpec(TypeSpecKind specKind, std::unique_ptr<TypeSpec> inner, int line, int col);
+
+    //defined below ParamDecl, which the parameter list needs complete
+    ~TypeSpec() override;
+
+    bool isName() const {
+        return specKind == TypeSpecKind::Builtin || specKind == TypeSpecKind::Named
+            || specKind == TypeSpecKind::Struct;
+    }
+
+    //one declaration line shares its type name between declarators, each gets
+    //a copy. only a type name is ever copied
+    std::unique_ptr<TypeSpec> clone() const {
+        return std::unique_ptr<TypeSpec>(new TypeSpec(specKind, name, tokIndex, line, col));
+    }
+
+    TypeSpecKind              specKind;
+    std::string               name;           //for a type name
+    int                       tokIndex = -1;  //index of the naming token in the token table
+    std::unique_ptr<TypeSpec> inner;          //for the wrapping kinds
+    std::unique_ptr<Expr>     size;           //for Array, null for an unsized []
+    NodeList<ParamDecl>       params;         //for Function
+
+    const sema::Type         *resolved = nullptr;  //filled in by the symbol builder
+};
 
 //how a variable is initialised: int a = 1, int a{1}, Dog d(3)
 enum class InitStyle { None, Copy, Brace, CtorArgs };
-
-//the initializer as parsed, before it is attached to a declarator
-struct Initializer {
-    InitStyle             style = InitStyle::None;
-    std::unique_ptr<Expr> value;
-};
-
-//everything after the type in one declarator. the parser builds this first and
-//then joins it with the type into a VarDecl or ParamDecl
-struct Declarator {
-    QualifiedName   name;  //empty for an unnamed parameter
-    int             line = 0;
-    int             col = 0;
-    int             pointerDepth = 0;
-    bool            isReference = false;
-    DeclaratorForm  form = DeclaratorForm::Plain;
-    NodeList<Expr>  dims;      //one entry per [], null for an unsized []
-    NodeList<ParamDecl> fnParams;  //parameters of a function pointer
-    InitStyle       initStyle = InitStyle::None;
-    std::unique_ptr<Expr> init;  //for Copy and Brace
-    NodeList<Expr>  ctorArgs;    //for CtorArgs
-
-    void setInitializer(Initializer *initializer) {
-        if (initializer == nullptr) return;
-        initStyle = initializer->style;
-        init = std::move(initializer->value);
-        delete initializer;
-    }
-};
 
 enum class AccessKind { None, Public, Private, Protected };
 
 class VarDecl : public Decl {
 public:
-    VarDecl(std::unique_ptr<TypeSpec> type, Declarator declarator, int line, int col)
-        : Decl(ASTKind::VarDecl, line, col), type(std::move(type)),
-          declarator(std::move(declarator)) {}
+    VarDecl(QualifiedName name, std::unique_ptr<TypeSpec> type, int line, int col)
+        : Decl(ASTKind::VarDecl, line, col), name(std::move(name)), type(std::move(type)) {}
 
 
+    QualifiedName             name;
     std::unique_ptr<TypeSpec> type;
-    Declarator                declarator;
+    InitStyle                 initStyle = InitStyle::None;
+    std::unique_ptr<Expr>     init;      //for Copy and Brace
+    NodeList<Expr>            ctorArgs;  //for CtorArgs
     bool                      isStatic = false;
+
+    sema::Symbol             *symbol = nullptr;
+    sema::FunctionSymbol     *constructor = nullptr;  //the constructor that runs, if any
 };
 
 class ParamDecl : public Decl {
 public:
-    ParamDecl(std::unique_ptr<TypeSpec> type, Declarator declarator, int line, int col)
-        : Decl(ASTKind::ParamDecl, line, col), type(std::move(type)),
-          declarator(std::move(declarator)) {}
+    ParamDecl(std::string name, std::unique_ptr<TypeSpec> type, int line, int col)
+        : Decl(ASTKind::ParamDecl, line, col), name(std::move(name)), type(std::move(type)) {}
 
 
+    std::string               name;  //empty for an unnamed parameter
     std::unique_ptr<TypeSpec> type;
-    Declarator                declarator;
+
+    sema::Symbol             *symbol = nullptr;
 };
+
+inline TypeSpec::TypeSpec(TypeSpecKind specKind, std::string name, int tokIndex, int line, int col)
+    : ASTNode(ASTKind::TypeSpec, line, col), specKind(specKind), name(std::move(name)),
+      tokIndex(tokIndex) {}
+
+inline TypeSpec::TypeSpec(TypeSpecKind specKind, std::unique_ptr<TypeSpec> inner, int line, int col)
+    : ASTNode(ASTKind::TypeSpec, line, col), specKind(specKind), inner(std::move(inner)) {}
+
+inline TypeSpec::~TypeSpec() = default;
 
 //a function declaration or, with a body, a definition. constructors and
 //destructors derive from it and have no return type
@@ -103,6 +126,9 @@ public:
     NodeList<ParamDecl>           params;
     std::unique_ptr<CompoundStmt> body;  //null for a declaration
     bool                          isStatic = false;
+
+    sema::FunctionSymbol         *symbol = nullptr;
+    sema::Scope                  *scope = nullptr;  //holds the parameters
 
 protected:
     FunctionDecl(ASTKind kind, std::unique_ptr<TypeSpec> returnType, QualifiedName name,
@@ -149,6 +175,9 @@ public:
     std::string                name;
     std::vector<BaseSpecifier> bases;
     NodeList<Decl>             members;
+
+    sema::RecordSymbol        *symbol = nullptr;
+    sema::Scope               *scope = nullptr;  //holds the members
 };
 
 //public: private: protected: inside a class, kept in member order

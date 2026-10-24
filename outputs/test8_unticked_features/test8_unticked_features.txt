@@ -1,14 +1,10 @@
-test/test8_unticked_features.ckp line: 2 col: 9 syntax error: unexpected TOK_INT, expecting TOK_IDENTIFIER or TOK_STAR or TOK_BITAND
-test/test8_unticked_features.ckp line: 12 col: 5 syntax error: unexpected TOK_INT, expecting TOK_RBRACE
-test/test8_unticked_features.ckp line: 14 col: 1 syntax error: unexpected TOK_RBRACE
-test/test8_unticked_features.ckp line: 18 col: 20 syntax error: unexpected TOK_LBRACE, expecting TOK_SEMI
-test/test8_unticked_features.ckp line: 21 col: 5 syntax error: unexpected TOK_RETURN
-test/test8_unticked_features.ckp line: 22 col: 1 syntax error: unexpected TOK_RBRACE
-test/test8_unticked_features.ckp line: 27 col: 5 syntax error: unexpected TOK_RETURN
-test/test8_unticked_features.ckp line: 28 col: 1 syntax error: unexpected TOK_RBRACE
-test/test8_unticked_features.ckp line: 36 col: 9 syntax error: unexpected TOK_ASSIGN
-test/test8_unticked_features.ckp line: 37 col: 9 syntax error: unexpected TOK_ASSIGN
-test/test8_unticked_features.ckp line: 38 col: 9 syntax error: unexpected TOK_ASSIGN, expecting TOK_IDENTIFIER
-test/test8_unticked_features.ckp line: 39 col: 9 syntax error: unexpected TOK_ASSIGN
-test/test8_unticked_features.ckp line: 40 col: 9 syntax error: unexpected TOK_ASSIGN
-13 syntax error(s) found.
+test/test8_unticked_features.ckp line: 9 col: 5 syntax error: unexpected TOK_INT, expecting TOK_RBRACE
+test/test8_unticked_features.ckp line: 11 col: 1 syntax error: unexpected TOK_RBRACE
+test/test8_unticked_features.ckp line: 16 col: 12 syntax error: unexpected TOK_SIZEOF, expecting TOK_SEMI
+test/test8_unticked_features.ckp line: 20 col: 23 syntax error: unexpected TOK_DOT
+test/test8_unticked_features.ckp line: 25 col: 9 syntax error: unexpected TOK_ASSIGN
+test/test8_unticked_features.ckp line: 26 col: 9 syntax error: unexpected TOK_ASSIGN
+test/test8_unticked_features.ckp line: 27 col: 9 syntax error: unexpected TOK_ASSIGN, expecting TOK_IDENTIFIER
+test/test8_unticked_features.ckp line: 28 col: 9 syntax error: unexpected TOK_ASSIGN
+test/test8_unticked_features.ckp line: 29 col: 9 syntax error: unexpected TOK_ASSIGN
+9 syntax error(s) found.

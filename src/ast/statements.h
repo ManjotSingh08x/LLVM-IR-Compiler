@@ -59,6 +59,7 @@ public:
     std::unique_ptr<Stmt> body;
 };
 
+//until (c) is a while loop that runs while c is false
 class WhileStmt : public Stmt {
 public:
     WhileStmt(std::unique_ptr<Expr> cond, std::unique_ptr<Stmt> body, int line, int col)
@@ -67,8 +68,10 @@ public:
 
     std::unique_ptr<Expr> cond;
     std::unique_ptr<Stmt> body;
+    bool                  isUntil = false;
 };
 
+//do ... until (c); likewise repeats while c is false
 class DoStmt : public Stmt {
 public:
     DoStmt(std::unique_ptr<Stmt> body, std::unique_ptr<Expr> cond, int line, int col)
@@ -77,6 +80,7 @@ public:
 
     std::unique_ptr<Stmt> body;
     std::unique_ptr<Expr> cond;
+    bool                  isUntil = false;
 };
 
 //every part but the body may be null. the init declarations live in their own

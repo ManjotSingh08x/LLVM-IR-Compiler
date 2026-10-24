@@ -1,0 +1,140 @@
+// IR run test: typedef and until loops.
+// Expected output: test/expected/test28_ir_typedef_until.out
+
+// Tests: typedef of a builtin, a pointer, an array and a typedef
+typedef int Integer;
+typedef int *IntPtr, Triple[3];
+typedef Integer Count;
+
+// Tests: typedef of a function pointer
+typedef int (*BinaryOp)(int, int);
+
+// Tests: an unsized array typedef takes its size from each initializer
+typedef int Row[];
+
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
+
+// Tests: typedef names in a signature
+Integer apply(BinaryOp op, Integer a, Integer b) {
+    return op(a, b);
+}
+
+Count sum(Triple values) {
+    Count total = 0;
+    for (int i = 0; i < 3; i++) total += values[i];
+    return total;
+}
+
+class Animal {
+public:
+    int age;
+    Animal() { this->age = 0; }
+    Animal(int a) { this->age = a; }
+    int getAge() { return this->age; }
+};
+
+// Tests: typedef of a class, used as a base and to construct objects
+typedef Animal Creature;
+
+class Dog : public Creature {
+public:
+    // Tests: a typedef inside a class, used by a field and a method
+    typedef int Volume;
+    Volume loudness;
+    Dog(int a) {
+        this->age = a;
+        this->loudness = 0;
+    }
+    Volume bark() {
+        this->loudness = this->loudness + 1;
+        return this->loudness;
+    }
+};
+
+// Tests: until runs while its condition is false
+int countUp(int n) {
+    until (n >= 10) {
+        n = n + 3;
+    }
+    return n;
+}
+
+// Tests: an until whose condition starts true never runs its body
+int neverRuns() {
+    int runs = 0;
+    until (true) runs++;
+    return runs;
+}
+
+// Tests: break and continue inside an until loop
+int skipOdd() {
+    int i = 0;
+    int total = 0;
+    until (false) {
+        i++;
+        if (i > 8) break;
+        if (i % 2 == 1) continue;
+        total += i;
+    }
+    return total;
+}
+
+// Tests: do-until runs its body once even when the condition starts true
+int doUntilOnce() {
+    int runs = 0;
+    do {
+        runs++;
+    } until (true);
+    return runs;
+}
+
+int halve(int n) {
+    int steps = 0;
+    do {
+        n = n / 2;
+        steps++;
+    } until (n <= 1);
+    return steps;
+}
+
+int main() {
+    Integer x = 7;
+    IntPtr p = &x;
+    *p = *p + 1;
+    printf("%d\n", x);
+
+    Triple t = {1, 2, 3};
+    printf("%d\n", sum(t));
+
+    Row r = {4, 5, 6, 7};
+    printf("%d %d\n", r[0], r[3]);
+
+    BinaryOp op = add;
+    printf("%d ", apply(op, 2, 3));
+    op = mul;
+    printf("%d\n", apply(op, 2, 3));
+
+    Creature c(4);
+    Dog d(9);
+    d.bark();
+    printf("%d %d %d\n", c.getAge(), d.getAge(), d.bark());
+
+    // Tests: new with a typedef name
+    Creature *heap = new Creature(11);
+    printf("%d\n", heap->getAge());
+    delete heap;
+
+    // Tests: a local typedef hides the global one inside its block
+    {
+        typedef char Integer;
+        Integer letter = 'A';
+        printf("%c\n", letter);
+    }
+    Integer back = 65;
+    printf("%d\n", back);
+
+    printf("%d %d %d\n", countUp(1), neverRuns(), skipOdd());
+    printf("%d %d\n", doUntilOnce(), halve(40));
+    return 0;
+}

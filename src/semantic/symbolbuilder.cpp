@@ -45,6 +45,9 @@ void SymbolBuilder::build(ast::Program *program) {
         case ast::ASTKind::VarDecl:
             declareGlobal(static_cast<ast::VarDecl *>(decl.get()));
             break;
+        case ast::ASTKind::TypedefDecl:
+            declareTypedef(static_cast<ast::TypedefDecl *>(decl.get()), current);
+            break;
         default:
             break;
         }
@@ -83,7 +86,8 @@ void SymbolBuilder::declareRecord(ast::RecordDecl *node, Scope *scope, RecordSym
 
     //a class inherits privately and a struct publicly when no access is written
     for (const ast::BaseSpecifier &spec : node->bases) {
-        RecordSymbol *base = findRecord(spec.name, scope);
+        const Type *named = findTypeName(spec.name, scope);
+        RecordSymbol *base = named ? asRecord(named) : nullptr;
         if (base == nullptr) {
             diags.error(node->line, node->col, "base '" + spec.name + "' is not a declared class or struct");
             continue;
@@ -115,6 +119,12 @@ void SymbolBuilder::declareRecord(ast::RecordDecl *node, Scope *scope, RecordSym
             if (nested->symbol) nested->symbol->access = access;
             break;
         }
+        case ast::ASTKind::TypedefDecl:
+            if (Symbol *alias = declareTypedef(static_cast<ast::TypedefDecl *>(member.get()), record->members)) {
+                alias->parentRecord = record;
+                alias->access = access;
+            }
+            break;
         case ast::ASTKind::VarDecl: {
             ast::VarDecl *var = static_cast<ast::VarDecl *>(member.get());
             SymbolKind kind = var->isStatic ? SymbolKind::Variable : SymbolKind::Field;
@@ -412,6 +422,23 @@ Symbol *SymbolBuilder::declareVariable(ast::VarDecl *node, Scope *scope, SymbolK
     return symbol;
 }
 
+//the aliased type is resolved once, here, so every later use of the name is
+//the type itself and nothing after this pass sees the typedef
+Symbol *SymbolBuilder::declareTypedef(ast::TypedefDecl *node, Scope *scope) {
+    const Type *type = resolveType(node->type.get(), scope, true);
+    if (type->is(TypeKind::Auto)) {
+        diags.error(node->line, node->col, "'auto' cannot be used in a typedef");
+        type = errorType();
+    }
+    if (!isFree(scope, node->name, node->line, node->col)) return nullptr;
+
+    Symbol *symbol = new Symbol(SymbolKind::Typedef, node->name, type, node->line, node->col);
+    symbol->decl = node;
+    scope->add(std::unique_ptr<Symbol>(symbol));
+    node->symbol = symbol;
+    return symbol;
+}
+
 //pass 2: bodies
 
 void SymbolBuilder::buildBodies(ast::Decl *decl) {
@@ -495,6 +522,10 @@ void SymbolBuilder::visitCompoundStmt(ast::CompoundStmt *node) {
 
 void SymbolBuilder::visitDeclStmt(ast::DeclStmt *node) {
     for (const std::unique_ptr<ast::Decl> &decl : node->decls) {
+        if (decl->getKind() == ast::ASTKind::TypedefDecl) {
+            declareTypedef(static_cast<ast::TypedefDecl *>(decl.get()), current);
+            continue;
+        }
         if (decl->getKind() != ast::ASTKind::VarDecl) continue;
         ast::VarDecl *var = static_cast<ast::VarDecl *>(decl.get());
         //the name is in scope from its declarator on, so the initializer could
@@ -654,6 +685,14 @@ const Type *SymbolBuilder::resolveType(ast::TypeSpec *spec, Scope *scope, bool a
         break;
 
     case ast::TypeSpecKind::Named:
+        if (const Type *named = findTypeName(spec->name, scope)) {
+            result = named;
+        } else {
+            diags.error(spec->line, spec->col, "unknown type name '" + spec->name + "'");
+        }
+        break;
+
+    //struct X names only a record, never a typedef
     case ast::TypeSpecKind::Struct:
         if (RecordSymbol *record = findRecord(spec->name, scope)) {
             result = record->type;
@@ -778,6 +817,17 @@ RecordSymbol *SymbolBuilder::findRecord(const std::string &name, Scope *scope) {
     for (; scope != nullptr; scope = scope->parent) {
         const std::vector<Symbol *> *found = scope->find(name);
         if (found && (*found)[0]->kind == SymbolKind::Record) return static_cast<RecordSymbol *>((*found)[0]);
+    }
+    return nullptr;
+}
+
+//the type a plain name stands for: a record, or the type a typedef names
+const Type *SymbolBuilder::findTypeName(const std::string &name, Scope *scope) {
+    for (; scope != nullptr; scope = scope->parent) {
+        const std::vector<Symbol *> *found = scope->find(name);
+        if (found == nullptr) continue;
+        Symbol *symbol = (*found)[0];
+        if (symbol->kind == SymbolKind::Record || symbol->kind == SymbolKind::Typedef) return symbol->type;
     }
     return nullptr;
 }

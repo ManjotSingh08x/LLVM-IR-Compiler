@@ -103,6 +103,7 @@ const char *symbolKindName(const Symbol &symbol) {
     case SymbolKind::Parameter: return "parameter";
     case SymbolKind::Field:     return "field";
     case SymbolKind::Record:    return static_cast<const RecordSymbol &>(symbol).isClass ? "class" : "struct";
+    case SymbolKind::Typedef:   return "typedef";
     case SymbolKind::Function: {
         const FunctionSymbol &fn = static_cast<const FunctionSymbol &>(symbol);
         if (fn.isConstructor) return "constructor";

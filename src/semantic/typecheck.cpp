@@ -519,6 +519,7 @@ const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &loo
     node->symbol = symbol;
     switch (symbol->kind) {
     case SymbolKind::Record:
+    case SymbolKind::Typedef:
         diags.error(node->line, node->col, "'" + node->name + "' is a type, not a value");
         return setType(node, errorType(), false);
 
@@ -592,7 +593,7 @@ const Type *TypeChecker::finishMember(ast::MemberExpr *node, const Lookup &looku
         diags.error(node->line, node->col, "the member function '" + node->member + "' must be called");
         return setType(node, errorType(), false);
     }
-    if (symbol->kind == SymbolKind::Record) {
+    if (symbol->kind == SymbolKind::Record || symbol->kind == SymbolKind::Typedef) {
         diags.error(node->line, node->col, "'" + node->member + "' is a type, not a member value");
         return setType(node, errorType(), false);
     }
@@ -815,7 +816,7 @@ const Type *TypeChecker::visitSwitchStmt(ast::SwitchStmt *node) {
 }
 
 const Type *TypeChecker::visitWhileStmt(ast::WhileStmt *node) {
-    checkCondition(node->cond, "a while condition");
+    checkCondition(node->cond, node->isUntil ? "an until condition" : "a while condition");
     context.loops++;
     context.breakables++;
     visit(node->body.get());
@@ -830,7 +831,7 @@ const Type *TypeChecker::visitDoStmt(ast::DoStmt *node) {
     visit(node->body.get());
     context.loops--;
     context.breakables--;
-    checkCondition(node->cond, "a do-while condition");
+    checkCondition(node->cond, node->isUntil ? "a do-until condition" : "a do-while condition");
     return nullptr;
 }
 

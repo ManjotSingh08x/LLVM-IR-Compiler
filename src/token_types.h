@@ -44,7 +44,8 @@ inline const std::unordered_map<std::string, int>& keywordTable() {
         {"private", TOK_PRIVATE}, {"protected", TOK_PROTECTED},
         {"new", TOK_NEW}, {"delete", TOK_DELETE}, {"true", TOK_TRUE},
         {"false", TOK_FALSE}, {"this", TOK_THIS}, {"null", TOK_NULL},
-        {"sizeof", TOK_SIZEOF}, {"static", TOK_STATIC}
+        {"sizeof", TOK_SIZEOF}, {"static", TOK_STATIC},
+        {"typedef", TOK_TYPEDEF}, {"until", TOK_UNTIL}
     };
     return kw;
 }

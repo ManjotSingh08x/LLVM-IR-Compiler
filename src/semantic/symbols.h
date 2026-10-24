@@ -20,7 +20,8 @@ enum class SymbolKind {
     Parameter,
     Field,      //a non-static data member
     Function,   //a free function, a method, a constructor or a destructor
-    Record
+    Record,
+    Typedef     //another name for its type
 };
 
 //one declared name

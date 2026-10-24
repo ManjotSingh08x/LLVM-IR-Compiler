@@ -190,6 +190,20 @@ public:
     AccessKind access;
 };
 
+//typedef int *IntPtr; the parser reads it as a declaration, so there is one
+//node per declarator, each holding the full type the name stands for
+class TypedefDecl : public Decl {
+public:
+    TypedefDecl(std::string name, std::unique_ptr<TypeSpec> type, int line, int col)
+        : Decl(ASTKind::TypedefDecl, line, col), name(std::move(name)), type(std::move(type)) {}
+
+
+    std::string               name;
+    std::unique_ptr<TypeSpec> type;
+
+    sema::Symbol             *symbol = nullptr;
+};
+
 } // namespace ast
 
 #endif

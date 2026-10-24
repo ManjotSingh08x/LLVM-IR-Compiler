@@ -15,6 +15,7 @@ const char *kindName(ASTKind kind) {
     case ASTKind::DestructorDecl:     return "DestructorDecl";
     case ASTKind::RecordDecl:         return "RecordDecl";
     case ASTKind::AccessSpecDecl:     return "AccessSpecDecl";
+    case ASTKind::TypedefDecl:        return "TypedefDecl";
     case ASTKind::CompoundStmt:       return "CompoundStmt";
     case ASTKind::DeclStmt:           return "DeclStmt";
     case ASTKind::ExprStmt:           return "ExprStmt";
@@ -315,6 +316,11 @@ void ASTPrinter::visitAccessSpecDecl(AccessSpecDecl *node) {
     line(*node, accessName(node->access));
 }
 
+void ASTPrinter::visitTypedefDecl(TypedefDecl *node) {
+    line(*node, node->name + " " + quoted(typeString(node->type.get())));
+    typeChildren(node->type.get());
+}
+
 //statements
 
 void ASTPrinter::visitCompoundStmt(CompoundStmt *node) {
@@ -346,13 +352,13 @@ void ASTPrinter::visitSwitchStmt(SwitchStmt *node) {
 }
 
 void ASTPrinter::visitWhileStmt(WhileStmt *node) {
-    line(*node, "");
+    line(*node, node->isUntil ? "until" : "");
     child("cond", node->cond.get());
     child("body", node->body.get());
 }
 
 void ASTPrinter::visitDoStmt(DoStmt *node) {
-    line(*node, "");
+    line(*node, node->isUntil ? "until" : "");
     child("body", node->body.get());
     child("cond", node->cond.get());
 }

@@ -252,15 +252,22 @@ Value *IRVisitor::visitIfStmt(ast::IfStmt *node) {
 
 //  while.cond: br i1 %c, label %while.body, label %while.end
 //  while.body: ... br label %while.cond
-//  continue goes to while.cond, break to while.end
+//  continue goes to while.cond, break to while.end. an until loop swaps the
+//  targets, br i1 %c, label %until.end, label %until.body
 Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
-    BasicBlock *condBlock = builder.createBlock("while.cond");
-    BasicBlock *bodyBlock = builder.createBlock("while.body");
-    BasicBlock *endBlock = builder.createBlock("while.end");
+    std::string loop = node->isUntil ? "until" : "while";
+    BasicBlock *condBlock = builder.createBlock(loop + ".cond");
+    BasicBlock *bodyBlock = builder.createBlock(loop + ".body");
+    BasicBlock *endBlock = builder.createBlock(loop + ".end");
     builder.createBr(condBlock);
 
     builder.setInsertBlock(condBlock);
-    builder.createCondBr(emitCondition(node->cond.get()), bodyBlock, endBlock);
+    Value *cond = emitCondition(node->cond.get());
+    if (node->isUntil) {
+        builder.createCondBr(cond, endBlock, bodyBlock);
+    } else {
+        builder.createCondBr(cond, bodyBlock, endBlock);
+    }
 
     builder.setInsertBlock(bodyBlock);
     JumpTarget breakTarget = { endBlock, ctx().cleanupScopes.size() };
@@ -276,7 +283,8 @@ Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
     return nullptr;
 }
 
-//the body runs first, the condition decides whether it runs again
+//the body runs first, the condition decides whether it runs again: while it is
+//true for do-while, until it is true for do-until
 Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     BasicBlock *bodyBlock = builder.createBlock("do.body");
     BasicBlock *condBlock = builder.createBlock("do.cond");
@@ -294,7 +302,12 @@ Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     builder.createBr(condBlock);
 
     builder.setInsertBlock(condBlock);
-    builder.createCondBr(emitCondition(node->cond.get()), bodyBlock, endBlock);
+    Value *cond = emitCondition(node->cond.get());
+    if (node->isUntil) {
+        builder.createCondBr(cond, endBlock, bodyBlock);
+    } else {
+        builder.createCondBr(cond, bodyBlock, endBlock);
+    }
 
     builder.setInsertBlock(endBlock);
     return nullptr;

@@ -1,0 +1,381 @@
+Program <1:1>
+  TypedefDecl Integer 'int' <5:13>
+  TypedefDecl IntPtr 'int*' <6:14>
+  TypedefDecl Triple 'int [3]' <6:22>
+    dim: IntLiteral 3 <6:29>
+  TypedefDecl Count 'Integer' <7:17>
+  TypedefDecl BinaryOp 'int (*)(int, int)' <10:15>
+    param: ParamDecl <unnamed> 'int' <10:25>
+    param: ParamDecl <unnamed> 'int' <10:30>
+  TypedefDecl Row 'int []' <13:13>
+    dim: <unsized>
+  FunctionDecl add returns 'int' <15:5>
+    param: ParamDecl a 'int' <15:13>
+    param: ParamDecl b 'int' <15:20>
+    body: CompoundStmt <15:23>
+      ReturnStmt <15:25>
+        BinaryExpr '+' <15:34>
+          DeclRefExpr a <15:32>
+          DeclRefExpr b <15:36>
+  FunctionDecl mul returns 'int' <16:5>
+    param: ParamDecl a 'int' <16:13>
+    param: ParamDecl b 'int' <16:20>
+    body: CompoundStmt <16:23>
+      ReturnStmt <16:25>
+        BinaryExpr '*' <16:34>
+          DeclRefExpr a <16:32>
+          DeclRefExpr b <16:36>
+  FunctionDecl apply returns 'Integer' <19:9>
+    param: ParamDecl op 'BinaryOp' <19:24>
+    param: ParamDecl a 'Integer' <19:36>
+    param: ParamDecl b 'Integer' <19:47>
+    body: CompoundStmt <19:50>
+      ReturnStmt <20:5>
+        CallExpr 2 arg(s) <20:14>
+          callee: DeclRefExpr op <20:12>
+          arg: DeclRefExpr a <20:15>
+          arg: DeclRefExpr b <20:18>
+  FunctionDecl sum returns 'Count' <23:7>
+    param: ParamDecl values 'Triple' <23:18>
+    body: CompoundStmt <23:26>
+      DeclStmt <24:5>
+        VarDecl total 'Count' init=copy <24:11>
+          init: IntLiteral 0 <24:19>
+      ForStmt <25:5>
+        init: DeclStmt <25:10>
+          VarDecl i 'int' init=copy <25:14>
+            init: IntLiteral 0 <25:18>
+        cond: BinaryExpr '<' <25:23>
+          DeclRefExpr i <25:21>
+          IntLiteral 3 <25:25>
+        inc: UnaryExpr '++' postfix <25:29>
+          DeclRefExpr i <25:28>
+        body: ExprStmt <25:33>
+          AssignExpr '+=' <25:39>
+            target: DeclRefExpr total <25:33>
+            value: ArraySubscriptExpr <25:48>
+              base: DeclRefExpr values <25:42>
+              index: DeclRefExpr i <25:49>
+      ReturnStmt <26:5>
+        DeclRefExpr total <26:12>
+  RecordDecl class Animal <29:1>
+    member: AccessSpecDecl public <30:1>
+    member: VarDecl age 'int' <31:9>
+    member: ConstructorDecl Animal <32:5>
+      body: CompoundStmt <32:14>
+        ExprStmt <32:16>
+          AssignExpr '=' <32:26>
+            target: MemberExpr ->age <32:20>
+              base: ThisExpr <32:16>
+            value: IntLiteral 0 <32:28>
+    member: ConstructorDecl Animal <33:5>
+      param: ParamDecl a 'int' <33:16>
+      body: CompoundStmt <33:19>
+        ExprStmt <33:21>
+          AssignExpr '=' <33:31>
+            target: MemberExpr ->age <33:25>
+              base: ThisExpr <33:21>
+            value: DeclRefExpr a <33:33>
+    member: FunctionDecl getAge returns 'int' <34:9>
+      body: CompoundStmt <34:18>
+        ReturnStmt <34:20>
+          MemberExpr ->age <34:31>
+            base: ThisExpr <34:27>
+  TypedefDecl Creature 'Animal' <38:16>
+  RecordDecl class Dog : public Creature <40:1>
+    member: AccessSpecDecl public <41:1>
+    member: TypedefDecl Volume 'int' <43:17>
+    member: VarDecl loudness 'Volume' <44:12>
+    member: ConstructorDecl Dog <45:5>
+      param: ParamDecl a 'int' <45:13>
+      body: CompoundStmt <45:16>
+        ExprStmt <46:9>
+          AssignExpr '=' <46:19>
+            target: MemberExpr ->age <46:13>
+              base: ThisExpr <46:9>
+            value: DeclRefExpr a <46:21>
+        ExprStmt <47:9>
+          AssignExpr '=' <47:24>
+            target: MemberExpr ->loudness <47:13>
+              base: ThisExpr <47:9>
+            value: IntLiteral 0 <47:26>
+    member: FunctionDecl bark returns 'Volume' <49:12>
+      body: CompoundStmt <49:19>
+        ExprStmt <50:9>
+          AssignExpr '=' <50:24>
+            target: MemberExpr ->loudness <50:13>
+              base: ThisExpr <50:9>
+            value: BinaryExpr '+' <50:41>
+              MemberExpr ->loudness <50:30>
+                base: ThisExpr <50:26>
+              IntLiteral 1 <50:43>
+        ReturnStmt <51:9>
+          MemberExpr ->loudness <51:20>
+            base: ThisExpr <51:16>
+  FunctionDecl countUp returns 'int' <56:5>
+    param: ParamDecl n 'int' <56:17>
+    body: CompoundStmt <56:20>
+      WhileStmt until <57:5>
+        cond: BinaryExpr '>=' <57:14>
+          DeclRefExpr n <57:12>
+          IntLiteral 10 <57:17>
+        body: CompoundStmt <57:21>
+          ExprStmt <58:9>
+            AssignExpr '=' <58:11>
+              target: DeclRefExpr n <58:9>
+              value: BinaryExpr '+' <58:15>
+                DeclRefExpr n <58:13>
+                IntLiteral 3 <58:17>
+      ReturnStmt <60:5>
+        DeclRefExpr n <60:12>
+  FunctionDecl neverRuns returns 'int' <64:5>
+    body: CompoundStmt <64:17>
+      DeclStmt <65:5>
+        VarDecl runs 'int' init=copy <65:9>
+          init: IntLiteral 0 <65:16>
+      WhileStmt until <66:5>
+        cond: BoolLiteral true <66:12>
+        body: ExprStmt <66:18>
+          UnaryExpr '++' postfix <66:22>
+            DeclRefExpr runs <66:18>
+      ReturnStmt <67:5>
+        DeclRefExpr runs <67:12>
+  FunctionDecl skipOdd returns 'int' <71:5>
+    body: CompoundStmt <71:15>
+      DeclStmt <72:5>
+        VarDecl i 'int' init=copy <72:9>
+          init: IntLiteral 0 <72:13>
+      DeclStmt <73:5>
+        VarDecl total 'int' init=copy <73:9>
+          init: IntLiteral 0 <73:17>
+      WhileStmt until <74:5>
+        cond: BoolLiteral false <74:12>
+        body: CompoundStmt <74:19>
+          ExprStmt <75:9>
+            UnaryExpr '++' postfix <75:10>
+              DeclRefExpr i <75:9>
+          IfStmt <76:9>
+            cond: BinaryExpr '>' <76:15>
+              DeclRefExpr i <76:13>
+              IntLiteral 8 <76:17>
+            then: BreakStmt <76:20>
+          IfStmt <77:9>
+            cond: BinaryExpr '==' <77:19>
+              BinaryExpr '%' <77:15>
+                DeclRefExpr i <77:13>
+                IntLiteral 2 <77:17>
+              IntLiteral 1 <77:22>
+            then: ContinueStmt <77:25>
+          ExprStmt <78:9>
+            AssignExpr '+=' <78:15>
+              target: DeclRefExpr total <78:9>
+              value: DeclRefExpr i <78:18>
+      ReturnStmt <80:5>
+        DeclRefExpr total <80:12>
+  FunctionDecl doUntilOnce returns 'int' <84:5>
+    body: CompoundStmt <84:19>
+      DeclStmt <85:5>
+        VarDecl runs 'int' init=copy <85:9>
+          init: IntLiteral 0 <85:16>
+      DoStmt until <86:5>
+        body: CompoundStmt <86:8>
+          ExprStmt <87:9>
+            UnaryExpr '++' postfix <87:13>
+              DeclRefExpr runs <87:9>
+        cond: BoolLiteral true <88:14>
+      ReturnStmt <89:5>
+        DeclRefExpr runs <89:12>
+  FunctionDecl halve returns 'int' <92:5>
+    param: ParamDecl n 'int' <92:15>
+    body: CompoundStmt <92:18>
+      DeclStmt <93:5>
+        VarDecl steps 'int' init=copy <93:9>
+          init: IntLiteral 0 <93:17>
+      DoStmt until <94:5>
+        body: CompoundStmt <94:8>
+          ExprStmt <95:9>
+            AssignExpr '=' <95:11>
+              target: DeclRefExpr n <95:9>
+              value: BinaryExpr '/' <95:15>
+                DeclRefExpr n <95:13>
+                IntLiteral 2 <95:17>
+          ExprStmt <96:9>
+            UnaryExpr '++' postfix <96:14>
+              DeclRefExpr steps <96:9>
+        cond: BinaryExpr '<=' <97:16>
+          DeclRefExpr n <97:14>
+          IntLiteral 1 <97:19>
+      ReturnStmt <98:5>
+        DeclRefExpr steps <98:12>
+  FunctionDecl main returns 'int' <101:5>
+    body: CompoundStmt <101:12>
+      DeclStmt <102:5>
+        VarDecl x 'Integer' init=copy <102:13>
+          init: IntLiteral 7 <102:17>
+      DeclStmt <103:5>
+        VarDecl p 'IntPtr' init=copy <103:12>
+          init: UnaryExpr '&' prefix <103:16>
+            DeclRefExpr x <103:17>
+      ExprStmt <104:5>
+        AssignExpr '=' <104:8>
+          target: UnaryExpr '*' prefix <104:5>
+            DeclRefExpr p <104:6>
+          value: BinaryExpr '+' <104:13>
+            UnaryExpr '*' prefix <104:10>
+              DeclRefExpr p <104:11>
+            IntLiteral 1 <104:15>
+      ExprStmt <105:5>
+        CallExpr 2 arg(s) <105:11>
+          callee: DeclRefExpr printf <105:5>
+          arg: ImplicitCastExpr array-to-pointer <105:12>
+            StringLiteral ""%d\n"" <105:12>
+          arg: DeclRefExpr x <105:20>
+      DeclStmt <107:5>
+        VarDecl t 'Triple' init=copy <107:12>
+          init: InitListExpr 3 item(s) <107:16>
+            IntLiteral 1 <107:17>
+            IntLiteral 2 <107:20>
+            IntLiteral 3 <107:23>
+      ExprStmt <108:5>
+        CallExpr 2 arg(s) <108:11>
+          callee: DeclRefExpr printf <108:5>
+          arg: ImplicitCastExpr array-to-pointer <108:12>
+            StringLiteral ""%d\n"" <108:12>
+          arg: CallExpr 1 arg(s) <108:23>
+            callee: DeclRefExpr sum <108:20>
+            arg: ImplicitCastExpr array-to-pointer <108:24>
+              DeclRefExpr t <108:24>
+      DeclStmt <110:5>
+        VarDecl r 'Row' init=copy <110:9>
+          init: InitListExpr 4 item(s) <110:13>
+            IntLiteral 4 <110:14>
+            IntLiteral 5 <110:17>
+            IntLiteral 6 <110:20>
+            IntLiteral 7 <110:23>
+      ExprStmt <111:5>
+        CallExpr 3 arg(s) <111:11>
+          callee: DeclRefExpr printf <111:5>
+          arg: ImplicitCastExpr array-to-pointer <111:12>
+            StringLiteral ""%d %d\n"" <111:12>
+          arg: ArraySubscriptExpr <111:24>
+            base: ImplicitCastExpr array-to-pointer <111:23>
+              DeclRefExpr r <111:23>
+            index: IntLiteral 0 <111:25>
+          arg: ArraySubscriptExpr <111:30>
+            base: ImplicitCastExpr array-to-pointer <111:29>
+              DeclRefExpr r <111:29>
+            index: IntLiteral 3 <111:31>
+      DeclStmt <113:5>
+        VarDecl op 'BinaryOp' init=copy <113:14>
+          init: ImplicitCastExpr function-to-pointer <113:19>
+            DeclRefExpr add <113:19>
+      ExprStmt <114:5>
+        CallExpr 2 arg(s) <114:11>
+          callee: DeclRefExpr printf <114:5>
+          arg: ImplicitCastExpr array-to-pointer <114:12>
+            StringLiteral ""%d "" <114:12>
+          arg: CallExpr 3 arg(s) <114:24>
+            callee: DeclRefExpr apply <114:19>
+            arg: DeclRefExpr op <114:25>
+            arg: IntLiteral 2 <114:29>
+            arg: IntLiteral 3 <114:32>
+      ExprStmt <115:5>
+        AssignExpr '=' <115:8>
+          target: DeclRefExpr op <115:5>
+          value: ImplicitCastExpr function-to-pointer <115:10>
+            DeclRefExpr mul <115:10>
+      ExprStmt <116:5>
+        CallExpr 2 arg(s) <116:11>
+          callee: DeclRefExpr printf <116:5>
+          arg: ImplicitCastExpr array-to-pointer <116:12>
+            StringLiteral ""%d\n"" <116:12>
+          arg: CallExpr 3 arg(s) <116:25>
+            callee: DeclRefExpr apply <116:20>
+            arg: DeclRefExpr op <116:26>
+            arg: IntLiteral 2 <116:30>
+            arg: IntLiteral 3 <116:33>
+      DeclStmt <118:5>
+        VarDecl c 'Creature' init=ctor <118:14>
+          arg: IntLiteral 4 <118:16>
+      DeclStmt <119:5>
+        VarDecl d 'Dog' init=ctor <119:9>
+          arg: IntLiteral 9 <119:11>
+      ExprStmt <120:5>
+        CallExpr 0 arg(s) <120:11>
+          callee: MemberExpr .bark <120:6>
+            base: DeclRefExpr d <120:5>
+      ExprStmt <121:5>
+        CallExpr 4 arg(s) <121:11>
+          callee: DeclRefExpr printf <121:5>
+          arg: ImplicitCastExpr array-to-pointer <121:12>
+            StringLiteral ""%d %d %d\n"" <121:12>
+          arg: CallExpr 0 arg(s) <121:34>
+            callee: MemberExpr .getAge <121:27>
+              base: DeclRefExpr c <121:26>
+          arg: CallExpr 0 arg(s) <121:46>
+            callee: MemberExpr .getAge <121:39>
+              base: DeclRefExpr d <121:38>
+          arg: CallExpr 0 arg(s) <121:56>
+            callee: MemberExpr .bark <121:51>
+              base: DeclRefExpr d <121:50>
+      DeclStmt <124:5>
+        VarDecl heap 'Creature*' init=copy <124:15>
+          init: NewExpr 'Creature' args <124:22>
+            arg: IntLiteral 11 <124:35>
+      ExprStmt <125:5>
+        CallExpr 2 arg(s) <125:11>
+          callee: DeclRefExpr printf <125:5>
+          arg: ImplicitCastExpr array-to-pointer <125:12>
+            StringLiteral ""%d\n"" <125:12>
+          arg: CallExpr 0 arg(s) <125:32>
+            callee: MemberExpr ->getAge <125:24>
+              base: DeclRefExpr heap <125:20>
+      ExprStmt <126:5>
+        DeleteExpr <126:5>
+          DeclRefExpr heap <126:12>
+      CompoundStmt <129:5>
+        DeclStmt <130:9>
+          TypedefDecl Integer 'char' <130:22>
+        DeclStmt <131:9>
+          VarDecl letter 'Integer' init=copy <131:17>
+            init: CharLiteral 'A' <131:26>
+        ExprStmt <132:9>
+          CallExpr 2 arg(s) <132:15>
+            callee: DeclRefExpr printf <132:9>
+            arg: ImplicitCastExpr array-to-pointer <132:16>
+              StringLiteral ""%c\n"" <132:16>
+            arg: ImplicitCastExpr integral <132:24>
+              DeclRefExpr letter <132:24>
+      DeclStmt <134:5>
+        VarDecl back 'Integer' init=copy <134:13>
+          init: IntLiteral 65 <134:20>
+      ExprStmt <135:5>
+        CallExpr 2 arg(s) <135:11>
+          callee: DeclRefExpr printf <135:5>
+          arg: ImplicitCastExpr array-to-pointer <135:12>
+            StringLiteral ""%d\n"" <135:12>
+          arg: DeclRefExpr back <135:20>
+      ExprStmt <137:5>
+        CallExpr 4 arg(s) <137:11>
+          callee: DeclRefExpr printf <137:5>
+          arg: ImplicitCastExpr array-to-pointer <137:12>
+            StringLiteral ""%d %d %d\n"" <137:12>
+          arg: CallExpr 1 arg(s) <137:33>
+            callee: DeclRefExpr countUp <137:26>
+            arg: IntLiteral 1 <137:34>
+          arg: CallExpr 0 arg(s) <137:47>
+            callee: DeclRefExpr neverRuns <137:38>
+          arg: CallExpr 0 arg(s) <137:58>
+            callee: DeclRefExpr skipOdd <137:51>
+      ExprStmt <138:5>
+        CallExpr 3 arg(s) <138:11>
+          callee: DeclRefExpr printf <138:5>
+          arg: ImplicitCastExpr array-to-pointer <138:12>
+            StringLiteral ""%d %d\n"" <138:12>
+          arg: CallExpr 0 arg(s) <138:34>
+            callee: DeclRefExpr doUntilOnce <138:23>
+          arg: CallExpr 1 arg(s) <138:43>
+            callee: DeclRefExpr halve <138:38>
+            arg: IntLiteral 40 <138:44>
+      ReturnStmt <139:5>
+        IntLiteral 0 <139:12>

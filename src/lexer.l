@@ -236,6 +236,14 @@ void setDeclType(int index, const std::string &type){
     }
 }
 
+//a typedef name is read as a declarator first, so it already holds the type of
+//the declaration by the time the parser knows it is a typedef
+void replaceDeclType(int index, const std::string &type){
+    if(index >= 0 && index < (int)g_tokens.size()){
+        g_tokens[index].declType = type;
+    }
+}
+
 std::string lexemeAt(int index){
     if(index >= 0 && index < (int)g_tokens.size()){
         return g_tokens[index].lexeme;

@@ -33,7 +33,8 @@ enum class ASTKind {
     DestructorDecl,
     RecordDecl,
     AccessSpecDecl,
-    LastDecl = AccessSpecDecl,
+    TypedefDecl,
+    LastDecl = TypedefDecl,
 
     //statements
     CompoundStmt,

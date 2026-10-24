@@ -42,6 +42,7 @@ static const char *g_filename = NULL;
 static std::unique_ptr<ast::Program> g_program;
 
 void        setDeclType(int index, const std::string &type);
+void        replaceDeclType(int index, const std::string &type);
 std::string lexemeAt(int index);
 
 //the names in a declaration are read before the parser reaches the end of the
@@ -266,6 +267,28 @@ static void markStatic(NodeList<ast::Decl> *decls) {
         }
     }
 }
+
+//a typedef is read as a declaration, then each VarDecl it gave becomes a
+//TypedefDecl. it names a type, so it cannot be initialised or qualified
+static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
+    NodeList<ast::Decl> *typedefs = new NodeList<ast::Decl>();
+    for (size_t i = 0; i < decls->size(); i++) {
+        ast::VarDecl *var = static_cast<ast::VarDecl *>((*decls)[i].get());
+        if (var->initStyle != ast::InitStyle::None) {
+            g_syntaxErrors.push_back({ "a typedef cannot have an initializer", var->line, var->col });
+            continue;
+        }
+        if (var->name.parts.size() > 1) {
+            g_syntaxErrors.push_back({ "a typedef name cannot be qualified", var->line, var->col });
+            continue;
+        }
+        replaceDeclType(var->name.lastTok, "TYPEDEF");
+        typedefs->emplace_back(new ast::TypedefDecl(var->name.parts[0], std::move(var->type),
+                                                    var->line, var->col));
+    }
+    delete decls;
+    return typedefs;
+}
 %}
 
 %locations
@@ -303,7 +326,7 @@ static void markStatic(NodeList<ast::Decl> *decls) {
 %token <tok> TOK_IF TOK_ELSE TOK_FOR TOK_WHILE TOK_DO TOK_SWITCH TOK_CASE
 %token <tok> TOK_STRUCT TOK_CLASS TOK_PUBLIC TOK_PRIVATE TOK_PROTECTED
 %token <tok> TOK_NEW TOK_DELETE TOK_TRUE TOK_FALSE TOK_THIS TOK_NULL TOK_SIZEOF
-%token <tok> TOK_STATIC
+%token <tok> TOK_STATIC TOK_TYPEDEF TOK_UNTIL
 %token <tok> TOK__KEYWORD_END
 
 %token <tok> TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH TOK_PERCENT
@@ -324,7 +347,7 @@ static void markStatic(NodeList<ast::Decl> *decls) {
 %type <decls>    class_item member_item declaration local_declaration_body
 %type <decl>     qualified_special_member_definition record_definition class_definition
 %type <decl>     special_member_definition special_member_declaration
-%type <decls>    parenthesized_declarator named_parenthesized_declaration
+%type <decls>    parenthesized_declarator named_parenthesized_declaration typedef_declaration
 %type <decl>     function_definition function_declaration
 %type <bases>    inheritance_opt base_list
 %type <base>     base_specifier
@@ -363,7 +386,7 @@ static void markStatic(NodeList<ast::Decl> *decls) {
     qualified_special_member_definition record_definition class_definition
     special_member_definition special_member_declaration
     function_definition function_declaration parenthesized_declarator
-    named_parenthesized_declaration paren_suffix
+    named_parenthesized_declaration typedef_declaration paren_suffix
     inheritance_opt base_list base_specifier
     simple_type type_specifier allocation_type qualified_name
     parameter_list_opt parameter_list parameter_declaration
@@ -411,6 +434,7 @@ external_item
                                       { $$ = single($1); }
     | declaration                     { $$ = $1; }
     | named_parenthesized_declaration { $$ = $1; }
+    | typedef_declaration             { $$ = $1; }
     | static_item                     { $$ = $1; }
     | error TOK_SEMI                  { yyerrok; $$ = new NodeList<ast::Decl>(); }
     ;
@@ -524,6 +548,7 @@ member_item
     | special_member_definition       { $$ = single($1); }
     | special_member_declaration      { $$ = single($1); }
     | declaration                     { $$ = $1; }
+    | typedef_declaration             { $$ = $1; }
     | static_item                     { $$ = $1; }
     | error TOK_SEMI                  { yyerrok; $$ = new NodeList<ast::Decl>(); }
     ;
@@ -652,6 +677,13 @@ parenthesized_declarator
                                                         $$ = makeVarDecls($1, single(addPointers($3, $2))); }
     ;
 
+//typedef takes any declarator a declaration does, typedef int *IntPtr, Row[3]
+//or typedef int (*BinaryOp)(int, int)
+typedef_declaration
+    : TOK_TYPEDEF declaration                         { $$ = makeTypedefs($2); }
+    | TOK_TYPEDEF named_parenthesized_declaration     { $$ = makeTypedefs($2); }
+    ;
+
 //at file scope, where there are no constructors, a class type may be followed
 //directly by the parenthesised declarator
 named_parenthesized_declaration
@@ -744,6 +776,8 @@ local_declaration
     : local_declaration_body TOK_SEMI { $$ = new ast::DeclStmt(take($1), LOC(@1)); }
     | TOK_STATIC local_declaration_body TOK_SEMI
                                       { markStatic($2); $$ = new ast::DeclStmt(take($2), LOC(@1)); }
+    | TOK_TYPEDEF local_declaration_body TOK_SEMI
+                                      { $$ = new ast::DeclStmt(take(makeTypedefs($2)), LOC(@1)); }
     ;
 
 //a block may also hold expressions, so a class type is never followed by a
@@ -840,6 +874,14 @@ iteration_statement
                                       { $$ = new ast::WhileStmt(own($3), own($5), LOC(@1)); }
     | TOK_DO statement TOK_WHILE TOK_LPAREN expression TOK_RPAREN TOK_SEMI
                                       { $$ = new ast::DoStmt(own($2), own($5), LOC(@1)); }
+    | TOK_UNTIL TOK_LPAREN expression TOK_RPAREN statement
+                                      { ast::WhileStmt *loop = new ast::WhileStmt(own($3), own($5), LOC(@1));
+                                        loop->isUntil = true;
+                                        $$ = loop; }
+    | TOK_DO statement TOK_UNTIL TOK_LPAREN expression TOK_RPAREN TOK_SEMI
+                                      { ast::DoStmt *loop = new ast::DoStmt(own($2), own($5), LOC(@1));
+                                        loop->isUntil = true;
+                                        $$ = loop; }
     | TOK_FOR TOK_LPAREN for_initializer TOK_SEMI expression_opt TOK_SEMI
       expression_opt TOK_RPAREN statement
                                       { $$ = new ast::ForStmt(own($3), own($5), own($7), own($9), LOC(@1)); }

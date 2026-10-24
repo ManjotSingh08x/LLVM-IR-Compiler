@@ -1,0 +1,20 @@
+// Tests : missing brackets
+int missingbrackets(){
+    int x=18;
+    if x>6 {
+        return x;
+    }
+
+    x--;
+    return x;
+}
+
+
+// Tests : function call arguments
+int functioncall(int x,){
+    return x;
+}
+
+int functioncall2(int x{
+    return 4;
+}

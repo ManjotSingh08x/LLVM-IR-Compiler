@@ -1,0 +1,28 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  function sign : int (int) [global_4sign_i] llvm: i32 (i32)
+  function grade : int (int) [global_5grade_i] llvm: i32 (i32)
+  function factorial : int (int) [global_9factorial_i] llvm: i32 (i32)
+  function main : int () [main] llvm: i32 ()
+  scope function sign <4:5>
+    parameter n : int llvm: i32
+    scope block <5:16>
+    scope block <7:24>
+    scope block <9:12>
+  scope function grade <15:5>
+    parameter score : int llvm: i32
+    variable result : int llvm: i32
+    scope block <17:20>
+  scope function factorial <32:5>
+    parameter n : int llvm: i32
+  scope function main <37:5>
+    variable odd : int llvm: i32
+    variable n : int llvm: i32
+    variable m : int llvm: i32
+    variable tries : int llvm: i32
+    scope block <44:5>
+      variable i : int llvm: i32
+      scope block <44:34>
+    scope block <52:19>
+    scope block <56:8>

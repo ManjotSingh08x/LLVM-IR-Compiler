@@ -23,6 +23,9 @@ public:
     int cells[2][3];
 };
 
+// Tests: definition of the static member declared above
+int Counter::total = 0;
+
 // Tests: multi-dimensional array parameter
 int sumGrid(int m[][3], int rows) {
     int s{};

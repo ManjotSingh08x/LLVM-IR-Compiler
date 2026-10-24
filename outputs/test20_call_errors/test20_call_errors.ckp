@@ -1,0 +1,81 @@
+// Calls, overloads and returns. Every line marked is a semantic error.
+// A record is defined at file scope: the grammar has no local definitions.
+struct Point {
+    int x;
+};
+
+int one(int a) {
+    return a;
+}
+
+int two(int a, int b) {
+    return a + b;
+}
+
+// Tests: overloads that differ in their parameters are allowed
+int pick(int a) { return a; }
+int pick(double a) { return 1; }
+int pick(char *s) { return 2; }
+
+class Counter {
+public:
+    int bump(int by) { return by; }
+    static int reset() { return 0; }
+};
+
+int wantsVoid() {
+    // Tests: a function with a return type must return a value
+    return;
+}
+
+void givesNothing() {
+    // Tests: a void function cannot return a value
+    return 1;
+}
+
+int wrongReturn() {
+    Point p;
+    // Tests: the returned value does not convert to the return type
+    return p;
+}
+
+int main() {
+    // Tests: the right number of arguments is accepted
+    int ok = one(1) + two(1, 2);
+
+    // Tests: too few and too many arguments
+    int few = two(1);
+    int many = one(1, 2);
+
+    // Tests: an argument that does not convert
+    Point p;
+    int badArg = one(p);
+
+    // Tests: overload resolution picks the exact match
+    int exact = pick(1) + pick(1.5);
+
+    // Tests: no overload matches
+    int none = pick(p);
+
+    // Tests: calling something that is not a function
+    int plain = 5;
+    int notCallable = plain(1);
+
+    // Tests: a function pointer must match the function it is given
+    int (*fp)(int) = one;
+    int viaPtr = fp(3);
+    int (*wrongFp)(int) = two;
+
+    // Tests: a member function needs an object
+    Counter c;
+    int viaObject = c.bump(1);
+    int noObject = bump(1);
+
+    // Tests: a static member function is called through the class or an object
+    int viaStatic = c.reset();
+
+    // Tests: a member function used as a value instead of being called
+    int unCalled = c.bump;
+
+    return ok + few + many + badArg + exact + none + notCallable + viaPtr + viaObject + noObject + viaStatic;
+}

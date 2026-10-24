@@ -19,6 +19,10 @@ long long charLiteralValue(const std::string &spelling);
 //the number of characters a string literal holds, without the closing \0
 size_t stringLiteralLength(const std::string &spelling);
 
+//the characters a string literal holds with its escapes worked out, without
+//the quotes and without the closing \0. always stringLiteralLength() long
+std::string decodeStringLiteral(const std::string &spelling);
+
 //works out an integer constant expression: literals, + - * / % and the other
 //arithmetic, bitwise, logical and comparison operators, and ?:. false when the
 //expression is not a constant, as for anything naming a variable

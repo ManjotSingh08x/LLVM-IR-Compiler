@@ -29,7 +29,11 @@ make CXX=g++-14 LLVM_CONFIG=/usr/bin/llvm-config-20
 ```
 
 Only LLVM support ADTs are linked (`llvm-config --libs support`). No LLVM IR
-library or types are used.
+library or types are used: the IR phase builds its own control flow graph and
+writes the `.ll` text itself.
+
+`run.sh` also needs `clang` on the `PATH` to check the generated IR and to run
+the test programs.
 
 ```bash
 make clean && make
@@ -56,18 +60,23 @@ make test                          # builds, then runs every test case
 Passing an executable path skips the build and uses the executable given.
 
 `run.sh` runs every `.ckp` file in `test/` and reports what happened to each:
-either the file was accepted and a token table was produced, or the analyzer
+either the file was accepted and LLVM IR was produced, or the compiler
 reported errors, in which case the errors are shown with a count. No test case is named
 in the script and no outcome is assumed in advance, so adding a test case means
-only adding the file. The full output for every file is written to `outputs/`.
+only adding the file. The full output for every file is written to `outputs/<name>/`.
+
+For an accepted file, `run.sh` checks the IR with
+`clang -x ir -c -fverify-intermediate-code`. When `test/expected/<name>.out`
+exists, it also links the program, runs it and compares what it prints.
 
 ## Output
 
-A file that is accepted prints both phases, then the token table:
+A file that is accepted prints every phase, then the token table:
 
 ```text
 Parsing successful.
 Semantic analysis successful.
+IR generation successful.
 
 Token                | Token_Type
 ---------------------+---------------
@@ -105,12 +114,14 @@ arrays and all, is in the symbol table dump described below.
 
 ### Semantic output
 
-Every accepted file also produces two files under `outputs/`:
+Every accepted file also produces these files under `outputs/<name>/`:
 
 - `<name>-ast.txt`, the syntax tree, which after semantic analysis also shows
   the `ImplicitCastExpr` nodes the type checker inserted;
 - `<name>-symbols.txt`, the scope tree with every symbol, its full type, its
-  mangled name, and the LLVM type it lowers to.
+  mangled name, and the LLVM type it lowers to;
+- `<name>.ll`, the program as LLVM IR, in the style of `clang -O0`.
+  `clang <name>.ll -o program` builds it.
 
 A file with a semantic error reports it in the same form as a syntax error and
 exits non-zero:
@@ -123,7 +134,7 @@ test/test18_type_errors.ckp line: 33 col: 15 semantic error: cannot dereference 
 
 ## Test coverage
 
-There are twenty-two test cases. Nine are accepted and produce a token table;
+There are twenty-seven test cases. Fourteen are accepted and produce LLVM IR;
 thirteen are rejected and report errors.
 
 Feature coverage:
@@ -144,6 +155,20 @@ Feature coverage:
 - **test22** the recursive type system: pointers of several levels, pointers to
   arrays, pointers to function pointers, references to arrays, `new` with a
   pointer element type, pointer arithmetic, and `null` and `void *` conversions.
+
+IR run tests. Each is linked and run, and its output is compared with
+`test/expected/<name>.out`, which was produced by compiling the same source
+with clang++:
+
+- **test23** expressions: every operator group, compound assignment,
+  increment and decrement.
+- **test24** control flow: `if`/`else`, `switch`, loops, `break`/`continue`,
+  `goto`, recursion.
+- **test25** arrays, pointers, references, structures, brace initialisers,
+  `new`/`delete`.
+- **test26** classes, inheritance, constructor and destructor order, static
+  members, nested classes.
+- **test27** static variables, functions and locals, and lambdas.
 
 Cases that must be rejected:
 
@@ -267,6 +292,9 @@ a length-prefixed name for a record.
 ```text
 docs/
   semantic-phase.md
+  ir-guide.md                 how the IR phase works
+  ir-implementation-plan.md   the agreed plan and edge-case rulebook
+  ir-change-log.md            every change made for the IR phase, and why
 src/
   lexer.l
   parser.y
@@ -283,6 +311,16 @@ src/
     typecheck.h typecheck.cpp
     constants.h constants.cpp
     diagnostics.h
+  ir/
+    ir_types.h ir_types.cpp
+    value.h value.cpp
+    instruction.h instruction.cpp
+    cfg.h cfg.cpp
+    ir_builder.h ir_builder.cpp
+    record_layout.h record_layout.cpp
+    constant_folder.h constant_folder.cpp
+    ir_visitor.h ir_visitor.cpp ir_statements.cpp
+    ir_expressions.cpp ir_calls.cpp ir_objects.cpp
 test/
   test1_control_flow.ckp
   test2_arrays_pointers_struct.ckp
@@ -306,6 +344,8 @@ test/
   test20_call_errors.ckp
   test21_flow_errors.ckp
   test22_pointer_types.ckp
+  test23_ir_expressions.ckp ... test27_ir_statics_lambdas.ckp
+  expected/<name>.out          what an IR run test must print
 Makefile
 run.sh
 README.md
@@ -320,11 +360,12 @@ build/parser.output
 build/parser.stamp
 build/lex.yy.cpp
 build/parser
+build/run/<name>              the linked IR run tests
 ```
 
-`run.sh` saves the token table, the syntax tree and the symbol table dump for
-each test under `outputs/` and reports the result of each without assuming what
-it should be.
+`run.sh` saves the token table, the syntax tree, the symbol table dump and the
+`.ll` file for each test under `outputs/<name>/` and reports the result of each
+without assuming what it should be.
 
 ## Supported syntax
 

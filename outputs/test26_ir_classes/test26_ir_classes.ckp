@@ -1,0 +1,86 @@
+// IR run test: classes, inheritance, constructors and destructors.
+// Expected output: test/expected/test26_ir_classes.out
+
+class Animal {
+public:
+    int age;
+    Animal() {
+        this->age = 1;
+        printf("Animal()\n");
+    }
+    Animal(int a) {
+        this->age = a;
+        printf("Animal(%d)\n", a);
+    }
+    ~Animal() {
+        printf("~Animal(%d)\n", this->age);
+    }
+    void setAge(int a) { this->age = a; }
+};
+
+// Tests: inheritance; the base is constructed first and destroyed last
+class Dog : public Animal {
+public:
+    bool loud;
+    Dog() {
+        this->loud = false;
+        printf("Dog()\n");
+    }
+    ~Dog() {
+        printf("~Dog()\n");
+    }
+    void bark() { this->loud = true; }
+};
+
+// Tests: inheritance from more than one base
+class Tag {
+public:
+    int serial;
+};
+
+class Pet : public Animal, public Tag {
+public:
+    int slot;
+};
+
+// Tests: static members and a class defined inside another
+class Counter {
+public:
+    static int total;
+    struct Inner { int value; };
+    Inner inner;
+    static int next() {
+        total++;
+        return total;
+    }
+};
+int Counter::total = 0;
+
+int main() {
+    // Tests: objects are destroyed at the end of their scope, newest first
+    {
+        Dog d;
+        d.bark();
+        d.setAge(5);
+        printf("dog %d %d\n", d.age, d.loud);
+        Animal a(9);
+    }
+
+    // Tests: fields of every base
+    Pet pet;
+    pet.age = 2;
+    pet.serial = 77;
+    pet.slot = 3;
+    printf("pet %d %d %d\n", pet.age, pet.serial, pet.slot);
+
+    // Tests: new and delete run the constructor and destructor
+    Animal *heap = new Animal(4);
+    heap->setAge(6);
+    delete heap;
+
+    Counter c;
+    c.inner.value = 11;
+    c.next();
+    printf("counter %d %d\n", c.next(), c.inner.value);
+    return 0;
+}

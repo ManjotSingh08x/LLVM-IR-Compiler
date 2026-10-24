@@ -427,31 +427,11 @@ std::string toLLVMType(const Type *type) {
         out += ")";
         return out;
     }
+    //a record used inside another type is named, its layout is written once by
+    //toLLVMRecord. writing the layout here gave [4 x %struct.Point = type {...}]
     case TypeKind::Record: {
         const RecordSymbol *rec = asRecord(type);
-        std::string name = "%" + std::string(rec->isClass ? "class." : "struct.") + rec->mangledName;
-        std::string elems;
-        bool first = true;
-        for (const BaseClass &base : rec->bases) {
-            if (!first) elems += ", ";
-            first = false;
-            elems += "%" + std::string(base.record->isClass ? "class." : "struct.") + base.record->mangledName;
-        }
-        for (const Symbol *field : rec->fields) {
-            if (!first) elems += ", ";
-            first = false;
-            if (field->type && field->type->is(TypeKind::Record)) {
-                const RecordSymbol *frec = asRecord(field->type);
-                elems += "%" + std::string(frec->isClass ? "class." : "struct.") + frec->mangledName;
-            } else {
-                elems += toLLVMType(field->type);
-            }
-        }
-        if (elems.empty()) {
-            return name + " = type {}";
-        } else {
-            return name + " = type { " + elems + " }";
-        }
+        return "%" + std::string(rec->isClass ? "class." : "struct.") + rec->mangledName;
     }
     case TypeKind::Closure: {
         const ClosureType *closure = asClosure(type);

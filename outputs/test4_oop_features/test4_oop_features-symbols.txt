@@ -1,0 +1,71 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  class Animal [Animal] llvm: %class.Animal { i32, i32, i32 }
+  class Dog [Dog] llvm: %class.Dog { %class.Animal, i1 }
+  class Cat [Cat] llvm: %class.Cat { %class.Animal, i1 }
+  function main : int () [main] llvm: i32 ()
+  class Trackable [Trackable] llvm: %class.Trackable { i32 }
+  class Tagged [Tagged] llvm: %class.Tagged { %class.Animal, i32 }
+  class Registered [Registered] llvm: %class.Registered { %class.Animal, %class.Trackable, i32 }
+  struct BaseRec [BaseRec] llvm: %struct.BaseRec { i32 }
+  struct DerivedRec [DerivedRec] llvm: %struct.DerivedRec { %struct.BaseRec, i32 }
+  class Outer [Outer] llvm: %class.Outer { %struct.Outer.Inner, %class.Outer.Nested }
+  function buildObjects : int () [global_12buildObjects_v] llvm: i32 ()
+  scope record Animal <2:1>
+    field age : int public llvm: i32
+    static member created : int public static [class_6Animal_7created] llvm: i32
+    constructor Animal : void () public [class_6Animal_C_v] this-lowered: void (Animal*) (no definition) llvm: void (ptr)
+    constructor Animal : void (int) public [class_6Animal_C_i] this-lowered: void (Animal*, int) (no definition) llvm: void (ptr, i32)
+    constructor Animal : void (int, int) public [class_6Animal_C_ii] this-lowered: void (Animal*, int, int) (no definition) llvm: void (ptr, i32, i32)
+    destructor ~Animal : void () public [class_6Animal_D_v] this-lowered: void (Animal*) (no definition) llvm: void (ptr)
+    method setAge : void (int) public [class_6Animal_6setAge_i] this-lowered: void (Animal*, int) llvm: void (ptr, i32)
+    field legs : int protected llvm: i32
+    field secretId : int private llvm: i32
+    method hidden : int () private [class_6Animal_6hidden_v] this-lowered: int (Animal*) llvm: i32 (ptr)
+    scope function setAge <15:10>
+      parameter a : int llvm: i32
+    scope function hidden <25:9>
+  scope record Dog <31:1>
+    field loud : bool public llvm: i1
+    constructor Dog : void () public [class_3Dog_C_v] this-lowered: void (Dog*) llvm: void (ptr)
+    constructor Dog : void (bool) public [class_3Dog_C_b] this-lowered: void (Dog*, bool) llvm: void (ptr, i1)
+    destructor ~Dog : void () public [class_3Dog_D_v] this-lowered: void (Dog*) llvm: void (ptr)
+    method bark : void () public [class_3Dog_4bark_v] this-lowered: void (Dog*) llvm: void (ptr)
+    scope function Dog <36:5>
+    scope function Dog <40:5>
+      parameter l : bool llvm: i1
+    scope function ~Dog <44:5>
+    scope function bark <48:10>
+  scope record Cat <54:1>
+    field quiet : bool private llvm: i1
+  scope record Trackable <78:1>
+    field serial : int public llvm: i32
+  scope record Tagged <80:1>
+    field tag : int public llvm: i32
+  scope record Registered <82:1>
+    field slot : int public llvm: i32
+  scope record BaseRec <85:1>
+    field first : int public llvm: i32
+  scope record DerivedRec <86:1>
+    field second : int public llvm: i32
+  scope record Outer <89:1>
+    struct Inner public [Outer.Inner] llvm: %struct.Outer.Inner { i32 }
+    class Nested public [Outer.Nested] llvm: %class.Outer.Nested { i32 }
+    field inner : Outer::Inner public llvm: %struct.Outer.Inner
+    field nested : Outer::Nested public llvm: %class.Outer.Nested
+    scope record Outer::Inner <91:5>
+      field value : int public llvm: i32
+    scope record Outer::Nested <92:5>
+      field depth : int public llvm: i32
+  scope function main <62:5>
+    variable a : Animal* llvm: ptr
+    variable d : Dog llvm: %class.Dog
+    variable c : Cat llvm: %class.Cat
+  scope function buildObjects <98:5>
+    variable plain : Animal llvm: %class.Animal
+    variable withOne : Animal llvm: %class.Animal
+    variable withTwo : Animal llvm: %class.Animal
+    variable tagged : Tagged llvm: %class.Tagged
+    variable registered : Registered llvm: %class.Registered
+    variable outer : Outer llvm: %class.Outer

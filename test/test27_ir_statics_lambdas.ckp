@@ -1,0 +1,54 @@
+// IR run test: static variables and functions, static locals, lambdas.
+// Expected output: test/expected/test27_ir_statics_lambdas.out
+
+// Tests: static variables and functions at file scope
+static int instances = 0;
+static int limit{10};
+static int helper(int x) {
+    return x * 2;
+}
+
+// Tests: a static local keeps its value between calls
+int calls() {
+    static int count = 0;
+    count++;
+    return count;
+}
+
+class Box {
+public:
+    int width;
+    // Tests: a lambda capturing this
+    int doubled() {
+        auto twice = [this]() { return this->width * 2; };
+        return twice();
+    }
+};
+
+int main() {
+    calls();
+    calls();
+    instances = helper(limit);
+    printf("%d %d\n", calls(), instances);
+
+    // Tests: lambdas without captures, with copy and reference captures
+    int base = 10;
+    auto square = [](int v) { return v * v; };
+    auto byValue = [base](int v) { return base + v; };
+    auto byRef = [&base](int v) { base = base + v; };
+    byRef(5);
+    printf("%d %d %d\n", square(4), byValue(1), base);
+
+    // Tests: capture defaults
+    int a = 1;
+    int b = 2;
+    auto allValue = [=]() { return a + b; };
+    auto allRef = [&]() { a = 100; };
+    allRef();
+    printf("%d %d\n", allValue(), a);
+
+    Box box;
+    box.width = 21;
+    printf("%d\n", box.doubled());
+    return 0;
+}

@@ -1,0 +1,38 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  struct Point [Point] llvm: %struct.Point { i32, i32 }
+  function takesInt : int (int) [global_8takesInt_i] llvm: i32 (i32)
+  function main : int () [main] llvm: i32 ()
+  scope record Point <2:1>
+    field x : int public llvm: i32
+    field y : int public llvm: i32
+  scope function takesInt <7:5>
+    parameter a : int llvm: i32
+  scope function main <11:5>
+    variable a : int llvm: i32
+    variable b : int llvm: i32
+    variable later : int llvm: i32
+    variable twice : int llvm: i32
+    variable p : Point llvm: %struct.Point
+    variable fromStruct : int llvm: i32
+    variable plain : int llvm: i32
+    variable bad : int llvm: i32
+    variable worse : int llvm: i32
+    variable addr : int* llvm: ptr
+    variable sum : int llvm: i32
+    variable cond : int llvm: i32
+    variable d : double llvm: double
+    variable mask : int llvm: i32
+    variable rem : int llvm: i32
+    variable missing : int llvm: i32
+    variable notClass : int llvm: i32
+    variable pp : Point* llvm: ptr
+    variable viaDot : int llvm: i32
+    variable viaArrow : int llvm: i32
+    variable arr : int [2] llvm: [2 x i32]
+    variable full : int [2] llvm: [2 x i32]
+    variable xy : Point llvm: %struct.Point
+    variable sized : <error> llvm: <none>
+    variable negative : <error> llvm: <none>
+    variable noInit : <error> llvm: <none>

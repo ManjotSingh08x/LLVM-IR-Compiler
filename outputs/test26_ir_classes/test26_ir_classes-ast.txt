@@ -1,0 +1,189 @@
+Program <1:1>
+  RecordDecl class Animal <4:1>
+    member: AccessSpecDecl public <5:1>
+    member: VarDecl age 'int' <6:9>
+    member: ConstructorDecl Animal <7:5>
+      body: CompoundStmt <7:14>
+        ExprStmt <8:9>
+          AssignExpr '=' <8:19>
+            target: MemberExpr ->age <8:13>
+              base: ThisExpr <8:9>
+            value: IntLiteral 1 <8:21>
+        ExprStmt <9:9>
+          CallExpr 1 arg(s) <9:15>
+            callee: DeclRefExpr printf <9:9>
+            arg: ImplicitCastExpr array-to-pointer <9:16>
+              StringLiteral ""Animal()\n"" <9:16>
+    member: ConstructorDecl Animal <11:5>
+      param: ParamDecl a 'int' <11:16>
+      body: CompoundStmt <11:19>
+        ExprStmt <12:9>
+          AssignExpr '=' <12:19>
+            target: MemberExpr ->age <12:13>
+              base: ThisExpr <12:9>
+            value: DeclRefExpr a <12:21>
+        ExprStmt <13:9>
+          CallExpr 2 arg(s) <13:15>
+            callee: DeclRefExpr printf <13:9>
+            arg: ImplicitCastExpr array-to-pointer <13:16>
+              StringLiteral ""Animal(%d)\n"" <13:16>
+            arg: DeclRefExpr a <13:32>
+    member: DestructorDecl ~Animal <15:5>
+      body: CompoundStmt <15:15>
+        ExprStmt <16:9>
+          CallExpr 2 arg(s) <16:15>
+            callee: DeclRefExpr printf <16:9>
+            arg: ImplicitCastExpr array-to-pointer <16:16>
+              StringLiteral ""~Animal(%d)\n"" <16:16>
+            arg: MemberExpr ->age <16:37>
+              base: ThisExpr <16:33>
+    member: FunctionDecl setAge returns 'void' <18:10>
+      param: ParamDecl a 'int' <18:21>
+      body: CompoundStmt <18:24>
+        ExprStmt <18:26>
+          AssignExpr '=' <18:36>
+            target: MemberExpr ->age <18:30>
+              base: ThisExpr <18:26>
+            value: DeclRefExpr a <18:38>
+  RecordDecl class Dog : public Animal <22:1>
+    member: AccessSpecDecl public <23:1>
+    member: VarDecl loud 'bool' <24:10>
+    member: ConstructorDecl Dog <25:5>
+      body: CompoundStmt <25:11>
+        ExprStmt <26:9>
+          AssignExpr '=' <26:20>
+            target: MemberExpr ->loud <26:13>
+              base: ThisExpr <26:9>
+            value: BoolLiteral false <26:22>
+        ExprStmt <27:9>
+          CallExpr 1 arg(s) <27:15>
+            callee: DeclRefExpr printf <27:9>
+            arg: ImplicitCastExpr array-to-pointer <27:16>
+              StringLiteral ""Dog()\n"" <27:16>
+    member: DestructorDecl ~Dog <29:5>
+      body: CompoundStmt <29:12>
+        ExprStmt <30:9>
+          CallExpr 1 arg(s) <30:15>
+            callee: DeclRefExpr printf <30:9>
+            arg: ImplicitCastExpr array-to-pointer <30:16>
+              StringLiteral ""~Dog()\n"" <30:16>
+    member: FunctionDecl bark returns 'void' <32:10>
+      body: CompoundStmt <32:17>
+        ExprStmt <32:19>
+          AssignExpr '=' <32:30>
+            target: MemberExpr ->loud <32:23>
+              base: ThisExpr <32:19>
+            value: BoolLiteral true <32:32>
+  RecordDecl class Tag <36:1>
+    member: AccessSpecDecl public <37:1>
+    member: VarDecl serial 'int' <38:9>
+  RecordDecl class Pet : public Animal, public Tag <41:1>
+    member: AccessSpecDecl public <42:1>
+    member: VarDecl slot 'int' <43:9>
+  RecordDecl class Counter <47:1>
+    member: AccessSpecDecl public <48:1>
+    member: VarDecl total 'int' static <49:16>
+    member: RecordDecl struct Inner <50:5>
+      member: VarDecl value 'int' <50:24>
+    member: VarDecl inner 'Inner' <51:11>
+    member: FunctionDecl next returns 'int' static <52:16>
+      body: CompoundStmt <52:23>
+        ExprStmt <53:9>
+          UnaryExpr '++' postfix <53:14>
+            DeclRefExpr total <53:9>
+        ReturnStmt <54:9>
+          DeclRefExpr total <54:16>
+  VarDecl Counter::total 'int' init=copy <57:5>
+    init: IntLiteral 0 <57:22>
+  FunctionDecl main returns 'int' <59:5>
+    body: CompoundStmt <59:12>
+      CompoundStmt <61:5>
+        DeclStmt <62:9>
+          VarDecl d 'Dog' <62:13>
+        ExprStmt <63:9>
+          CallExpr 0 arg(s) <63:15>
+            callee: MemberExpr .bark <63:10>
+              base: DeclRefExpr d <63:9>
+        ExprStmt <64:9>
+          CallExpr 1 arg(s) <64:17>
+            callee: MemberExpr .setAge <64:10>
+              base: DeclRefExpr d <64:9>
+            arg: IntLiteral 5 <64:18>
+        ExprStmt <65:9>
+          CallExpr 3 arg(s) <65:15>
+            callee: DeclRefExpr printf <65:9>
+            arg: ImplicitCastExpr array-to-pointer <65:16>
+              StringLiteral ""dog %d %d\n"" <65:16>
+            arg: MemberExpr .age <65:32>
+              base: DeclRefExpr d <65:31>
+            arg: ImplicitCastExpr integral <65:39>
+              MemberExpr .loud <65:39>
+                base: DeclRefExpr d <65:38>
+        DeclStmt <66:9>
+          VarDecl a 'Animal' init=ctor <66:16>
+            arg: IntLiteral 9 <66:18>
+      DeclStmt <70:5>
+        VarDecl pet 'Pet' <70:9>
+      ExprStmt <71:5>
+        AssignExpr '=' <71:13>
+          target: MemberExpr .age <71:8>
+            base: DeclRefExpr pet <71:5>
+          value: IntLiteral 2 <71:15>
+      ExprStmt <72:5>
+        AssignExpr '=' <72:16>
+          target: MemberExpr .serial <72:8>
+            base: DeclRefExpr pet <72:5>
+          value: IntLiteral 77 <72:18>
+      ExprStmt <73:5>
+        AssignExpr '=' <73:14>
+          target: MemberExpr .slot <73:8>
+            base: DeclRefExpr pet <73:5>
+          value: IntLiteral 3 <73:16>
+      ExprStmt <74:5>
+        CallExpr 4 arg(s) <74:11>
+          callee: DeclRefExpr printf <74:5>
+          arg: ImplicitCastExpr array-to-pointer <74:12>
+            StringLiteral ""pet %d %d %d\n"" <74:12>
+          arg: MemberExpr .age <74:33>
+            base: DeclRefExpr pet <74:30>
+          arg: MemberExpr .serial <74:42>
+            base: DeclRefExpr pet <74:39>
+          arg: MemberExpr .slot <74:54>
+            base: DeclRefExpr pet <74:51>
+      DeclStmt <77:5>
+        VarDecl heap 'Animal*' init=copy <77:13>
+          init: NewExpr 'Animal' args <77:20>
+            arg: IntLiteral 4 <77:31>
+      ExprStmt <78:5>
+        CallExpr 1 arg(s) <78:17>
+          callee: MemberExpr ->setAge <78:9>
+            base: DeclRefExpr heap <78:5>
+          arg: IntLiteral 6 <78:18>
+      ExprStmt <79:5>
+        DeleteExpr <79:5>
+          DeclRefExpr heap <79:12>
+      DeclStmt <81:5>
+        VarDecl c 'Counter' <81:13>
+      ExprStmt <82:5>
+        AssignExpr '=' <82:19>
+          target: MemberExpr .value <82:12>
+            base: MemberExpr .inner <82:6>
+              base: DeclRefExpr c <82:5>
+          value: IntLiteral 11 <82:21>
+      ExprStmt <83:5>
+        CallExpr 0 arg(s) <83:11>
+          callee: MemberExpr .next <83:6>
+            base: DeclRefExpr c <83:5>
+      ExprStmt <84:5>
+        CallExpr 3 arg(s) <84:11>
+          callee: DeclRefExpr printf <84:5>
+          arg: ImplicitCastExpr array-to-pointer <84:12>
+            StringLiteral ""counter %d %d\n"" <84:12>
+          arg: CallExpr 0 arg(s) <84:37>
+            callee: MemberExpr .next <84:32>
+              base: DeclRefExpr c <84:31>
+          arg: MemberExpr .value <84:48>
+            base: MemberExpr .inner <84:42>
+              base: DeclRefExpr c <84:41>
+      ReturnStmt <85:5>
+        IntLiteral 0 <85:12>

@@ -29,11 +29,15 @@ The compiler executes five sequential phases. Each phase only runs if all previo
 1. **Scanner (`src/lexer.l`)**: Tokenizes the source file and populates the token table.
 2. **Parser (`src/parser.y`)**: Builds the Abstract Syntax Tree (`ast::Program`).
 3. **SymbolBuilder (`src/semantic/symbolbuilder.*`)**: Builds the persistent scope tree (`sema::SymbolTable`), resolves every `ast::TypeSpec` into a `sema::Type`, handles overload sets, computes `loweredType` for methods, and assigns unique length-prefixed `mangledName`s.
-4. **TypeChecker (`src/semantic/typecheck.*`)**: Type-checks all expressions and statements, attaches `Expr::type` and `Expr::isLValue`, resolves `DeclRefExpr::symbol`, `MemberExpr::symbol`, `CallExpr::function`, `GotoStmt::target`, `CaseStmt::constant`, `LambdaExpr::usedCaptures`, and wraps every implicit conversion in an explicit `ast::ImplicitCastExpr` node.
+4. **TypeChecker (`src/semantic/typecheck.*`)**: Type-checks all expressions and statements, attaches `Expr::type` and `Expr::isLValue`, resolves `DeclRefExpr::symbol`, `MemberExpr::symbol`, `CallExpr::function`, `GotoStmt::target`, `CaseStmt::constant`, `LambdaExpr::usedCaptures`, and wraps every implicit conversion in an explicit `ast::ImplicitCastExpr` node. **There are two exceptions:**
+   - Binding a reference adds no cast node; the expression is only marked `isLValue`. The IR must look at the destination type (see plan §5.2).
+   - Lvalue-to-rvalue loads are never explicit. The IR decides between `emitLValue` and `emitRValue`.
 5. **IRGenerator (`src/ir/`)**:
    - `ir::IRVisitor` walks the annotated AST and `sema::SymbolTable` and instructs `ir::IRBuilder` to construct the in-memory Control Flow Graph inside an `ir::Module`.
    - `ir::Module::dump(std::ostream &)` traverses the in-memory CFG and emits `outputs/<name>/<name>.ll`.
-   - The test runner (`run.sh`) validates `outputs/<name>/<name>.ll` using `clang -x ir -fsyntax-only`.
+   - The test runner (`run.sh`) validates `outputs/<name>/<name>.ll` using `clang -x ir -c -fverify-intermediate-code -o /dev/null`. `-fsyntax-only` cannot be used: clang rejects every IR file with "cannot apply AST actions to LLVM IR file". Without `-fverify-intermediate-code`, release clang skips the IR verifier.
+
+> **Precedence:** [`ir-implementation-plan.md` §5](ir-implementation-plan.md) is the edge-case rulebook. It was checked against what `typecheck.cpp` actually produces and against clang's verifier. Where this guide simplifies, the plan wins.
 
 ### Strict Separation of Concerns
 `IRVisitor` **never** re-runs name lookup, overload resolution, access checking, or type inference. It treats the AST annotations and `sema::SymbolTable` as ground truth.
@@ -245,7 +249,7 @@ However, LLVM instructions that allocate, dereference, or offset a pointer **mus
 Because our IR reuses `const sema::Type*` from `src/semantic/types.h` (where `PointerType` retains its `const sema::Type *pointee`), and because `MemoryInst` explicitly stores `const sema::Type *pointeeType` (the allocated type for `AllocaInst`, the loaded value type for `LoadInst`, the stored value type for `StoreInst`, and the base element type being indexed for `GEPInst`), our IR generator never loses pointee type information.
 
 > [!NOTE]
-> `sema::toLLVMType` and `sema::toLLVMRecord` in `src/semantic/types.cpp` exist only for the `-symbols.txt` debug dump. The IR module in `src/ir/` implements its own dedicated type formatter (`ir::formatType(const sema::Type *)` and `ir::formatRecordDef(const sema::RecordSymbol *)`) so that IR serialization is completely self-contained inside `src/ir/`.
+> `sema::toLLVMType` and `sema::toLLVMRecord` in `src/semantic/types.cpp` exist only for the `-symbols.txt` debug dump. The IR module in `src/ir/` implements its own dedicated type formatter (`ir::formatType(const sema::Type *)`, `ir::formatRecordName` and `ir::formatRecordBody`, plus the IR-only `ir::int64Type()` sentinel, because sema has no 64-bit integer type) so that IR serialization is completely self-contained inside `src/ir/`.
 
 ---
 
@@ -311,9 +315,11 @@ Notice what happens in `classify` (from `test1_control_flow.ckp`):
 4. If we emitted an empty `if.end0:` label at the end of `@global_8classify_i`, `clang` would reject the `.ll` file because every `BasicBlock` in LLVM IR must contain at least one instruction and end with a terminator.
 5. **How the CFG solves this cleanly**:
    - Before emitting any instruction in `IRBuilder`, if `insertBlock == nullptr` or `insertBlock->isTerminated()`, the instruction is suppressed (it is unreachable code after a `return`/`break`/`continue`/`goto`).
-   - At the end of `Function` body generation:
-     - If a non-entry `BasicBlock` is completely empty and has `predecessors.empty()`, it is removed from `Function::blocks`.
-     - If the final `BasicBlock` is reachable (either it is `entry` or `!predecessors.empty()`) and `!isTerminated()`, `IRBuilder` appends a fallback terminator: `ret void` for `void` functions/constructors/destructors, `ret i32 0` for `main` (per C++ standard `[basic.start.main]`), or `ret <default_zero>` for non-void functions where control reaches the end without a return.
+   - At the end of `Function` body generation (`Function::finalizeCFG`):
+     - Walk from `entry` over `successors` and delete **every** non-entry block that is not reached, not just the empty ones.
+     - **Every** remaining block without a terminator gets one, not just the final block. The fallback is `ret void` for `void` functions/constructors/destructors, `ret i32 0` for `main` (per C++ standard `[basic.start.main]`), or `ret <default_zero>` for other non-void functions where control reaches the end without a return.
+   - Why "remove only empty, pred-less blocks" is not enough: in `classify`, the `else if` creates an inner `if.end1` that is empty and has no predecessors. The outer `if` then appends `br label %if.end0` **into** `if.end1`. Now both blocks are non-empty with a predecessor, though neither is reachable. The reachability walk removes both. Full rules: plan §5.4.
+   - CFG edges are recorded only when a branch is really inserted. A branch suppressed by the terminator guard must not call `addEdge`.
 
 ---
 
@@ -397,6 +403,8 @@ This section explains the exact contract between the semantic phase (`src/semant
   - In LLVM IR, `ReferenceType(int)` lowers to `ptr`.
   - For a normal value parameter `int x`, `IRVisitor` creates `%x.addr = alloca i32` and stores `%x` into `%x.addr`.
   - For a **reference parameter** `int &a`, the incoming argument `%a` is already the `ptr` to the caller's object! We still allocate `%a.addr = alloca ptr` and store `ptr %a` into `%a.addr` (just like `clang -O0`). When `a` is accessed as an LValue, `IRVisitor` loads the `ptr` from `%a.addr`!
+  - **The caller side has no AST marker.** In `swap(left, right)` the arguments are plain `DeclRefExpr`s with no `ImplicitCastExpr`, because sema marks a reference binding only via `isLValue`. `IRVisitor` must check `loweredType->params[i]` and pass `emitLValue(arg)` when it is a `ReferenceType`. The same applies to reference locals (`int &alias = value;` stores `emitLValue(init)` into an `alloca ptr`) and to `return` from a function returning `T&` (plan §5.2).
+  - `%a.addr`, `%t.addr` are base names. Every local name goes through a per-function uniquer, because two locals named `x` in sibling blocks, a parameter named `t0`, or one named `entry` would otherwise clash with each other, with temporaries, or with block labels (plan §5.3).
 - **Emitted `.ll`**:
   ```llvm
   define void @global_4swap_RiRi(ptr %a, ptr %b) {
@@ -436,7 +444,12 @@ Every expression in C++ is evaluated either for its **memory location (`emitLVal
 | `UnaryExpr(*p)` (`Deref`) | `emitRValue(p)` (the pointer value itself is the address of `*p`!) | `load <pointee>, ptr (emitRValue(p))` |
 | `UnaryExpr(&x)` (`AddrOf`) | *(Not an LValue)* | `emitLValue(x)` (the address of `x` IS the rvalue of `&x`!) |
 | `ArraySubscriptExpr(a[i])` | `getelementptr <elem_ty>, ptr (emitRValue(a)), i32 (emitRValue(i))` | `load <elem_ty>, ptr (emitLValue(a[i]))` |
-| `MemberExpr(s.f / p->f)` | `getelementptr %Struct, ptr %base, i32 0, i32 <idx>` | `load <field_ty>, ptr (emitLValue(s.f))` |
+| `MemberExpr(s.f / p->f)` | `getelementptr %Struct, ptr %base, i32 0, i32 <idx>` (static member: the global itself) | `load <field_ty>, ptr (emitLValue(s.f))` |
+| `ParenExpr` | `emitLValue(sub)` | `emitRValue(sub)` |
+| `CallExpr` returning `T&` | the call's `ptr` result | `load T, ptr %call` |
+| `ConditionalExpr` with `isLValue` (`(a > b) ? a : b`) | branch; store `emitLValue(arm)` into an entry `alloca ptr`; load it | `load` through that address |
+| `AssignExpr` / `++x` / `--x` | the target address | the stored value |
+| `StringLiteral` | `@.str.N` (an lvalue array) | *(only reached through `ArrayToPointer`)* |
 
 #### Row 8: Lowering `ImplicitCastExpr` (All 10 `CastKind`s)
 Because `TypeChecker` already inserted an `ast::ImplicitCastExpr` node for every implicit conversion in the source program, `IRVisitor::visitImplicitCastExpr` simply switches on `node->castKind`:
@@ -459,7 +472,11 @@ Because `TypeChecker` already inserted an `ast::ImplicitCastExpr` node for every
 | `FunctionToPointer` | `FunctionType` -> `PointerType(FunctionType)` | `@mangled_fn` (function symbol address is already `ptr`) |
 | `NullToPointer` | `null` -> `T*` (`ptr`) | `Constant::getNull(node->type)` (`null`) |
 | `PointerToVoid` | `T*` (`ptr`) -> `void*` (`ptr`) | `%v` (no-op under opaque `ptr`, updates `Value::type` wrapper) |
-| `DerivedToBase` | `Derived*` / `Derived&` / `Derived` -> `Base` | Chain of `getelementptr inbounds %Derived, ptr %p, i32 0, i32 <base_idx>` along inheritance path |
+| `DerivedToBase` (pointer) | `Derived*` -> `Base*` | GEP chain along the inheritance path. If any index is non-zero (a non-first base), wrap it: `icmp eq ptr %p, null` + `select`, so null stays null (plan §5.6) |
+| `DerivedToBase` (reference) | `Derived` lvalue -> `Base&` (cast type is the base record, `isLValue`) | the GEP chain on `emitLValue(sub)` |
+| `DerivedToBase` (slicing) | `Derived` value -> `Base` value | `load %Base` from the GEP chain; materialize `sub` into a temporary first if it is an rvalue |
+
+> **Constant folding caveat:** `sema::evaluateConstant` looks *through* these casts without applying them. `bool b = 4;` folds to `4`, and `i1 4` is silently truncated to `false` by LLVM's parser. `float f = 2;` folds to `2`, and `float 2` is a parse error. Apply the cast chain and `normalizeInt` to every folded constant (plan §5.1).
 
 ---
 
@@ -492,6 +509,9 @@ for (int i = 0; i < 10; i++) {       // pushes continue -> for.inc, break -> for
 }
 ```
 
+- **Each entry also records `cleanupDepth`**: the size of the destructor-scope stack when the loop or switch was entered. `break`/`continue` emit destructor calls for every scope above that depth before branching (plan §5.7).
+- **These stacks are per function.** A lambda body is emitted as a separate function in the middle of its enclosing function, so the stacks, `namedValues`, label blocks, cleanup scopes, `this` and the return type all live in a `FunctionContext` that is pushed and popped around it (plan §2.5, §5.9). A `break` inside a lambda inside a loop must never see the outer loop.
+
 ### 7.2 `switchStack` (Case & Default Registration)
 In C/C++, `CaseStmt` (`case 1:`) and `DefaultStmt` (`default:`) are AST nodes nested inside the `CompoundStmt` body of a `SwitchStmt`—they can even be nested inside inner `{ }` blocks or `case 3: case 4:` fallthrough chains (`test5_switch_literals.ckp`):
 ```cpp
@@ -510,6 +530,8 @@ Notice how the parser builds `case 3: case 4: dec = 300;`:
   1. It evaluates `cond`, creates `switch.end` and a placeholder `SwitchInst`, and pushes a `SwitchContext { SwitchInst *inst, BasicBlock *defaultBB }` onto `switchStack`.
   2. When `visitCaseStmt(node)` runs, it creates a new `BasicBlock` `sw.case`, if the current block is not terminated it emits a **fallthrough branch** `br label %sw.case`, switches the builder to `sw.case`, registers `(node->constant, sw.case)` on `switchStack.back().inst`, and visits `node->sub`.
   3. Because `case 3:` visits its child `case 4:`, `case 3`'s block automatically falls through (`br label %sw.case.4`) into `case 4`'s block!
+  4. The `SwitchInst`'s default destination starts as `switch.end`. Visiting a `DefaultStmt` patches it to the new `sw.default` block, wherever `default:` appears (first, middle or last). Case values are printed as `i32`, because sema always promotes the condition to `int`.
+  5. Statements before the first `case` are dead: the switch block is already terminated, so the builder guard drops them.
 
 ### 7.3 Short-Circuit Evaluation (`&&`, `||`) and Ternary (`?:`)
 Why can't `a && b` simply evaluate `lhs = emitRValue(a)`, `rhs = emitRValue(b)`, and emit `and i1 %lhs, %rhs`?
@@ -533,6 +555,11 @@ land.end:
   %result = load i1, ptr %res.addr
 ```
 This produces 100% valid `-O0` IR without any `phi` node!
+
+**Ternary `c ? a : b`** uses the same shape (`cond.true` / `cond.false` / `cond.end`) with an entry slot, and comes in two forms:
+- **rvalue** (arms converted to a common type): store each arm's value into an `alloca <T>` slot and load it in `cond.end`. With a `void` result there is no slot.
+- **lvalue**: sema marks the `ConditionalExpr` `isLValue` when both arms are lvalues of the same type, as in `c = (a > b) ? a : b;` in test1 and test7. The arms are then *not* decayed. Store each arm's **address** (`emitLValue(arm)`) into an `alloca ptr`. The expression's address is the loaded `ptr`, and its value is a load through it. This is what makes `((a > b) ? a : b) = 0;` work.
+- Never lower `?:` with `select`: it evaluates both arms, which breaks `p ? p->x : 0`.
 
 ---
 
@@ -602,6 +629,10 @@ In C++, object construction and destruction follow strict deterministic rules:
      - Whenever a local variable `VarDecl` of `RecordType` (or array of `RecordType`) is declared in a block scope and its record has a destructor (user-declared or synthesized because a base/member has a destructor), `IRVisitor` pushes `(varAllocaPtr, recordType)` onto `scopeCleanupStack.back()`.
      - At the end of a `CompoundStmt` (or `ForStmt`), if the current block is not already terminated, `IRVisitor` pops the scope and emits destructor calls in **reverse declaration order (LIFO)**.
      - Before emitting `return`, `break`, `continue`, or `goto`, `IRVisitor` emits destructor calls for all active scopes being exited (for `return`, all scopes up to the function root; for `break`/`continue`, all scopes up to the target loop/switch scope) **without** popping the stack (since subsequent sibling branches still need the scope stack intact).
+     - **`return` evaluates its value first, then destroys.** For `return d.age;` with `Dog d` in scope, the order is: compute the value, store it in a `retval` slot, run the destructors, then `ret` the reloaded value. Destroying first would read a dead object. `main` in `test4` is the case that matters: `Dog d` and `Cat c` are live at `return 0;`.
+     - **`goto`** runs destructors for every scope it leaves: each scope on the jump's scope chain that is not on the label's chain. A `goto` that jumps *into* a scope past an object's construction is ill-formed C++. Sema does not check it, so the IR phase reports it (plan §5.7, §5.12).
+   - "Has a destructor" means **needs destruction**: a user destructor, or any base or field (arrays included, recursively) that needs one. `Registered`, `Tagged` and `Cat` in `test4` declare no destructor but inherit from `Animal`, which has one. They get an implicit `class_<path>_D_v` that calls `~Animal`.
+   - Constructors follow the same rule (plan §5.10). If a base or member needs default construction but its record only has constructors with parameters, there is nothing to call. Sema does not catch this, so the IR phase reports it rather than silently skipping the base.
 
 ---
 
@@ -618,10 +649,12 @@ Our compiler does not hardcode target ABI struct padding or use `llvm::DataLayou
   %t0 = getelementptr %class.Bar, ptr null, i64 1
   %t1 = ptrtoint ptr %t0 to i64
   %t2 = call ptr @malloc(i64 %t1)
-  ; If Bar has a constructor, invoke it on %t2:
-  call void @class_3Bar_C_v(ptr %t2)
+  ; Only if Bar needs construction (user ctor, or a base/field that needs one, or an
+  ; in-class initializer). In test7 neither Bar nor Foo does, so no call is emitted.
+  ; call void @class_3Bar_C_v(ptr %t2)
   store ptr %t2, ptr %barPtr.addr
 ```
+`@malloc` and `@free` are declared by `ir::Module` itself (`declare ptr @malloc(i64)`, `declare void @free(ptr)`). They are **not** sema builtins, because source code could never call them usefully (plan §1.2).
 
 #### Example 2: Dynamic Array Allocation (`int *heapData = new int[n];` or `new int[2][3]`)
 For `new T[d0][d1]...[dk]`:
@@ -633,7 +666,9 @@ For `new T[d0][d1]...[dk]`:
   %size.bytes = ptrtoint ptr %size.ptr to i64
   %raw = call ptr @malloc(i64 %size.bytes)
 ```
-- If `NewForm::ArrayInit` (`new int[3]{7, 8, 9}`), `IRVisitor` stores each initializer element via `getelementptr`.
+- If `NewForm::ArrayInit` (`new int[3]{7, 8, 9}`), `IRVisitor` stores each initializer element via `getelementptr`. Elements past the end of the list are zero-filled.
+- If the element type is a record that needs construction (`new Dog[n]`), the constructor runs in a loop over all `n` elements, with a runtime bound.
+- `new int()` (`NewForm::Args` with no arguments) stores zero. `new int` leaves the memory uninitialized.
 
 ### 9.2 How `delete` and `delete[]` Lower
 For `delete p;` or `delete[] p;` where `p` has type `T*`:
@@ -646,6 +681,8 @@ For `delete p;` or `delete[] p;` where `p` has type `T*`:
    ```llvm
    call void @free(ptr %ptr_val)
    ```
+4. **Null**: `delete` of a null pointer is a no-op. `free(null)` is harmless, but the destructor call is not, so guard it with `icmp eq ptr %ptr_val, null`.
+5. **`delete[]` on records that need destruction** must know how many elements to destroy, and a plain `malloc` block does not record that. Either use an array cookie, as clang does (store the `i64` count in 8 extra bytes in front of the elements, return `raw + 8`, read it back in `delete[]`, then `free(p - 8)`), or report it as unsupported. Arrays of scalars and pointers (all of `test3`, `test7`, `test17`, `test22`) need no cookie (plan §5.11).
 
 ---
 
@@ -687,6 +724,14 @@ int res = mixed(4);
      %res = call i32 @__lambda_269_22(ptr %mixed.addr, i32 4)
      ```
 
+### Lambda Pitfalls
+- **The lambda is emitted while its enclosing function is half built.** Save the builder's insertion point, push a fresh per-function context (locals, labels, loop/switch stacks, cleanups, `this`, return type), emit all of `@__lambda_L_C`, then pop and restore. Only then build the closure object in the outer function. A `return` inside the lambda uses the lambda's deduced return type; a `break` inside it never sees the outer loop.
+- **Nested lambdas.** If an inner lambda uses an outer function's local, sema appends that capture to *every* lambda in between. Building the inner closure inside the outer lambda's body then just reads `namedValues[sym]`, which there points at the outer closure's field. This works only because `namedValues` is per function.
+- **Capturing a reference variable.** By copy, it copies the *referee's value*: sema's closure layout uses `stripReference`. By reference, it stores the referee's address (`load ptr, ptr %r.addr`), not the address of the reference slot.
+- **Parameters can be captured** (`isLocal` accepts `SymbolKind::Parameter`). Their `.addr` slot is used like any local's.
+- **No captures** gives `%closure.L.C = type {}`. The lambda still takes `ptr %__closure`, and the call still passes the address of the (empty) closure object.
+- The closure layout must exactly match `usedCaptures` order. `This` captures have `symbol == nullptr`, and sema adds them implicitly for `[=]`/`[&]` when the body uses `this`.
+
 ---
 
 ## 11. Edge Cases and Pitfalls Caught in Specification
@@ -698,6 +743,11 @@ int res = mixed(4);
    - Consider `char c = 10; int a = 5; c += a;`.
    - `AssignExpr` only evaluates `target` (`c`) **once** as an LValue (`%c.addr`).
    - Loads `%old = load i8, ptr %c.addr`, promotes if needed, performs the operation (including pointer `+=` via `getelementptr` when `target` is a pointer!), converts back to `target->type`, and stores into `%c.addr`.
+   - **Watch out:** today `TypeChecker::visitAssignExpr` converts `value` to the *target* type before the operation, which C++ does not do:
+     - `int x = 7; x *= 2.5;` gives `14`, not `17`;
+     - `bool b = true; b += 1;` becomes `add i1 1, 1`, which is `false`.
+     
+     Plan §1.3 changes sema to convert `value` to the common arithmetic type instead, so the IR converts the loaded target up, operates, and converts the result back (a `ToBool` when the target is `bool`).
 3. **Pre-Increment / Post-Increment (`++x`, `x++`, `--x`, `x--`) on Integers, Floats, and Pointers**:
    - Evaluates `operand` as an LValue (`%addr`), loads `%old = load <ty>, ptr %addr`.
    - Computes `%new`:

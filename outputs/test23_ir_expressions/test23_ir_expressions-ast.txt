@@ -1,0 +1,176 @@
+Program <1:1>
+  FunctionDecl main returns 'int' <3:5>
+    body: CompoundStmt <3:12>
+      DeclStmt <5:5>
+        VarDecl a 'int' init=copy <5:9>
+          init: IntLiteral 17 <5:13>
+      DeclStmt <6:5>
+        VarDecl b 'int' init=copy <6:9>
+          init: IntLiteral 5 <6:13>
+      ExprStmt <7:5>
+        CallExpr 6 arg(s) <7:11>
+          callee: DeclRefExpr printf <7:5>
+          arg: ImplicitCastExpr array-to-pointer <7:12>
+            StringLiteral ""%d %d %d %d %d\n"" <7:12>
+          arg: BinaryExpr '+' <7:34>
+            DeclRefExpr a <7:32>
+            DeclRefExpr b <7:36>
+          arg: BinaryExpr '-' <7:41>
+            DeclRefExpr a <7:39>
+            DeclRefExpr b <7:43>
+          arg: BinaryExpr '*' <7:48>
+            DeclRefExpr a <7:46>
+            DeclRefExpr b <7:50>
+          arg: BinaryExpr '/' <7:55>
+            DeclRefExpr a <7:53>
+            DeclRefExpr b <7:57>
+          arg: BinaryExpr '%' <7:62>
+            DeclRefExpr a <7:60>
+            DeclRefExpr b <7:64>
+      ExprStmt <8:5>
+        CallExpr 6 arg(s) <8:11>
+          callee: DeclRefExpr printf <8:5>
+          arg: ImplicitCastExpr array-to-pointer <8:12>
+            StringLiteral ""%d %d %d %d %d\n"" <8:12>
+          arg: BinaryExpr '&' <8:34>
+            DeclRefExpr a <8:32>
+            DeclRefExpr b <8:36>
+          arg: BinaryExpr '|' <8:41>
+            DeclRefExpr a <8:39>
+            DeclRefExpr b <8:43>
+          arg: BinaryExpr '^' <8:48>
+            DeclRefExpr a <8:46>
+            DeclRefExpr b <8:50>
+          arg: BinaryExpr '<<' <8:55>
+            DeclRefExpr a <8:53>
+            IntLiteral 2 <8:58>
+          arg: BinaryExpr '>>' <8:63>
+            DeclRefExpr a <8:61>
+            IntLiteral 1 <8:66>
+      DeclStmt <11:5>
+        VarDecl t 'bool' init=copy <11:10>
+          init: BinaryExpr '&&' <11:22>
+            ParenExpr <11:14>
+              BinaryExpr '>' <11:17>
+                DeclRefExpr a <11:15>
+                DeclRefExpr b <11:19>
+            ParenExpr <11:25>
+              BinaryExpr '!=' <11:28>
+                DeclRefExpr b <11:26>
+                IntLiteral 0 <11:31>
+      DeclStmt <12:5>
+        VarDecl f 'bool' init=copy <12:10>
+          init: BinaryExpr '||' <12:22>
+            ParenExpr <12:14>
+              BinaryExpr '<' <12:17>
+                DeclRefExpr a <12:15>
+                DeclRefExpr b <12:19>
+            UnaryExpr '!' prefix <12:25>
+              ParenExpr <12:26>
+                BinaryExpr '==' <12:29>
+                  DeclRefExpr a <12:27>
+                  IntLiteral 17 <12:32>
+      ExprStmt <13:5>
+        CallExpr 3 arg(s) <13:11>
+          callee: DeclRefExpr printf <13:5>
+          arg: ImplicitCastExpr array-to-pointer <13:12>
+            StringLiteral ""%d %d\n"" <13:12>
+          arg: ImplicitCastExpr integral <13:23>
+            DeclRefExpr t <13:23>
+          arg: ImplicitCastExpr integral <13:26>
+            DeclRefExpr f <13:26>
+      DeclStmt <16:5>
+        VarDecl bigger 'int' init=copy <16:9>
+          init: ConditionalExpr <16:26>
+            cond: ParenExpr <16:18>
+              BinaryExpr '>' <16:21>
+                DeclRefExpr a <16:19>
+                DeclRefExpr b <16:23>
+            true: DeclRefExpr a <16:28>
+            false: DeclRefExpr b <16:32>
+      ExprStmt <17:5>
+        CallExpr 2 arg(s) <17:11>
+          callee: DeclRefExpr printf <17:5>
+          arg: ImplicitCastExpr array-to-pointer <17:12>
+            StringLiteral ""%d\n"" <17:12>
+          arg: DeclRefExpr bigger <17:20>
+      DeclStmt <20:5>
+        VarDecl c 'int' init=copy <20:9>
+          init: IntLiteral 10 <20:13>
+      ExprStmt <21:5>
+        AssignExpr '+=' <21:7>
+          target: DeclRefExpr c <21:5>
+          value: IntLiteral 5 <21:10>
+      ExprStmt <22:5>
+        AssignExpr '-=' <22:7>
+          target: DeclRefExpr c <22:5>
+          value: IntLiteral 3 <22:10>
+      ExprStmt <23:5>
+        AssignExpr '*=' <23:7>
+          target: DeclRefExpr c <23:5>
+          value: IntLiteral 2 <23:10>
+      ExprStmt <24:5>
+        AssignExpr '/=' <24:7>
+          target: DeclRefExpr c <24:5>
+          value: IntLiteral 4 <24:10>
+      ExprStmt <25:5>
+        AssignExpr '%=' <25:7>
+          target: DeclRefExpr c <25:5>
+          value: IntLiteral 4 <25:10>
+      ExprStmt <26:5>
+        CallExpr 2 arg(s) <26:11>
+          callee: DeclRefExpr printf <26:5>
+          arg: ImplicitCastExpr array-to-pointer <26:12>
+            StringLiteral ""%d\n"" <26:12>
+          arg: DeclRefExpr c <26:20>
+      DeclStmt <29:5>
+        VarDecl i 'int' init=copy <29:9>
+          init: IntLiteral 3 <29:13>
+      DeclStmt <30:5>
+        VarDecl post 'int' init=copy <30:9>
+          init: UnaryExpr '++' postfix <30:17>
+            DeclRefExpr i <30:16>
+      DeclStmt <31:5>
+        VarDecl pre 'int' init=copy <31:9>
+          init: UnaryExpr '++' prefix <31:15>
+            DeclRefExpr i <31:17>
+      ExprStmt <32:5>
+        UnaryExpr '--' postfix <32:6>
+          DeclRefExpr i <32:5>
+      ExprStmt <33:5>
+        UnaryExpr '--' prefix <33:5>
+          DeclRefExpr i <33:7>
+      ExprStmt <34:5>
+        CallExpr 4 arg(s) <34:11>
+          callee: DeclRefExpr printf <34:5>
+          arg: ImplicitCastExpr array-to-pointer <34:12>
+            StringLiteral ""%d %d %d\n"" <34:12>
+          arg: DeclRefExpr post <34:26>
+          arg: DeclRefExpr pre <34:32>
+          arg: DeclRefExpr i <34:37>
+      DeclStmt <37:5>
+        VarDecl letter 'char' init=copy <37:10>
+          init: CharLiteral 'a' <37:19>
+      ExprStmt <38:5>
+        UnaryExpr '++' postfix <38:11>
+          DeclRefExpr letter <38:5>
+      DeclStmt <39:5>
+        VarDecl half 'float' init=copy <39:11>
+          init: ImplicitCastExpr floating <39:18>
+            FloatLiteral 0.5 <39:18>
+      DeclStmt <40:5>
+        VarDecl sum 'double' init=copy <40:12>
+          init: BinaryExpr '+' <40:23>
+            ImplicitCastExpr floating <40:18>
+              DeclRefExpr half <40:18>
+            FloatLiteral 1.25 <40:25>
+      ExprStmt <41:5>
+        CallExpr 3 arg(s) <41:11>
+          callee: DeclRefExpr printf <41:5>
+          arg: ImplicitCastExpr array-to-pointer <41:12>
+            StringLiteral ""%c %f\n"" <41:12>
+          arg: ImplicitCastExpr integral <41:23>
+            DeclRefExpr letter <41:23>
+          arg: DeclRefExpr sum <41:31>
+      ReturnStmt <42:5>
+        IntLiteral 0 <42:12>

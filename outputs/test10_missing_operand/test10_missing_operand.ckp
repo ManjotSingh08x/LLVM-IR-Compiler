@@ -1,0 +1,6 @@
+// Tests: missing operand
+int missingOperand() {
+    int value = 1;
+    value = value + ;
+    return value;
+}

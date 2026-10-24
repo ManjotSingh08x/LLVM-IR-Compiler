@@ -81,6 +81,15 @@ size_t stringLiteralLength(const std::string &spelling) {
     return length;
 }
 
+std::string decodeStringLiteral(const std::string &spelling) {
+    std::string bytes;
+    size_t i = 1;  //past the opening quote
+    while (i + 1 < spelling.size()) {
+        bytes += (char)readChar(spelling, i);
+    }
+    return bytes;
+}
+
 bool evaluateConstant(const ast::Expr *expr, long long &value) {
     if (expr == nullptr) return false;
 

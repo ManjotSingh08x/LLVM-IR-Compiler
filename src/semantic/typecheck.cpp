@@ -1182,7 +1182,10 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
                                                    + "' and '" + typeToString(value) + "')");
             return setType(node, errorType(), false);
         }
-        convert(node->value, target, "an assignment");
+        //x op= v works like x = x op v: both sides meet in their common type
+        //and only the result is converted back to the target. converting v to
+        //the target first would make int x *= 2.5 multiply by 2
+        convert(node->value, commonArithmeticType(promote(target), promote(value)), "an assignment");
         break;
     }
     }

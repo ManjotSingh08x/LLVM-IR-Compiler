@@ -1,0 +1,55 @@
+scope global <1:1>
+  function printf : int (char*, ...) [printf] llvm: i32 (ptr, ...)
+  function scanf : int (char*, ...) [scanf] llvm: i32 (ptr, ...)
+  struct Point [Point] llvm: %struct.Point { i32 }
+  function one : int (int) [global_3one_i] llvm: i32 (i32)
+  function two : int (int, int) [global_3two_ii] llvm: i32 (i32, i32)
+  function pick : int (int) [global_4pick_i] llvm: i32 (i32)
+  function pick : int (double) [global_4pick_d] llvm: i32 (double)
+  function pick : int (char*) [global_4pick_Pc] llvm: i32 (ptr)
+  class Counter [Counter] llvm: %class.Counter {  }
+  function wantsVoid : int () [global_9wantsVoid_v] llvm: i32 ()
+  function givesNothing : void () [global_12givesNothing_v] llvm: void ()
+  function wrongReturn : int () [global_11wrongReturn_v] llvm: i32 ()
+  function main : int () [main] llvm: i32 ()
+  scope record Point <3:1>
+    field x : int public llvm: i32
+  scope record Counter <20:1>
+    method bump : int (int) public [class_7Counter_4bump_i] this-lowered: int (Counter*, int) llvm: i32 (ptr, i32)
+    static method reset : int () public static [class_7Counter_5reset_v] llvm: i32 ()
+    scope function bump <22:9>
+      parameter by : int llvm: i32
+    scope function reset <23:16>
+  scope function one <7:5>
+    parameter a : int llvm: i32
+  scope function two <11:5>
+    parameter a : int llvm: i32
+    parameter b : int llvm: i32
+  scope function pick <16:5>
+    parameter a : int llvm: i32
+  scope function pick <17:5>
+    parameter a : double llvm: double
+  scope function pick <18:5>
+    parameter s : char* llvm: ptr
+  scope function wantsVoid <26:5>
+  scope function givesNothing <31:6>
+  scope function wrongReturn <36:5>
+    variable p : Point llvm: %struct.Point
+  scope function main <42:5>
+    variable ok : int llvm: i32
+    variable few : int llvm: i32
+    variable many : int llvm: i32
+    variable p : Point llvm: %struct.Point
+    variable badArg : int llvm: i32
+    variable exact : int llvm: i32
+    variable none : int llvm: i32
+    variable plain : int llvm: i32
+    variable notCallable : int llvm: i32
+    variable fp : int (*)(int) llvm: ptr
+    variable viaPtr : int llvm: i32
+    variable wrongFp : int (*)(int) llvm: ptr
+    variable c : Counter llvm: %class.Counter
+    variable viaObject : int llvm: i32
+    variable noObject : int llvm: i32
+    variable viaStatic : int llvm: i32
+    variable unCalled : int llvm: i32

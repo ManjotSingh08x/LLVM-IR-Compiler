@@ -10,6 +10,8 @@
 #include "ast/ast.h"
 #include "ast/ast_printer.h"
 #include "declarator.h"
+#include "ir/cfg.h"
+#include "ir/ir_visitor.h"
 #include "semantic/diagnostics.h"
 #include "semantic/symbolbuilder.h"
 #include "semantic/symbols.h"
@@ -1142,13 +1144,14 @@ static void printSyntaxErrors() {
     cout << g_syntaxErrors.size() << " syntax error(s) found." << endl;
 }
 
-//opens outputs/<source name><suffix> for writing
+//opens outputs/<stem>/<stem><suffix> for writing, one folder per source file
 static std::ofstream openOutput(const char *sourcePath, const std::string &suffix) {
-    std::filesystem::path outDir("outputs");
+    std::string stem = std::filesystem::path(sourcePath).stem().string();
+    std::filesystem::path outDir = std::filesystem::path("outputs") / stem;
     std::error_code ec;
     std::filesystem::create_directories(outDir, ec);
 
-    std::filesystem::path path = outDir / (std::filesystem::path(sourcePath).stem().string() + suffix);
+    std::filesystem::path path = outDir / (stem + suffix);
     std::ofstream file(path);
     if (!file) cerr << "error: cannot write " << path.string() << "\n";
     return file;
@@ -1183,6 +1186,20 @@ static bool analyze(const char *sourcePath) {
         diags.print(cout, sourcePath);
         return false;
     }
+
+    //the tree is correct, so it is lowered to llvm ir in outputs/<stem>/<stem>.ll.
+    //the ir phase can still meet something it cannot lower, which it reports
+    //the same way, and then no .ll is written
+    ir::Module module(table, sourcePath);
+    ir::IRVisitor generator(module, table, diags);
+    generator.generate(g_program.get());
+    if (!diags.empty()) {
+        diags.print(cout, sourcePath);
+        return false;
+    }
+
+    std::ofstream irFile = openOutput(sourcePath, ".ll");
+    if (irFile) module.dump(irFile);
     return true;
 }
 
@@ -1213,7 +1230,8 @@ int main(int argc, char **argv) {
     if (g_program && !analyze(argv[1])) return 1;
 
     std::cout << "Parsing successful." << std::endl;
-    std::cout << "Semantic analysis successful." << std::endl << std::endl;
+    std::cout << "Semantic analysis successful." << std::endl;
+    std::cout << "IR generation successful." << std::endl << std::endl;
     printTable();
     return 0;
 }

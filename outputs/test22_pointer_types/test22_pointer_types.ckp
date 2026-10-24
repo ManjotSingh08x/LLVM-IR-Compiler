@@ -1,0 +1,93 @@
+// Multi-level pointers and the recursive type system. This file is valid and
+// must be accepted: every declaration below is a type the symbol table holds.
+struct Point {
+    int x;
+    int y;
+};
+
+class Grid {
+public:
+    int cells[2][3];
+    int **rows;
+    // Tests: a pointer to an array as a member
+    int (*block)[3];
+};
+
+// Tests: multi-level pointers in a return type and in parameters
+int **pickRow(int ***table, char **argv, int (*apply)(int, int)) {
+    return *table;
+}
+
+// Tests: a pointer to an array at file scope, and a pointer to a class type
+int **(*deep)[10];
+Point (*pointBlock)[4];
+static char ***names;
+
+int twice(int a, int b) {
+    return a * b;
+}
+
+int main() {
+    // Tests: pointers of several levels, and the address and dereference chain
+    int value = 7;
+    int *p = &value;
+    int **pp = &p;
+    int ***ppp = &pp;
+    int read = ***ppp;
+
+    // Tests: a pointer to an array of pointers to int
+    int **(*block)[10];
+
+    // Tests: a pointer to a function pointer
+    int (*fp)(int, int) = twice;
+    int (**fpp)(int, int) = &fp;
+    int called = (*fpp)(2, 3) + fp(4, 5);
+
+    // Tests: a pointer to an array, written with the parenthesised declarator
+    int grid[2][3];
+    int (*row)[3] = grid;
+    int element = row[1][2];
+
+    // Tests: a reference to an array
+    int (&alias)[2][3] = grid;
+    alias[0][0] = 1;
+
+    // Tests: a pointer to a struct, and arrays of pointers
+    Point origin;
+    Point *one = &origin;
+    Point **two = &one;
+    int viaTwo = (*two)->x + (**two).y;
+
+    // Tests: new with a pointer element type
+    int **heapRows = new int*[4];
+    Point **heapPoints = new Point*[2];
+    int (*heapBlock)[3] = new int[2][3];
+    heapRows[0] = p;
+
+    // Tests: pointer arithmetic and the distance between two pointers
+    int line[4];
+    int *first = line;
+    int *third = first + 2;
+    int gap = third - first;
+
+    // Tests: a null pointer compares with any pointer
+    int *empty = null;
+    bool same = (empty == p);
+
+    // Tests: a void pointer takes any object pointer
+    void *any = p;
+    void *alsoAny = one;
+
+    // Tests: a class member of pointer-to-array type
+    Grid g;
+    g.block = grid;
+    g.rows = heapRows;
+    int fromMember = g.block[0][1] + g.cells[1][2];
+
+    delete[] heapRows;
+    delete[] heapPoints;
+    delete[] heapBlock;
+    delete[] names;
+
+    return read + called + element + viaTwo + gap + fromMember + same;
+}

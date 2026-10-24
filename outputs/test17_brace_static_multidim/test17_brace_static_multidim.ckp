@@ -1,0 +1,79 @@
+// Tests: static variables and functions at file scope
+static int instances = 0;
+static int limit{10};
+static int helper(int x);
+static int helper(int x) {
+    return x * 2;
+}
+
+struct Point {
+    int x;
+    int y;
+};
+
+class Counter {
+public:
+    // Tests: static members, list-initialised member
+    static int total;
+    static int next() {
+        total++;
+        return total;
+    }
+    int start{0};
+    int cells[2][3];
+};
+
+// Tests: definition of the static member declared above
+int Counter::total = 0;
+
+// Tests: multi-dimensional array parameter
+int sumGrid(int m[][3], int rows) {
+    int s{};
+    for (int i{0}; i < rows; i++) {
+        for (int j = 0; j < 3; j++) {
+            s += m[i][j];
+        }
+    }
+    return s;
+}
+
+int main() {
+    // Tests: static locals
+    static int calls = 0;
+    static int seen[4]{};
+    calls++;
+
+    // Tests: brace initialisation without =
+    int a{5};
+    int b{};
+    int arr[3]{1, 2, 3};
+    int grid[2][3]{{1, 2, 3}, {4, 5, 6}};
+    char word[3]{'h', 'i', '\0'};
+    struct Point origin{0, 0};
+    Point p{1, 2};
+    Point q = {3, 4};
+    Point *pp{&p};
+
+    // Tests: brace initialisation with new
+    int *heap = new int[3]{7, 8, 9};
+    Point *np = new Point{5, 6};
+    int (*m)[3] = new int[2][3]{{1, 2, 3}, {4, 5, 6}};
+
+    // Tests: multi-dimensional access
+    int cube[2][2][2];
+    cube[1][0][1] = grid[1][2] + m[0][1];
+    grid[a - 4][b] += cube[0][0][0];
+    m[1][2]++;
+    --grid[0][0];
+    int *cell = &grid[1][1];
+    Counter c;
+    c.cells[1][2] = 4;
+    Counter *cp = &c;
+    cp->cells[0][1] = cp->cells[1][2] * 2;
+    int total = sumGrid(grid, 2) + seen[0] + arr[grid[0][0]];
+
+    delete[] heap;
+    delete[] m;
+    delete np;
+    return total + instances + limit + helper(a) + c.next() + word[0] + *cell + pp->x + origin.y + q.x;
+}

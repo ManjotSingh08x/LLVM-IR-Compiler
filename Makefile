@@ -13,7 +13,7 @@ endif
 
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG) --cxxflags)
 LLVM_LDFLAGS  := $(shell $(LLVM_CONFIG) --ldflags)
-LLVM_LIBS     := $(shell $(LLVM_CONFIG) --libs core support) \
+LLVM_LIBS     := $(shell $(LLVM_CONFIG) --libs support) \
                  $(shell $(LLVM_CONFIG) --system-libs)
 
 # llvm-config reports its own warning and standard settings, ours come after it

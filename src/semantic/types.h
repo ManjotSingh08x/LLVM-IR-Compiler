@@ -7,10 +7,6 @@
 
 #include "ast/ast.h"
 
-namespace llvm {
-class LLVMContext;
-class Type;
-} // namespace llvm
 
 namespace sema {
 
@@ -176,10 +172,12 @@ std::string typeToString(const Type *type);
 //the type code used in mangled names, see the README
 std::string mangleType(const Type *type);
 
-//the llvm type a value of this type is stored as. pointers and references are
-//all the opaque ptr, the pointee stays known only in our type. auto and
-//error have no llvm type and give null
-llvm::Type *toLLVM(const Type *type, llvm::LLVMContext &context);
+//the llvm type spelling a value of this type is stored as. pointers and references
+//are all the opaque ptr, the pointee stays known only in our type.
+std::string toLLVMType(const Type *type);
+
+//the llvm record layout spelling: bases in order, then fields
+std::string toLLVMRecord(const RecordSymbol *record);
 
 } // namespace sema
 

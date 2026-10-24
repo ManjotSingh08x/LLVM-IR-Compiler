@@ -28,8 +28,8 @@ On Linux it uses `llvm-config` from the `PATH` and `g++`. Both can be overridden
 make CXX=g++-14 LLVM_CONFIG=/usr/bin/llvm-config-20
 ```
 
-Only the type API is linked (`llvm-config --libs core support`), to lower our
-types to LLVM types. No IR is generated yet.
+Only LLVM support ADTs are linked (`llvm-config --libs support`). No LLVM IR
+library or types are used.
 
 ```bash
 make clean && make

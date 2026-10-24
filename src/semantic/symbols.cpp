@@ -1,8 +1,5 @@
 #include "semantic/symbols.h"
 
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/Support/raw_ostream.h"
 
 namespace sema {
 
@@ -99,28 +96,6 @@ const char *accessName(ast::AccessKind access) {
     return "";
 }
 
-std::string llvmSpelling(llvm::Type *type) {
-    if (type == nullptr) return "<none>";
-    std::string out;
-    llvm::raw_string_ostream stream(out);
-    type->print(stream);
-    return stream.str();
-}
-
-//a named struct prints as its whole definition, nested bases and all. the name
-//with one level of fields is what is worth reading
-std::string llvmRecordBody(llvm::Type *type) {
-    llvm::StructType *record = llvm::dyn_cast<llvm::StructType>(type);
-    if (record == nullptr) return llvmSpelling(type);
-    std::string out = "%" + record->getName().str() + " { ";
-    for (unsigned i = 0; i < record->getNumElements(); i++) {
-        if (i > 0) out += ", ";
-        llvm::Type *field = record->getElementType(i);
-        llvm::StructType *nested = llvm::dyn_cast<llvm::StructType>(field);
-        out += nested ? "%" + nested->getName().str() : llvmSpelling(field);
-    }
-    return out + " }";
-}
 
 const char *symbolKindName(const Symbol &symbol) {
     switch (symbol.kind) {
@@ -139,7 +114,7 @@ const char *symbolKindName(const Symbol &symbol) {
     return "?";
 }
 
-void dumpScope(std::ostream &out, Scope *scope, int depth, llvm::LLVMContext &context) {
+void dumpScope(std::ostream &out, Scope *scope, int depth) {
     std::string pad(depth * 2, ' ');
     out << pad << "scope " << scopeKindName(scope->kind);
     if (scope->kind == ScopeKind::Record && scope->record) out << " " << scope->record->qualifiedName();
@@ -157,23 +132,21 @@ void dumpScope(std::ostream &out, Scope *scope, int depth, llvm::LLVMContext &co
             const FunctionSymbol &fn = static_cast<const FunctionSymbol &>(*symbol);
             if (fn.isMethod()) out << " this-lowered: " << typeToString(fn.loweredType);
             if (!fn.isBuiltin && !fn.definition) out << " (no definition)";
-            if (fn.loweredType) out << " llvm: " << llvmSpelling(toLLVM(fn.loweredType, context));
+            if (fn.loweredType) out << " llvm: " << toLLVMType(fn.loweredType);
         } else if (symbol->kind == SymbolKind::Record) {
-            out << " llvm: " << llvmRecordBody(toLLVM(symbol->type, context));
+            out << " llvm: " << toLLVMRecord(static_cast<const RecordSymbol *>(symbol.get()));
         } else if (symbol->type && !symbol->type->is(TypeKind::Auto)) {
-            out << " llvm: " << llvmSpelling(toLLVM(symbol->type, context));
+            out << " llvm: " << toLLVMType(symbol->type);
         }
         out << "\n";
     }
-    for (const std::unique_ptr<Scope> &child : scope->children) dumpScope(out, child.get(), depth + 1, context);
+    for (const std::unique_ptr<Scope> &child : scope->children) dumpScope(out, child.get(), depth + 1);
 }
 
 } // namespace
 
 void SymbolTable::dump(std::ostream &out) {
-    //a context of its own, only to show what each type lowers to
-    llvm::LLVMContext context;
-    dumpScope(out, root.get(), 0, context);
+    dumpScope(out, root.get(), 0);
 }
 
 } // namespace sema

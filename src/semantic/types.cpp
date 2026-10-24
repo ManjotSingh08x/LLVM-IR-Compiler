@@ -1,7 +1,5 @@
 #include "semantic/types.h"
 
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/LLVMContext.h"
 
 #include "semantic/symbols.h"
 
@@ -372,71 +370,113 @@ std::string mangleType(const Type *type) {
 
 //lowering
 
-namespace {
-
-//a record becomes a named llvm struct: its bases in order, then its fields.
-//the struct is looked up by name first, so each record is made once per
-//context, and a record that points at itself only needs ptr for that field
-llvm::Type *lowerRecord(const RecordSymbol *record, llvm::LLVMContext &context) {
-    std::string name = (record->isClass ? "class." : "struct.") + record->mangledName;
-    if (llvm::StructType *existing = llvm::StructType::getTypeByName(context, name)) return existing;
-
-    llvm::StructType *lowered = llvm::StructType::create(context, name);
-    std::vector<llvm::Type *> body;
-    for (const BaseClass &base : record->bases) body.push_back(lowerRecord(base.record, context));
-    for (const Symbol *field : record->fields) body.push_back(toLLVM(field->type, context));
-    lowered->setBody(body);
-    return lowered;
+std::string toLLVMRecord(const RecordSymbol *record) {
+    if (!record) return "<none>";
+    std::string name = "%" + std::string(record->isClass ? "class." : "struct.") + record->mangledName;
+    std::string out = name + " { ";
+    bool first = true;
+    for (const BaseClass &base : record->bases) {
+        if (!first) out += ", ";
+        first = false;
+        out += "%" + std::string(base.record->isClass ? "class." : "struct.") + base.record->mangledName;
+    }
+    for (const Symbol *field : record->fields) {
+        if (!first) out += ", ";
+        first = false;
+        if (field->type && field->type->is(TypeKind::Record)) {
+            const RecordSymbol *frec = asRecord(field->type);
+            out += "%" + std::string(frec->isClass ? "class." : "struct.") + frec->mangledName;
+        } else {
+            out += toLLVMType(field->type);
+        }
+    }
+    out += " }";
+    return out;
 }
 
-} // namespace
-
-llvm::Type *toLLVM(const Type *type, llvm::LLVMContext &context) {
+std::string toLLVMType(const Type *type) {
+    if (!type) return "<none>";
     switch (type->getKind()) {
-    case TypeKind::Void:   return llvm::Type::getVoidTy(context);
-    case TypeKind::Bool:   return llvm::Type::getInt1Ty(context);
-    case TypeKind::Char:   return llvm::Type::getInt8Ty(context);
-    case TypeKind::Int:    return llvm::Type::getInt32Ty(context);
-    case TypeKind::Float:  return llvm::Type::getFloatTy(context);
-    case TypeKind::Double: return llvm::Type::getDoubleTy(context);
+    case TypeKind::Void:   return "void";
+    case TypeKind::Bool:   return "i1";
+    case TypeKind::Char:   return "i8";
+    case TypeKind::Int:    return "i32";
+    case TypeKind::Float:  return "float";
+    case TypeKind::Double: return "double";
 
     case TypeKind::Null:
     case TypeKind::Pointer:
     case TypeKind::Reference:
-        return llvm::PointerType::get(context, 0);
+        return "ptr";
 
     case TypeKind::Array: {
         const ArrayType *array = asArray(type);
-        return llvm::ArrayType::get(toLLVM(array->element, context), array->size);
+        return "[" + std::to_string(array->size) + " x " + toLLVMType(array->element) + "]";
     }
     case TypeKind::Function: {
         const FunctionType *fn = asFunction(type);
-        std::vector<llvm::Type *> params;
-        for (const Type *param : fn->params) params.push_back(toLLVM(param, context));
-        return llvm::FunctionType::get(toLLVM(fn->returnType, context), params, fn->isVariadic);
+        std::string out = toLLVMType(fn->returnType) + " (";
+        for (size_t i = 0; i < fn->params.size(); i++) {
+            if (i > 0) out += ", ";
+            out += toLLVMType(fn->params[i]);
+        }
+        if (fn->isVariadic) {
+            if (!fn->params.empty()) out += ", ";
+            out += "...";
+        }
+        out += ")";
+        return out;
     }
-    case TypeKind::Record:
-        return lowerRecord(asRecord(type), context);
-
-    //a lambda is stored as the variables it captures, a reference capture as
-    //a pointer to the variable
-    case TypeKind::Closure: {
-        std::vector<llvm::Type *> fields;
-        for (const ast::LambdaCapture &capture : asClosure(type)->lambda->usedCaptures) {
-            if (capture.kind == ast::LambdaCapture::Kind::ByCopy && capture.symbol) {
-                fields.push_back(toLLVM(stripReference(capture.symbol->type), context));
+    case TypeKind::Record: {
+        const RecordSymbol *rec = asRecord(type);
+        std::string name = "%" + std::string(rec->isClass ? "class." : "struct.") + rec->mangledName;
+        std::string elems;
+        bool first = true;
+        for (const BaseClass &base : rec->bases) {
+            if (!first) elems += ", ";
+            first = false;
+            elems += "%" + std::string(base.record->isClass ? "class." : "struct.") + base.record->mangledName;
+        }
+        for (const Symbol *field : rec->fields) {
+            if (!first) elems += ", ";
+            first = false;
+            if (field->type && field->type->is(TypeKind::Record)) {
+                const RecordSymbol *frec = asRecord(field->type);
+                elems += "%" + std::string(frec->isClass ? "class." : "struct.") + frec->mangledName;
             } else {
-                fields.push_back(llvm::PointerType::get(context, 0));
+                elems += toLLVMType(field->type);
             }
         }
-        return llvm::StructType::get(context, fields);
+        if (elems.empty()) {
+            return name + " = type {}";
+        } else {
+            return name + " = type { " + elems + " }";
+        }
     }
-
+    case TypeKind::Closure: {
+        const ClosureType *closure = asClosure(type);
+        std::string elems;
+        bool first = true;
+        for (const ast::LambdaCapture &capture : closure->lambda->usedCaptures) {
+            if (!first) elems += ", ";
+            first = false;
+            if (capture.kind == ast::LambdaCapture::Kind::ByCopy && capture.symbol) {
+                elems += toLLVMType(stripReference(capture.symbol->type));
+            } else {
+                elems += "ptr";
+            }
+        }
+        if (elems.empty()) {
+            return "{}";
+        } else {
+            return "{ " + elems + " }";
+        }
+    }
     case TypeKind::Auto:
     case TypeKind::Error:
-        return nullptr;
+        return "<none>";
     }
-    return nullptr;
+    return "<none>";
 }
 
 } // namespace sema

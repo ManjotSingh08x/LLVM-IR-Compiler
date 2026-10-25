@@ -1,0 +1,47 @@
+struct Point {
+    int x;
+    int y;
+};
+
+void swap(int &a, int &b) {
+    int t = a;
+    a = b;
+    b = t;
+}
+
+int main() {
+    int arr[5] = {1, 2, 3};
+    char word[6] = "hey";
+    int grid[2][3]{{1, 2, 3}, {4, 5, 6}};
+    printf("%d %d %d %s\n", arr[0], arr[2], arr[4], word);
+    printf("%d %d\n", grid[1][2], grid[0][1]);
+
+    int value = 7;
+    int *p = &value;
+    int **pp = &p;
+    **pp = 8;
+    int *second = arr + 1;
+    printf("%d %d %d\n", value, *second, second - arr);
+
+    int (*row)[3] = grid;
+    printf("%d\n", row[1][0]);
+
+    int left = 1;
+    int right = 2;
+    swap(left, right);
+    int &alias = left;
+    alias = 20;
+    printf("%d %d\n", left, right);
+
+    Point pt{3, 4};
+    Point *pp2 = &pt;
+    pp2->x = 30;
+    printf("%d %d\n", pt.x, pt.y);
+
+    int *heap = new int[3]{7, 8, 9};
+    Point *np = new Point{5, 6};
+    printf("%d %d %d\n", heap[2], np->x, np->y);
+    delete[] heap;
+    delete np;
+    return 0;
+}

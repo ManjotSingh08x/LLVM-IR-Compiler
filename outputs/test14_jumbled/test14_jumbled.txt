@@ -1,2 +1,0 @@
-test/test14_jumbled.ckp line: 3 col: 9 syntax error: unexpected TOK_ASSIGN, expecting TOK_IDENTIFIER or TOK_STAR or TOK_BITAND or TOK_LPAREN
-1 syntax error(s) found.

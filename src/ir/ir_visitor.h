@@ -17,9 +17,7 @@
 
 namespace ir {
 
-//where a variable's storage is. slot is an alloca, a global, or a field of a
-//lambda's closure. for a reference (and a by-reference capture) the slot does
-//not hold the object, it holds the object's address, so it is loaded first
+//where a variable lives, for references the slot holds the object's address
 struct VariableBinding {
     Value *slot = nullptr;
     bool   slotHoldsAddress = false;
@@ -48,16 +46,14 @@ struct SwitchContext {
     SwitchInst *inst;      //null when the switch itself is unreachable
 };
 
-//the scopes around a label, worked out before a function is lowered, so that a
-//goto (even one above the label) knows which destructors to run
+//the scopes around a label, so a goto knows which destructors to run
 struct LabelInfo {
     std::vector<const ast::Stmt *> owners;
     std::vector<size_t>            objectCounts;       //objects to destroy, per scope, before the label
     std::vector<size_t>            constructedCounts;  //objects constructed, per scope, before the label
 };
 
-//everything that belongs to the one function being lowered. a lambda body is
-//lowered while its enclosing function is half done, so these are kept on a stack
+//per-function lowering state, stacked because lambdas are lowered mid-function
 struct FunctionContext {
     Function                                       *function = nullptr;
     const sema::Type                               *returnType = nullptr;
@@ -102,14 +98,7 @@ struct IncDecResult {
     Value *newValue = nullptr;
 };
 
-//lowers the checked tree to the ir in a Module. statements are lowered through
-//the visitor (visit(stmt)), expressions through emitLValue and emitRValue.
-//the work is split by topic over several files:
-//  ir_visitor.cpp     the passes, functions, globals
-//  ir_statements.cpp  statements, local variables, scopes and cleanups, goto
-//  ir_expressions.cpp lvalues, rvalues, operators, casts
-//  ir_calls.cpp       calls, methods, lambdas
-//  ir_objects.cpp     initialization, construction, destruction, new, delete
+//lowers the checked tree to a Module: statements via visit, expressions via emitLValue/emitRValue
 class IRVisitor : public ast::ASTVisitor<IRVisitor, Value *> {
 public:
     IRVisitor(Module &module, sema::SymbolTable &symTab, sema::Diagnostics &diags);
@@ -134,7 +123,7 @@ public:
     Value *visitDefaultStmt(ast::DefaultStmt *node);
 
 private:
-    // ---- ir_visitor.cpp: passes, functions and globals ----
+    //  ir_visitor.cpp: passes, functions and globals 
     void collectScope(sema::Scope *scope);
     void declareFunction(sema::FunctionSymbol *fn);
     void emitGlobalVariables(ast::Program *program);
@@ -150,7 +139,7 @@ private:
     Function *functionFor(const sema::FunctionSymbol *fn);
     void error(int line, int col, const std::string &message);
 
-    // ---- ir_statements.cpp: statements, locals, scopes ----
+    //  ir_statements.cpp: statements, locals, scopes 
     void emitLocalVariable(ast::VarDecl *decl);
     void emitStaticLocal(ast::VarDecl *decl);
     void pushScope(const ast::Stmt *owner);
@@ -162,7 +151,7 @@ private:
     BasicBlock *labelBlock(const ast::LabelStmt *label);
     void emitJump(const JumpTarget &target);
 
-    // ---- ir_expressions.cpp: expressions ----
+    //  ir_expressions.cpp: expressions 
     Value *emitLValue(ast::Expr *expr);
     Value *emitRValue(ast::Expr *expr);
     Value *emitCondition(ast::Expr *expr);
@@ -187,7 +176,7 @@ private:
     Value *emitArithmeticConversion(Value *value, const sema::Type *from, const sema::Type *to);
     Value *sizeOf(const sema::Type *type, Value *count);
 
-    // ---- ir_calls.cpp: calls and lambdas ----
+    //  ir_calls.cpp: calls and lambdas 
     Value *emitCall(ast::CallExpr *node);
     Value *emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn);
     std::vector<Value *> emitArguments(const sema::FunctionType *signature, ast::NodeList<ast::Expr> &args);
@@ -195,7 +184,7 @@ private:
     void      emitLambdaBody(ast::LambdaExpr *lambda);
     void      emitLambdaInto(Value *address, ast::LambdaExpr *lambda);
 
-    // ---- ir_objects.cpp: objects ----
+    //  ir_objects.cpp: objects 
     void   emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl);
     void   emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr);
     void   emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list);

@@ -5,8 +5,7 @@
 #include <string>
 #include <vector>
 
-//semantic analysis writes its results into the tree. the ast only holds
-//pointers to these, so it does not depend on the semantic headers
+//semantic results are held by pointer so the ast does not depend on semantic headers
 namespace sema {
 class Type;
 class Symbol;
@@ -17,9 +16,7 @@ class Scope;
 
 namespace ast {
 
-//every concrete node has its own kind, which is how a node is told apart from
-//the others: visitors switch on it and static_cast to the concrete class. the
-//First/Last markers group the kinds of one family for range checks
+//one kind per concrete node, First/Last markers bound each family
 enum class ASTKind {
     Program,
     TypeSpec,
@@ -85,8 +82,7 @@ enum class ASTKind {
 template <class T>
 using NodeList = std::vector<std::unique_ptr<T>>;
 
-//base of every node. the kind is fixed at construction, the location is the
-//line and column of the token the node is reported at
+//base of every node: a fixed kind and the source location it is reported at
 class ASTNode {
 public:
     virtual ~ASTNode() = default;
@@ -121,8 +117,7 @@ protected:
     using ASTNode::ASTNode;
 };
 
-//the type checker fills in the type of every expression and whether it names
-//an object (an lvalue) or is only a value
+//filled by the type checker: the type and whether the expression is an lvalue
 class Expr : public ASTNode {
 public:
     const sema::Type *type = nullptr;

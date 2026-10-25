@@ -1,0 +1,38 @@
+typedef int Integer;
+
+typedef char Integer;
+
+typedef Missing Unknown;
+
+typedef auto Deduced;
+
+typedef void Nothing;
+Nothing nothing;
+
+class Box {
+public:
+    typedef int Size;
+    Size size;
+};
+
+struct Integer wrong;
+
+int main() {
+    int a = Integer;
+
+    Box box;
+    int b = box.Size;
+
+    {
+        typedef int Inner;
+        Inner fine = 1;
+    }
+    Inner gone = 2;
+
+    until (box) a++;
+    do { a++; } until (box);
+
+    until (a > 5) { if (a == 3) break; a++; continue; }
+    break;
+    return 0;
+}

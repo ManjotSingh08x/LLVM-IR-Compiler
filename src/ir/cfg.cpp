@@ -4,8 +4,7 @@
 
 namespace ir {
 
-// ---------------------------------------------------------------------------
-// BasicBlock
+//BasicBlock
 
 void BasicBlock::append(std::unique_ptr<Instruction> inst) {
     inst->setParent(this);
@@ -25,8 +24,7 @@ void BasicBlock::addEdge(BasicBlock *from, BasicBlock *to) {
 
 void BasicBlock::dump(std::ostream &out) const {
     out << name << ":";
-    //the predecessors are written as a comment, the way clang does, so the
-    //edges of the graph can be read straight off the .ll file
+    //predecessors are written as a comment, as clang does
     if (!predecessors.empty()) {
         out << "  ; preds = ";
         std::set<const BasicBlock *> written;
@@ -43,8 +41,7 @@ void BasicBlock::dump(std::ostream &out) const {
     for (const std::unique_ptr<Instruction> &inst : instructions) inst->dump(out);
 }
 
-// ---------------------------------------------------------------------------
-// Function
+//Function
 
 Argument *Function::addArgument(const sema::Type *type, const std::string &baseName) {
     Argument *arg = new Argument(type, uniqueName(baseName), this, args.size());
@@ -105,8 +102,7 @@ void Function::finalizeCFG(Module &module) {
         }
     }
 
-    //2. the layout keeps only those blocks. a reachable block that was never
-    //written into (a branch target that stayed empty) is added at the end
+    //2. keep only reachable blocks, appending any that were never written into
     std::vector<BasicBlock *> kept;
     for (BasicBlock *block : layout) {
         if (reached.count(block)) kept.push_back(block);
@@ -128,8 +124,7 @@ void Function::finalizeCFG(Module &module) {
         block->predecessors = preds;
     }
 
-    //3. a block that runs off its end returns: ret void, or the zero value of
-    //the return type, which makes main return 0 as c++ requires
+    //3. a block that runs off its end returns the zero value
     const sema::Type *returnType = fnType->returnType;
     for (BasicBlock *block : layout) {
         if (block->isTerminated()) continue;
@@ -168,8 +163,7 @@ void Function::dump(std::ostream &out) const {
     out << "}\n";
 }
 
-// ---------------------------------------------------------------------------
-// Module
+//Module
 
 const sema::Type *Module::pointerType() {
     if (genericPointer == nullptr) genericPointer = symTab.pointerTo(sema::voidType());

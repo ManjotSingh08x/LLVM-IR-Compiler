@@ -43,8 +43,7 @@ FoldedNumber makeFloat(double value, const sema::Type *type) {
 
 } // namespace
 
-// ---------------------------------------------------------------------------
-// whole declarations and values
+//whole declarations and values
 
 Constant *ConstantFolder::foldVariable(ast::VarDecl *decl, const sema::Type *type) {
     //a constructor, or a member that needs one, always runs as code
@@ -96,8 +95,7 @@ Constant *ConstantFolder::fold(ast::Expr *expr, const sema::Type *type) {
     }
 }
 
-//{ ... } for an array, a record without constructors, or a single value.
-//missing elements are zero, or the in-class initializer of a missing field
+//{ ... } for an array, a plain record or a single value, missing elements are zero
 Constant *ConstantFolder::foldList(ast::InitListExpr *list, const sema::Type *type) {
     if (list->constructor != nullptr) return nullptr;
 
@@ -208,8 +206,7 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
     return module.getAddress(global);
 }
 
-// ---------------------------------------------------------------------------
-// numbers
+// numbers 
 
 bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
     switch (expr->getKind()) {

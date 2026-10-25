@@ -14,21 +14,12 @@ struct FoldedNumber {
     const sema::Type *type = nullptr;
 };
 
-//works out the constant a global (or static local) starts with, so it can be
-//written into the global's definition: @global_5limit = internal global i32 10.
-//when the initializer needs code to run, the folder answers null and the
-//caller runs the initializer at startup instead.
-//
-//sema::evaluateConstant is not enough here: it looks through the implicit
-//casts without applying them, so bool b = 4 would give i1 4 (which llvm
-//silently reads as false) and float f = 2 would give "float 2" (a parse
-//error). this folder applies every cast to the value it carries
+//folds global and static initializers to constants, applying every implicit cast, null means run at startup
 class ConstantFolder {
 public:
     ConstantFolder(Module &module, RecordLayout &layout) : module(module), layout(layout) {}
 
-    //the constant for a whole declaration, int a[4]{1} or Point p = {1, 2},
-    //or null when its initializer must run as code
+    //the constant for a whole declaration, or null when its initializer must run as code
     Constant *foldVariable(ast::VarDecl *decl, const sema::Type *type);
 
     //the constant for one value converted to type, or null

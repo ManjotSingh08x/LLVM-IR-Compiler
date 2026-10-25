@@ -40,13 +40,9 @@ Instruction *IRBuilder::insert(Instruction *inst) {
     return inst;
 }
 
-// ---------------------------------------------------------------------------
-// memory
+//  memory 
 
-//an alloca reserves a stack slot each time it runs. at the top of entry it runs
-//exactly once per call, and entry dominates every block, so the slot can be
-//used anywhere in the function. the store that initialises the variable stays
-//where the declaration is
+//allocas go at the top of entry so they run once per call and dominate every use
 AllocaInst *IRBuilder::createEntryAlloca(const sema::Type *type, const std::string &baseName) {
     AllocaInst *inst = new AllocaInst(type, module.pointerType(), function->uniqueName(baseName));
     function->getEntryBlock()->insertAlloca(std::unique_ptr<Instruction>(inst));
@@ -79,8 +75,7 @@ Value *IRBuilder::createElementGEP(const sema::Type *elementType, Value *base, V
     return createGEP(elementType, base, indices);
 }
 
-// ---------------------------------------------------------------------------
-// values
+//  values 
 
 Value *IRBuilder::createBinary(BinaryOpKind op, const sema::Type *operandType, Value *lhs, Value *rhs) {
     const sema::Type *resultType = isCompare(op) ? sema::boolType() : operandType;
@@ -113,9 +108,7 @@ Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *calleeType
     return insert(new CallInst(callee, calleeType, args, name));
 }
 
-// ---------------------------------------------------------------------------
-// terminators. an edge is only recorded when the branch is really written:
-// a branch in dead code must not make its target look reachable
+//  terminators, edges are recorded only for branches really written 
 
 void IRBuilder::createRet(const sema::Type *returnType, Value *value) {
     insert(new ReturnInst(returnType, value));
@@ -152,8 +145,7 @@ void IRBuilder::addSwitchCase(SwitchInst *inst, long long value, BasicBlock *tar
     BasicBlock::addEdge(inst->getParent(), target);
 }
 
-//the default starts as the end of the switch and moves to the default label
-//once that is seen
+//the default starts as the switch end and moves to the default label once seen
 void IRBuilder::setSwitchDefault(SwitchInst *inst, BasicBlock *target) {
     if (inst == nullptr) return;
     BasicBlock *from = inst->getParent();

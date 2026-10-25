@@ -40,8 +40,7 @@ static std::string g_strBuf;
 
 //helpers
 static int addToken(int id) {
-    //the semantic value of every token is its position in g_tokens, which lets
-    //the parser record a declared type against the right entry
+    //a token's semantic value is its index in g_tokens
     yylval.tok = (int)g_tokens.size();
     g_tokens.push_back({ std::string(yytext), id, tokLine, std::string() });
     return id;
@@ -236,8 +235,7 @@ void setDeclType(int index, const std::string &type){
     }
 }
 
-//a typedef name is read as a declarator first, so it already holds the type of
-//the declaration by the time the parser knows it is a typedef
+//typedef names already hold the declaration's type when the parser marks them
 void replaceDeclType(int index, const std::string &type){
     if(index >= 0 && index < (int)g_tokens.size()){
         g_tokens[index].declType = type;

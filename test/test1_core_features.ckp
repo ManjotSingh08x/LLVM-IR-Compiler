@@ -1,0 +1,255 @@
+/* a block comment
+   that spans two lines */
+struct Point {
+    int x;
+    int y;
+};
+
+class Animal {
+public:
+    int age;
+    static int created;
+
+    Animal();
+    Animal(int a);
+    Animal(int a, int l);
+    ~Animal();
+
+    void setAge(int a) {
+        this->age = a;
+    }
+
+protected:
+    int legs;
+
+private:
+    int secretId;
+
+    int hidden() {
+        return secretId + legs;
+    }
+};
+
+class Dog : public Animal {
+public:
+    bool loud;
+
+    Dog() {
+        this->loud = false;
+    }
+
+    Dog(bool l) {
+        this->loud = l;
+    }
+
+    ~Dog() {
+        this->loud = false;
+    }
+
+    void bark() {
+        this->loud = true;
+    }
+};
+
+class Cat : protected Animal {
+private:
+    bool quiet;
+};
+
+int Animal::created = 0;
+
+class Trackable { public: int serial; };
+class Tagged : Animal { public: int tag; };
+class Registered : public Animal, public Trackable { public: int slot; };
+
+struct BaseRec { int first; };
+struct DerivedRec : BaseRec { int second; };
+
+class Outer {
+public:
+    struct Inner { int value; };
+    class Nested { public: int depth; };
+    Inner   inner;
+    Nested  nested;
+};
+
+int classify(int n) {   // a line comment after code
+    if (n < 0) {
+        return -1;
+    } else if (n == 0) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+int factorial(int n) {
+    if (n <= 1) return 1;
+    return n * factorial(n - 1);
+}
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int twice(int x) {
+    return x * 2;
+}
+
+int operatorsAndLoops() {
+    int a = 10, b = 3, c;
+    bool t;
+
+    c= a+b;   c=a -b;
+    c=a* b;
+    c = a / b;   c = a % b;
+    c += a;  c -= a;  c *= a;  c /= a;  c %= a;
+    a++;  a--;  ++a;  --a;
+
+    t = (a == b);  t = (a != b);
+    t = (a <  b);  t = (a >  b);
+    t = (a <= b);  t = (a >= b);
+    t = (a && b);  t = (a || b);  t = !a;
+
+    c = a & b;   c = a | b;   c = a ^ b;
+    c = ~a;      c = a << 2;  c = a >> 2;
+    c = (a > b) ? a : b;
+
+    int i, sum = 0;
+    for (i = 0; i < 10; i++) {
+        if (i % 2 == 0) continue;
+        if (i > 7) break;
+        sum += i;
+    }
+    while (sum > 0) { sum -= 1; }
+    do { sum += 2; } while (sum < 10);
+
+    i = 0;
+top:
+    i = i + 1;
+    if (i < 3) goto top;
+    ;;
+    return classify(sum);
+}
+
+int arraysAndPointers() {
+    int  arr[5];
+    char name[20];
+    int  grid[3][4];
+    int  cube[2][3][4];
+
+    arr[0] = 1;
+    name[0] = 'A';
+    grid[1][2] = 7;
+    cube[1][2][3] = 9;
+
+    int value = 42;
+    int *p = &value;
+    int v = *p;
+    int &ref = value;
+    ref = v;
+
+    struct Point pt;
+    pt.x = 1;
+    pt.y = 2;
+    struct Point *pp = &pt;
+    pp->x = 3;
+    pp->y = 4;
+
+    void *nothing = null;
+    struct Point *none = nullptr;
+    return arr[0] + grid[1][2];
+}
+
+int objects() {
+    Animal *a = new Animal();
+    a->setAge(3);
+    delete a;
+
+    Dog d;
+    d.bark();
+    d.setAge(5);
+    Cat c;
+
+    Animal plain;
+    Animal withOne(3);
+    Animal withTwo(3, 4);
+    Tagged tagged;
+    Registered registered;
+    Outer outer;
+
+    outer.inner.value = 1;
+    outer.nested.depth = 2;
+    return withOne.age + withTwo.age + tagged.tag + registered.slot;
+}
+
+int literalsAndSwitch() {
+    int dec = 42;
+    int hex = 0x1F;
+    int oct = 0755;
+    int bin = 0b1010;
+
+    float  f1 = 3.14;
+    float  f2 = 1.5e-3;
+    double d1 = .5;
+    double d2 = 2.;
+    double d3 = 1e10;
+
+    char c1 = 'a';
+    char c2 = '\n';
+    char c3 = '\t';
+    char c4 = '\'';
+    char c5 = '\\';
+    char c6 = '\x41';
+    char c7 = '\0';
+
+    char *s1 = "hello world";
+    char *s2 = "tab\there and newline\n";
+    char *s3 = "quote \" and backslash \\ inside";
+    char *s4 = "not a comment: /* nor this */ // nor this";
+    char *s5 = "";
+
+    bool yes = true;
+    bool no  = false;
+
+    switch (dec) {
+        case 1:
+            dec = 100;
+            break;
+        case 2:
+            dec = 200;
+            break;
+        case 3:
+        case 4:
+            dec = 300;
+            break;
+        default:
+            dec = 0;
+    }
+    return dec + hex + oct + bin;
+}
+
+int main(int argc, char *argv[]) {
+    int input;
+    scanf("%d", &input);
+
+    int f = factorial(input);
+    int s = add(f, 10);
+
+    int (*fp)(int) = twice;
+    s = fp(s);
+
+    auto square = [](int x) { return x * x; };
+    s = square(s);
+
+    int *buffer = new int[10];
+    buffer[0] = s;
+    delete[] buffer;
+
+    double *d = new double;
+    delete d;
+
+    s = s + operatorsAndLoops() + arraysAndPointers() + objects() + literalsAndSwitch();
+    printf("%d %d %s\n", s, argc, argv[0]);
+    return 0;
+}

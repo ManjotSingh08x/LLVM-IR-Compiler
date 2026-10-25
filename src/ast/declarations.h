@@ -7,8 +7,7 @@ namespace ast {
 
 class ParamDecl;
 
-//a name that may be qualified, Shape::area. lastTok is the token index of the
-//final part, which the token table records the declared type against
+//a possibly qualified name, Shape::area. lastTok is the token index of the final part
 struct QualifiedName {
     std::vector<std::string> parts;
     int lastTok = -1;
@@ -25,11 +24,7 @@ struct QualifiedName {
     }
 };
 
-//a type as it is written in the source, kept as a tree read from the inside
-//out. int **(*p)[10] is
-//  Pointer -> Array [10] -> Pointer -> Pointer -> Builtin int
-//the first three kinds are names and have no inner type, the others wrap inner:
-//the pointee, the referred type, the element type or the return type
+//a type as written, read inside out: int **(*p)[10] is Pointer -> Array [10] -> Pointer -> Pointer -> int
 enum class TypeSpecKind { Builtin, Named, Struct, Pointer, Reference, Array, Function };
 
 class TypeSpec : public ASTNode {
@@ -37,8 +32,7 @@ public:
     //a type name: int, Dog, struct Node
     TypeSpec(TypeSpecKind specKind, std::string name, int tokIndex, int line, int col);
 
-    //a pointer, reference, array or function around inner. the parser builds
-    //declarators before it knows the base type, so inner may start out null
+    //a pointer, reference, array or function around inner, null until the base type is known
     TypeSpec(TypeSpecKind specKind, std::unique_ptr<TypeSpec> inner, int line, int col);
 
     //defined below ParamDecl, which the parameter list needs complete
@@ -49,8 +43,7 @@ public:
             || specKind == TypeSpecKind::Struct;
     }
 
-    //one declaration line shares its type name between declarators, each gets
-    //a copy. only a type name is ever copied
+    //each declarator sharing a type name gets its own copy
     std::unique_ptr<TypeSpec> clone() const {
         return std::unique_ptr<TypeSpec>(new TypeSpec(specKind, name, tokIndex, line, col));
     }
@@ -108,8 +101,7 @@ inline TypeSpec::TypeSpec(TypeSpecKind specKind, std::unique_ptr<TypeSpec> inner
 
 inline TypeSpec::~TypeSpec() = default;
 
-//a function declaration or, with a body, a definition. constructors and
-//destructors derive from it and have no return type
+//a function declaration, or a definition when it has a body
 class FunctionDecl : public Decl {
 public:
     FunctionDecl(std::unique_ptr<TypeSpec> returnType, QualifiedName name,
@@ -190,8 +182,7 @@ public:
     AccessKind access;
 };
 
-//typedef int *IntPtr; the parser reads it as a declaration, so there is one
-//node per declarator, each holding the full type the name stands for
+//typedef int *IntPtr; one node per declarator, each holding the aliased type
 class TypedefDecl : public Decl {
 public:
     TypedefDecl(std::string name, std::unique_ptr<TypeSpec> type, int line, int col)

@@ -36,8 +36,7 @@ public:
 
     SymbolKind  kind;
     std::string name;
-    //the name later passes give the symbol: set for functions, globals and
-    //static members, empty for locals and fields
+    //the mangled name, empty for locals and fields
     std::string mangledName;
     const Type *type;
     Scope      *scope = nullptr;  //the scope the symbol is declared in
@@ -49,8 +48,7 @@ public:
     RecordSymbol   *parentRecord = nullptr;
     ast::AccessKind access = ast::AccessKind::None;
 
-    //static storage: a static global or local, a static member or a static
-    //function
+    //static storage: static globals, locals, members and functions
     bool isStatic = false;
 };
 
@@ -65,9 +63,7 @@ public:
     //a method that is called on an object, so it receives this
     bool isMethod() const { return parentRecord != nullptr && !isStatic; }
 
-    //the signature of the global function the method becomes: a pointer to
-    //the record is put in front as this. the same as signature() for free and
-    //static functions
+    //the lowered signature, with this in front for methods
     const FunctionType *loweredType = nullptr;
 
     bool                isConstructor = false;
@@ -103,9 +99,7 @@ public:
 
 enum class ScopeKind { Global, Record, Function, Block, Lambda };
 
-//one node of the scope tree. every scope is kept after it is built, and the
-//ast nodes that open a scope point at theirs, so later passes walk back into
-//exactly the scopes the symbol builder made
+//one node of the scope tree, kept for later passes to walk
 class Scope {
 public:
     Scope(ScopeKind kind, Scope *parent, int line, int col)
@@ -116,13 +110,10 @@ public:
 
     Scope *addChild(ScopeKind childKind, int childLine, int childCol);
 
-    //the scope takes ownership of the symbol. a symbol that is not findable
-    //is kept but never found by name: constructors and destructors, which are
-    //reached through their record instead
+    //takes ownership, non-findable symbols such as constructors are never looked up by name
     Symbol *add(std::unique_ptr<Symbol> symbol, bool findable = true);
 
-    //the symbols with this name declared directly in this scope. more than one
-    //only for overloaded functions. null when there are none
+    //the symbols declared here under name, several for overloads, null when none
     const std::vector<Symbol *> *find(const std::string &name) const;
 
     //the nearest enclosing function or lambda scope, the one labels belong to
@@ -143,8 +134,7 @@ public:
     llvm::StringMap<ast::LabelStmt *>         labels;   //for function and lambda scopes
 };
 
-//the root of the scope tree. it also owns every compound type, since types are
-//shared: the type of &x points at the type of x
+//root of the scope tree and owner of every compound type
 class SymbolTable {
 public:
     SymbolTable();

@@ -1,0 +1,35 @@
+int main() {
+    int a = 17;
+    int b = 5;
+    printf("%d %d %d %d %d\n", a + b, a - b, a * b, a / b, a % b);
+    printf("%d %d %d %d %d\n", a & b, a | b, a ^ b, a << 2, a >> 1);
+
+    bool t = (a > b) && (b != 0);
+    bool f = (a < b) || !(a == 17);
+    printf("%d %d\n", t, f);
+
+    int bigger = (a > b) ? a : b;
+    printf("%d\n", bigger);
+
+    int c = 10;
+    c += 5;
+    c -= 3;
+    c *= 2;
+    c /= 4;
+    c %= 4;
+    printf("%d\n", c);
+
+    int i = 3;
+    int post = i++;
+    int pre = ++i;
+    i--;
+    --i;
+    printf("%d %d %d\n", post, pre, i);
+
+    char letter = 'a';
+    letter++;
+    float half = 0.5;
+    double sum = half + 1.25;
+    printf("%c %f\n", letter, sum);
+    return 0;
+}

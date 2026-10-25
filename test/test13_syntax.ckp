@@ -1,0 +1,42 @@
+int missingSemicolon() {
+    int value = 10
+    return value;
+}
+
+int missingOperand() {
+    int value = 1;
+    value = value + ;
+    return value;
+}
+
+int missingName() {
+    int = 3;
+    return 0;
+}
+
+int missingParenthesis() {
+    int x = (10 + 5;
+    return x;
+}
+
+int jumbledTokens() {
+    int = 10 x ;
+    return 0;
+}
+
+int missingOperator() {
+    int x = 1;
+    int y = 2;
+    int z = x y;
+    return z;
+}
+
+int conditionWithoutParentheses() {
+    int x = 18;
+    if x > 6 x = 0;
+    return x;
+}
+
+int trailingComma(int x,);
+
+int unclosedParameters(int x;

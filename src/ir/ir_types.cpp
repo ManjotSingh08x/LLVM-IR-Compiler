@@ -82,8 +82,7 @@ std::string closureTypeName(const ast::LambdaExpr *lambda) {
     return "%closure." + std::to_string(lambda->line) + "." + std::to_string(lambda->col);
 }
 
-//must match sema::toLLVMType for a closure: a copied variable is stored as its
-//value (a copied reference as the value it refers to), everything else as ptr
+//must match sema::toLLVMType: copies are stored by value, everything else as ptr
 std::string formatClosureBody(const ast::LambdaExpr *lambda) {
     std::string elements;
     for (const ast::LambdaCapture &capture : lambda->usedCaptures) {

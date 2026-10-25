@@ -5,19 +5,7 @@
 
 namespace ast {
 
-//llvm StmtVisitor style visitor, shared by every pass over the tree: the
-//semantic passes and the ast printer. visit() switches on the node's kind and calls
-//the matching visitX of the derived class, so every pass picks its own return
-//type: a printer returns void, a type checker could return a Type *.
-//
-//  class MyPass : public ASTVisitor<MyPass, int> {
-//  public:
-//      int visitIfStmt(IfStmt *node) { ... }
-//  };
-//
-//a visitX the derived class does not define falls back to its family:
-//ConstructorDecl and DestructorDecl to visitFunctionDecl, then every node to
-//visitDecl, visitStmt or visitExpr, which return RetTy()
+//llvm StmtVisitor style: visit() dispatches to visitX, falling back to the node's family
 template <class Derived, class RetTy = void>
 class ASTVisitor {
 public:

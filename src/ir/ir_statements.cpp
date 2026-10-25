@@ -4,8 +4,7 @@
 
 namespace ir {
 
-// ---------------------------------------------------------------------------
-// local variables
+//  local variables 
 
 void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
     sema::Symbol *symbol = decl->symbol;
@@ -37,12 +36,7 @@ void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
     }
 }
 
-//a static local lives in a global and keeps its value between calls.
-//a constant initializer is written into the global. any other initializer must
-//run exactly once, the first time the declaration is reached, so a guard
-//global remembers whether it has run:
-//    %done = load i1, ptr @main.x.0.guard
-//    br i1 %done, label %static.done, label %static.init
+//a static local lives in a global, initialised once behind a guard flag
 void IRVisitor::emitStaticLocal(ast::VarDecl *decl) {
     sema::Symbol *symbol = decl->symbol;
     const sema::Type *type = symbol->type;
@@ -75,8 +69,7 @@ void IRVisitor::emitStaticLocal(ast::VarDecl *decl) {
     builder.setInsertBlock(doneBlock);
 }
 
-// ---------------------------------------------------------------------------
-// scopes and cleanups
+//  scopes and cleanups 
 
 void IRVisitor::pushScope(const ast::Stmt *owner) {
     CleanupScope scope;
@@ -97,8 +90,7 @@ void IRVisitor::emitScopeCleanups(const CleanupScope &scope, size_t keep) {
     }
 }
 
-//a jump out of scopes runs their destructors, innermost first, but does not
-//close the scopes: the code after the jump is still inside them
+//runs destructors for the scopes a jump leaves, without closing them
 void IRVisitor::emitCleanupsDownTo(size_t depth) {
     std::vector<CleanupScope> &scopes = ctx().cleanupScopes;
     for (size_t i = scopes.size(); i > depth; i--) emitScopeCleanups(scopes[i - 1], 0);
@@ -112,9 +104,7 @@ bool IRVisitor::hasActiveCleanups() const {
     return false;
 }
 
-//walks a body before it is lowered and records, for every label, the scopes
-//around it and how many objects each had been given by then. the walk mirrors
-//exactly what emitLocalVariable counts
+//records, for every label, the enclosing scopes and their object counts
 void IRVisitor::collectLabels(ast::Stmt *stmt, std::vector<CleanupScope> &chain) {
     if (stmt == nullptr) return;
 
@@ -204,8 +194,7 @@ void IRVisitor::emitJump(const JumpTarget &target) {
     builder.createBr(target.block);
 }
 
-// ---------------------------------------------------------------------------
-// statements
+//  statements 
 
 Value *IRVisitor::visitCompoundStmt(ast::CompoundStmt *node) {
     pushScope(node);
@@ -226,10 +215,6 @@ Value *IRVisitor::visitExprStmt(ast::ExprStmt *node) {
     return nullptr;
 }
 
-//            br i1 %cond, label %if.then, label %if.else
-//  if.then:  ...  br label %if.end
-//  if.else:  ...  br label %if.end
-//  if.end:
 Value *IRVisitor::visitIfStmt(ast::IfStmt *node) {
     Value *cond = emitCondition(node->cond.get());
     BasicBlock *thenBlock = builder.createBlock("if.then");
@@ -250,10 +235,7 @@ Value *IRVisitor::visitIfStmt(ast::IfStmt *node) {
     return nullptr;
 }
 
-//  while.cond: br i1 %c, label %while.body, label %while.end
-//  while.body: ... br label %while.cond
-//  continue goes to while.cond, break to while.end. an until loop swaps the
-//  targets, br i1 %c, label %until.end, label %until.body
+//continue goes to cond, break to end, until swaps the branch targets
 Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
     std::string loop = node->isUntil ? "until" : "while";
     BasicBlock *condBlock = builder.createBlock(loop + ".cond");
@@ -283,8 +265,7 @@ Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
     return nullptr;
 }
 
-//the body runs first, the condition decides whether it runs again: while it is
-//true for do-while, until it is true for do-until
+//do-while and do-until: the body runs before the condition
 Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     BasicBlock *bodyBlock = builder.createBlock("do.body");
     BasicBlock *condBlock = builder.createBlock("do.cond");
@@ -313,8 +294,7 @@ Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     return nullptr;
 }
 
-//the init declarations get a scope around the whole loop, so their objects are
-//destroyed at for.end. continue goes to for.inc, so the increment still runs
+//init declarations are scoped to the loop, continue goes to for.inc
 Value *IRVisitor::visitForStmt(ast::ForStmt *node) {
     pushScope(node);
     visit(node->init.get());
@@ -351,9 +331,7 @@ Value *IRVisitor::visitForStmt(ast::ForStmt *node) {
     return nullptr;
 }
 
-//the value is computed first and the destructors run after, so return d.age
-//reads d before d is destroyed. when there are destructors in between, the
-//value waits in a stack slot (%retval)
+//the return value is computed before destructors run, via %retval when needed
 Value *IRVisitor::visitReturnStmt(ast::ReturnStmt *node) {
     const sema::Type *returnType = ctx().returnType;
     Value *value = nullptr;
@@ -394,12 +372,7 @@ Value *IRVisitor::visitContinueStmt(ast::ContinueStmt *) {
     return nullptr;
 }
 
-//the scopes the goto is in and the scopes the label is in share a common
-//outer part. every scope of the goto beyond that part is left, so all its
-//objects are destroyed. in the shared scopes only the objects made after the
-//label's position are destroyed (a jump back before their declaration ends
-//their life). jumping into a scope past an object's construction is not
-//valid c++ and is reported
+//destroys the objects a goto leaves, jumping past a construction is an error
 Value *IRVisitor::visitGotoStmt(ast::GotoStmt *node) {
     if (node->target == nullptr) return nullptr;
     BasicBlock *target = labelBlock(node->target);
@@ -441,11 +414,7 @@ Value *IRVisitor::visitLabelStmt(ast::LabelStmt *node) {
     return nullptr;
 }
 
-//    switch i32 %v, label %sw.end [ i32 1, label %sw.case ... ]
-//each case label starts a block. the case blocks are filled while the body is
-//walked, so a case nested inside { } or inside another case still finds its
-//switch at the top of ctx().switches. a block that runs into the next case
-//label falls through with a plain br
+//switch: each case label starts a block, falling through with a plain br
 Value *IRVisitor::visitSwitchStmt(ast::SwitchStmt *node) {
     Value *cond = emitRValue(node->cond.get());
     BasicBlock *endBlock = builder.createBlock("sw.end");
@@ -457,8 +426,7 @@ Value *IRVisitor::visitSwitchStmt(ast::SwitchStmt *node) {
     JumpTarget breakTarget = { endBlock, ctx().cleanupScopes.size() };
     ctx().breakTargets.push_back(breakTarget);
 
-    //statements before the first case are never run: the block is already
-    //terminated by the switch, so the builder drops them
+    //statements before the first case are unreachable and dropped
     visit(node->body.get());
 
     ctx().breakTargets.pop_back();

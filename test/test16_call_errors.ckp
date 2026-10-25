@@ -1,0 +1,65 @@
+struct Point {
+    int x;
+};
+
+int one(int a) {
+    return a;
+}
+
+int two(int a, int b) {
+    return a + b;
+}
+
+int pick(int a) { return a; }
+int pick(double a) { return 1; }
+int pick(char *s) { return 2; }
+
+class Counter {
+public:
+    int bump(int by) { return by; }
+    static int reset() { return 0; }
+};
+
+int wantsVoid() {
+    return;
+}
+
+void givesNothing() {
+    return 1;
+}
+
+int wrongReturn() {
+    Point p;
+    return p;
+}
+
+int main() {
+    int ok = one(1) + two(1, 2);
+
+    int few = two(1);
+    int many = one(1, 2);
+
+    Point p;
+    int badArg = one(p);
+
+    int exact = pick(1) + pick(1.5);
+
+    int none = pick(p);
+
+    int plain = 5;
+    int notCallable = plain(1);
+
+    int (*fp)(int) = one;
+    int viaPtr = fp(3);
+    int (*wrongFp)(int) = two;
+
+    Counter c;
+    int viaObject = c.bump(1);
+    int noObject = bump(1);
+
+    int viaStatic = c.reset();
+
+    int unCalled = c.bump;
+
+    return ok + few + many + badArg + exact + none + notCallable + viaPtr + viaObject + noObject + viaStatic;
+}

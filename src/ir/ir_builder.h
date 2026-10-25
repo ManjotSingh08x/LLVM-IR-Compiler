@@ -14,13 +14,7 @@ struct InsertPoint {
     BasicBlock *block = nullptr;
 };
 
-//makes instructions and puts them at the insertion point. it is the only code
-//that adds instructions to blocks, so it can keep three promises:
-//  - every alloca goes to the top of the entry block (createEntryAlloca)
-//  - nothing is added after a terminator: code after return, break, continue
-//    or goto is built but discarded, see insert()
-//  - the predecessor and successor lists of the blocks always match the
-//    branches that were really written
+//makes instructions at the insertion point, allocas go to entry and nothing follows a terminator
 class IRBuilder {
 public:
     explicit IRBuilder(Module &module) : module(module) {}
@@ -33,8 +27,7 @@ public:
     Function   *getFunction() const { return function; }
     BasicBlock *getInsertBlock() const { return block; }
 
-    //true while new instructions would really be written: there is a block
-    //and it has not been terminated yet
+    //true while there is an unterminated block to write into
     bool isReachable() const { return block != nullptr && !block->isTerminated(); }
 
     BasicBlock *createBlock(const std::string &label);
@@ -72,9 +65,7 @@ public:
     void        setSwitchDefault(SwitchInst *inst, BasicBlock *target);
 
 private:
-    //adds the instruction to the current block, or, when the block is already
-    //terminated, gives it to the function to keep unwritten. either way the
-    //returned value is a real object the caller may keep using
+    //appends to the current block, or keeps the instruction unwritten when it is terminated
     Instruction *insert(Instruction *inst);
     std::string  tempName();
 

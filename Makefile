@@ -1,7 +1,6 @@
 UNAME    := $(shell uname -s)
 
-# Homebrew keeps llvm off the PATH, so llvm-config is looked up there on macOS.
-# both may be overridden: make CXX=g++-14 LLVM_CONFIG=/usr/bin/llvm-config-20
+# llvm-config is looked up in Homebrew on macOS, override with make CXX=... LLVM_CONFIG=...
 ifeq ($(UNAME),Darwin)
 LLVM_CONFIG ?= $(shell brew --prefix llvm 2>/dev/null)/bin/llvm-config
 # homebrew llvm is built against libc++, so its headers are compiled with clang

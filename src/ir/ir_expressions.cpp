@@ -16,7 +16,7 @@ bool isPointerLike(const sema::Type *type) {
 
 } // namespace
 
-// ---- lvalues and rvalues ----
+//  lvalues and rvalues 
 
 Value *IRVisitor::emitRValue(ast::Expr *expr) {
     //an object in memory: compute where it is, then read it
@@ -141,7 +141,7 @@ Value *IRVisitor::materialize(Value *value, const sema::Type *type) {
     return temp;
 }
 
-// ---- names, members and subscripts ----
+//  names, members and subscripts 
 
 Value *IRVisitor::emitDeclRefAddress(ast::DeclRefExpr *node) {
     sema::Symbol *symbol = node->symbol;
@@ -204,7 +204,7 @@ Value *IRVisitor::emitSubscriptAddress(ast::ArraySubscriptExpr *node) {
     return builder.createElementGEP(node->type, base, index);
 }
 
-// ---- operators ----
+//  operators 
 
 Value *IRVisitor::emitUnary(ast::UnaryExpr *node) {
     switch (node->op) {
@@ -467,7 +467,7 @@ Value *IRVisitor::emitConditional(ast::ConditionalExpr *node, bool wantAddress) 
     return builder.createLoad(slotType, slot);
 }
 
-// ---- implicit conversions ----
+//  implicit conversions 
 
 Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
     ast::Expr *sub = node->sub.get();

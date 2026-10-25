@@ -123,7 +123,7 @@ public:
     Value *visitDefaultStmt(ast::DefaultStmt *node);
 
 private:
-    // ---- ir_visitor.cpp: passes, functions and globals ----
+    //  ir_visitor.cpp: passes, functions and globals 
     void collectScope(sema::Scope *scope);
     void declareFunction(sema::FunctionSymbol *fn);
     void emitGlobalVariables(ast::Program *program);
@@ -139,7 +139,7 @@ private:
     Function *functionFor(const sema::FunctionSymbol *fn);
     void error(int line, int col, const std::string &message);
 
-    // ---- ir_statements.cpp: statements, locals, scopes ----
+    //  ir_statements.cpp: statements, locals, scopes 
     void emitLocalVariable(ast::VarDecl *decl);
     void emitStaticLocal(ast::VarDecl *decl);
     void pushScope(const ast::Stmt *owner);
@@ -151,7 +151,7 @@ private:
     BasicBlock *labelBlock(const ast::LabelStmt *label);
     void emitJump(const JumpTarget &target);
 
-    // ---- ir_expressions.cpp: expressions ----
+    //  ir_expressions.cpp: expressions 
     Value *emitLValue(ast::Expr *expr);
     Value *emitRValue(ast::Expr *expr);
     Value *emitCondition(ast::Expr *expr);
@@ -176,7 +176,7 @@ private:
     Value *emitArithmeticConversion(Value *value, const sema::Type *from, const sema::Type *to);
     Value *sizeOf(const sema::Type *type, Value *count);
 
-    // ---- ir_calls.cpp: calls and lambdas ----
+    //  ir_calls.cpp: calls and lambdas 
     Value *emitCall(ast::CallExpr *node);
     Value *emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn);
     std::vector<Value *> emitArguments(const sema::FunctionType *signature, ast::NodeList<ast::Expr> &args);
@@ -184,7 +184,7 @@ private:
     void      emitLambdaBody(ast::LambdaExpr *lambda);
     void      emitLambdaInto(Value *address, ast::LambdaExpr *lambda);
 
-    // ---- ir_objects.cpp: objects ----
+    //  ir_objects.cpp: objects 
     void   emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl);
     void   emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr);
     void   emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list);

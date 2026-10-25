@@ -43,7 +43,7 @@ FoldedNumber makeFloat(double value, const sema::Type *type) {
 
 } // namespace
 
-// ---- whole declarations and values ----
+//whole declarations and values
 
 Constant *ConstantFolder::foldVariable(ast::VarDecl *decl, const sema::Type *type) {
     //a constructor, or a member that needs one, always runs as code
@@ -206,7 +206,7 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
     return module.getAddress(global);
 }
 
-// ---- numbers ----
+// numbers 
 
 bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
     switch (expr->getKind()) {

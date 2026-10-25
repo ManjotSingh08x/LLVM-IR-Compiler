@@ -43,7 +43,7 @@ protected:
     BasicBlock  *parent = nullptr;
 };
 
-// ---- return ----
+// return 
 
 //ret void, or ret <type> <value>
 class ReturnInst : public Instruction {
@@ -59,7 +59,7 @@ public:
     Value            *returnValue;  //null for ret void
 };
 
-// ---- branches ----
+//branches
 
 //br label %target, or br i1 %cond, label %target, label %falseTarget
 class BranchInst : public Instruction {
@@ -104,7 +104,7 @@ public:
     void dump(std::ostream &out) const override { out << "  unreachable\n"; }
 };
 
-// ---- memory ----
+//  memory 
 
 class MemoryInst : public Instruction {
 public:
@@ -163,7 +163,7 @@ public:
     bool                 inBounds;
 };
 
-// ---- calls ----
+//  calls 
 
 //%t2 = call i32 @f(i32 1), variadic callees are written with their full type
 class CallInst : public Instruction {
@@ -180,7 +180,7 @@ public:
     std::vector<Value *>      args;
 };
 
-// ---- expressions ----
+//  expressions 
 
 class ExprInst : public Instruction {
 public:

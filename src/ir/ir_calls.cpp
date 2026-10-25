@@ -13,7 +13,7 @@ ast::Expr *withoutParens(ast::Expr *expr) {
 
 } // namespace
 
-// ---- calls ----
+//  calls 
 
 //callee order: named function, lambda, function lvalue, function pointer
 Value *IRVisitor::emitCall(ast::CallExpr *node) {
@@ -86,7 +86,7 @@ std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signatur
     return values;
 }
 
-// ---- lambdas: a closure struct of captures plus a function taking it ----
+//  lambdas: a closure struct of captures plus a function taking it 
 
 Function *IRVisitor::lambdaFunction(ast::LambdaExpr *lambda) {
     std::string name = lambdaFunctionName(lambda);

@@ -4,7 +4,7 @@
 
 namespace ir {
 
-// ---- local variables ----
+//  local variables 
 
 void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
     sema::Symbol *symbol = decl->symbol;
@@ -69,7 +69,7 @@ void IRVisitor::emitStaticLocal(ast::VarDecl *decl) {
     builder.setInsertBlock(doneBlock);
 }
 
-// ---- scopes and cleanups ----
+//  scopes and cleanups 
 
 void IRVisitor::pushScope(const ast::Stmt *owner) {
     CleanupScope scope;
@@ -194,7 +194,7 @@ void IRVisitor::emitJump(const JumpTarget &target) {
     builder.createBr(target.block);
 }
 
-// ---- statements ----
+//  statements 
 
 Value *IRVisitor::visitCompoundStmt(ast::CompoundStmt *node) {
     pushScope(node);

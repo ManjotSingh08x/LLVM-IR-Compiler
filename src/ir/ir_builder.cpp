@@ -40,7 +40,7 @@ Instruction *IRBuilder::insert(Instruction *inst) {
     return inst;
 }
 
-// ---- memory ----
+//  memory 
 
 //allocas go at the top of entry so they run once per call and dominate every use
 AllocaInst *IRBuilder::createEntryAlloca(const sema::Type *type, const std::string &baseName) {
@@ -75,7 +75,7 @@ Value *IRBuilder::createElementGEP(const sema::Type *elementType, Value *base, V
     return createGEP(elementType, base, indices);
 }
 
-// ---- values ----
+//  values 
 
 Value *IRBuilder::createBinary(BinaryOpKind op, const sema::Type *operandType, Value *lhs, Value *rhs) {
     const sema::Type *resultType = isCompare(op) ? sema::boolType() : operandType;
@@ -108,7 +108,7 @@ Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *calleeType
     return insert(new CallInst(callee, calleeType, args, name));
 }
 
-// ---- terminators, edges are recorded only for branches really written ----
+//  terminators, edges are recorded only for branches really written 
 
 void IRBuilder::createRet(const sema::Type *returnType, Value *value) {
     insert(new ReturnInst(returnType, value));

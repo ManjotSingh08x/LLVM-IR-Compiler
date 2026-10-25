@@ -27,7 +27,7 @@ ast::Expr *referenceSource(ast::VarDecl *decl) {
 
 } // namespace
 
-// ---- initialization ----
+//  initialization 
 
 //gives the object at address its initial value
 void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl) {
@@ -160,7 +160,7 @@ void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *re
     ctx().thisRecord = savedRecord;
 }
 
-// ---- construction ----
+//  construction 
 
 //default-constructs an object with no initializer, element-wise for arrays
 void IRVisitor::emitDefaultConstruct(Value *address, const sema::Type *type, const sema::FunctionSymbol *chosen) {
@@ -212,7 +212,7 @@ void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value
     for (const sema::Symbol *field : record->fields) emitFieldDefaultInit(thisPtr, record, field);
 }
 
-// ---- destruction ----
+//  destruction 
 
 //the end of every destructor: fields in reverse order, then bases in reverse
 void IRVisitor::emitMemberDestruction(const sema::RecordSymbol *record, Value *thisPtr) {
@@ -263,7 +263,7 @@ Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isC
     return fn;
 }
 
-// ---- array element loops, destruction runs backwards ----
+//  array element loops, destruction runs backwards 
 
 void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Value *begin, Value *end,
                                 ElementAction action, const sema::FunctionSymbol *ctor) {
@@ -314,7 +314,7 @@ void IRVisitor::emitElementAction(Value *element, const sema::Type *elementType,
     }
 }
 
-// ---- fields and base classes ----
+//  fields and base classes 
 
 //the address of a field, moved into the base subobject when inherited
 Value *IRVisitor::fieldAddress(Value *object, const sema::RecordSymbol *objectRecord, const sema::Symbol *field) {
@@ -346,7 +346,7 @@ Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, c
     return builder.createSelect(isNull, module.getNull(module.pointerType()), result, module.pointerType());
 }
 
-// ---- new and delete ----
+//  new and delete 
 
 Value *IRVisitor::callMalloc(Value *bytes) {
     Function *fn = module.getRuntimeMalloc();

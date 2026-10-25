@@ -22,7 +22,7 @@ void IRVisitor::generate(ast::Program *program) {
     emitSynthesizedStructors();
 }
 
-// ---- pass 1 ----
+//  pass 1 
 
 void IRVisitor::collectScope(sema::Scope *scope) {
     for (const std::unique_ptr<sema::Symbol> &symbol : scope->symbols) {
@@ -69,7 +69,7 @@ Function *IRVisitor::functionFor(const sema::FunctionSymbol *fn) {
     return function;
 }
 
-// ---- pass 2 ----
+//  pass 2 
 
 void IRVisitor::emitGlobalVariables(ast::Program *program) {
     for (const std::unique_ptr<ast::Decl> &decl : program->decls) {
@@ -135,7 +135,7 @@ void IRVisitor::emitGlobalInitializers() {
     finishFunction();
 }
 
-// ---- pass 3 ----
+//  pass 3 
 
 //only the defining declaration gets a body, in-class methods are found via the record
 void IRVisitor::emitDefinitions(ast::Decl *decl) {
@@ -200,7 +200,7 @@ void IRVisitor::emitSynthesizedStructors() {
     }
 }
 
-// ---- function bodies ----
+//  function bodies 
 
 void IRVisitor::startFunction(Function *fn, const sema::Type *returnType) {
     contexts.push_back(std::unique_ptr<FunctionContext>(new FunctionContext()));

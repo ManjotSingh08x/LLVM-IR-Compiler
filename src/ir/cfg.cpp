@@ -4,7 +4,7 @@
 
 namespace ir {
 
-// ---- BasicBlock ----
+//BasicBlock
 
 void BasicBlock::append(std::unique_ptr<Instruction> inst) {
     inst->setParent(this);
@@ -41,7 +41,7 @@ void BasicBlock::dump(std::ostream &out) const {
     for (const std::unique_ptr<Instruction> &inst : instructions) inst->dump(out);
 }
 
-// ---- Function ----
+//Function
 
 Argument *Function::addArgument(const sema::Type *type, const std::string &baseName) {
     Argument *arg = new Argument(type, uniqueName(baseName), this, args.size());
@@ -163,7 +163,7 @@ void Function::dump(std::ostream &out) const {
     out << "}\n";
 }
 
-// ---- Module ----
+//Module
 
 const sema::Type *Module::pointerType() {
     if (genericPointer == nullptr) genericPointer = symTab.pointerTo(sema::voidType());

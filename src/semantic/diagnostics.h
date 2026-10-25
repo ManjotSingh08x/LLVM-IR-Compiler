@@ -8,8 +8,7 @@
 
 namespace sema {
 
-//the errors found by the semantic passes, printed in the same form as the
-//parser's syntax errors
+//semantic errors, printed in the parser's syntax error format
 class Diagnostics {
 public:
     void error(int line, int col, const std::string &message) {

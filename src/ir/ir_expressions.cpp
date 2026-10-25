@@ -4,12 +4,7 @@
 
 #include "semantic/constants.h"
 
-//expressions. every expression is lowered in one of two ways:
-//  emitLValue: the address of the object it names (a ptr), for x in x = 1
-//  emitRValue: its value, for x in y = x. for an lvalue that is a load from
-//              the address emitLValue gives
-//the type checker marks each expression with isLValue and its type, and has
-//already wrapped every implicit conversion in an ImplicitCastExpr
+//expressions lower via emitLValue (the address) or emitRValue (the value)
 
 namespace ir {
 
@@ -21,8 +16,7 @@ bool isPointerLike(const sema::Type *type) {
 
 } // namespace
 
-// ---------------------------------------------------------------------------
-// the two ways to lower an expression
+// ---- lvalues and rvalues ----
 
 Value *IRVisitor::emitRValue(ast::Expr *expr) {
     //an object in memory: compute where it is, then read it
@@ -123,8 +117,7 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
     return materialize(emitRValue(expr), expr->type);
 }
 
-//a bool for a branch. the type checker already turned every condition into a
-//bool with a ToBool cast, so this is the value itself
+//a bool for a branch, conditions already carry a ToBool cast
 Value *IRVisitor::emitCondition(ast::Expr *expr) { return emitRValue(expr); }
 
 //an expression statement: computed for its side effects. an lvalue is not read
@@ -141,17 +134,14 @@ Value *IRVisitor::emitAddressOf(ast::Expr *expr) {
     return materialize(emitRValue(expr), expr->type);
 }
 
-//stores a value into a new stack slot and gives the slot's address. used for
-//an object that only exists as a value, such as a record returned by a call,
-//when a member of it or a method on it needs its address
+//spills a value to a new stack slot and returns its address
 Value *IRVisitor::materialize(Value *value, const sema::Type *type) {
     AllocaInst *temp = builder.createEntryAlloca(type, "tmp");
     builder.createStore(type, value, temp);
     return temp;
 }
 
-// ---------------------------------------------------------------------------
-// names, members and subscripts
+// ---- names, members and subscripts ----
 
 Value *IRVisitor::emitDeclRefAddress(ast::DeclRefExpr *node) {
     sema::Symbol *symbol = node->symbol;
@@ -169,8 +159,7 @@ Value *IRVisitor::emitDeclRefAddress(ast::DeclRefExpr *node) {
     }
 }
 
-//the address of the object a variable names. for a reference the slot holds
-//that address, so it is loaded: int &r = x; r = 5 stores through load(%r)
+//the address a variable names, loaded through the slot for references
 Value *IRVisitor::variableAddress(const sema::Symbol *symbol) {
     VariableBinding binding;
     std::map<const sema::Symbol *, VariableBinding>::iterator local = ctx().locals.find(symbol);
@@ -188,8 +177,7 @@ Value *IRVisitor::variableAddress(const sema::Symbol *symbol) {
     return binding.slot;
 }
 
-//s.f or p->f: the address of the object, moved to the base class that declares
-//the field when it is inherited, then the field inside it
+//s.f or p->f: the object's address, moved to the declaring base, then the field
 Value *IRVisitor::emitMemberAddress(ast::MemberExpr *node) {
     sema::Symbol *member = node->symbol;
     if (member->kind == sema::SymbolKind::Variable) {
@@ -209,17 +197,14 @@ Value *IRVisitor::emitMemberAddress(ast::MemberExpr *node) {
     return fieldAddress(object, record, member);
 }
 
-//a[i]: the base was already turned into a pointer to the first element, so this
-//is getelementptr <element>, ptr %a, i32 %i. a two dimensional grid[r][c] is two
-//of these, with the inner row turned into a pointer by an ArrayToPointer cast
+//a[i]: getelementptr on the decayed base pointer
 Value *IRVisitor::emitSubscriptAddress(ast::ArraySubscriptExpr *node) {
     Value *base = emitRValue(node->base.get());
     Value *index = emitRValue(node->index.get());
     return builder.createElementGEP(node->type, base, index);
 }
 
-// ---------------------------------------------------------------------------
-// operators
+// ---- operators ----
 
 Value *IRVisitor::emitUnary(ast::UnaryExpr *node) {
     switch (node->op) {
@@ -251,9 +236,7 @@ Value *IRVisitor::emitUnary(ast::UnaryExpr *node) {
     return emitLValue(node);
 }
 
-//++x, x++, --x, x--: read, add or subtract one, write back. a pointer moves by
-//one element. x++ gives the old value, ++x names x itself. the operand is
-//evaluated once, so ++a[i++] moves i only once
+//++x, x++, --x, x--, the operand is evaluated once
 IncDecResult IRVisitor::emitIncDec(ast::UnaryExpr *node) {
     ast::Expr *operand = node->operand.get();
     const sema::Type *type = operand->type;
@@ -327,8 +310,7 @@ Value *IRVisitor::emitArithmetic(ast::BinaryOp op, const sema::Type *type, Value
     return builder.createBinary(kind, type, lhs, rhs);
 }
 
-//integers compare signed, floats with the ordered predicates (false when a side
-//is NaN) except != which is true for NaN, pointers as unsigned addresses
+//signed integer, ordered float (except !=) and unsigned pointer compares
 Value *IRVisitor::emitCompare(ast::BinaryOp op, const sema::Type *operandType, Value *lhs, Value *rhs) {
     BinaryOpKind kind = BinaryOpKind::ICmpEQ;
     if (isPointerLike(operandType)) {
@@ -364,8 +346,7 @@ Value *IRVisitor::emitCompare(ast::BinaryOp op, const sema::Type *operandType, V
     return builder.createBinary(kind, operandType, lhs, rhs);
 }
 
-//p + n and n + p move p by n elements: getelementptr inbounds <pointee>, ptr %p,
-//i32 %n. p - n moves by -n
+//p + n, n + p and p - n move p by n elements
 Value *IRVisitor::emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value *rhs) {
     bool pointerOnLeft = sema::asPointer(node->lhs->type) != nullptr;
     Value *pointer = pointerOnLeft ? lhs : rhs;
@@ -376,8 +357,7 @@ Value *IRVisitor::emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value
     return builder.createElementGEP(sema::asPointer(node->type)->pointee, pointer, count);
 }
 
-//q - p counts the elements between two pointers: the byte distance divided by
-//the element size. the division is exact because both point into one array
+//q - p: byte distance divided exactly by the element size
 Value *IRVisitor::emitPointerDifference(ast::BinaryExpr *node, Value *lhs, Value *rhs) {
     const sema::Type *element = sema::asPointer(node->lhs->type)->pointee;
     Value *left = builder.createCast(CastOpKind::PtrToInt, lhs, module.pointerType(), int64Type());
@@ -387,11 +367,7 @@ Value *IRVisitor::emitPointerDifference(ast::BinaryExpr *node, Value *lhs, Value
     return builder.createCast(CastOpKind::Trunc, count, int64Type(), sema::intType());
 }
 
-//a && b must not evaluate b when a is false (p != null && p->x > 0). the
-//result goes through a stack slot instead of a phi node:
-//           br i1 %a, label %land.rhs, label %land.short
-//  land.short: store i1 false, ptr %slot     land.rhs: store i1 %b, ptr %slot
-//  land.end:   %r = load i1, ptr %slot
+//short-circuit logic through a stack slot instead of a phi
 Value *IRVisitor::emitShortCircuit(ast::BinaryExpr *node) {
     bool isAnd = node->op == ast::BinaryOp::LogicalAnd;
     AllocaInst *slot = builder.createEntryAlloca(sema::boolType(), isAnd ? "and.result" : "or.result");
@@ -418,10 +394,7 @@ Value *IRVisitor::emitShortCircuit(ast::BinaryExpr *node) {
     return builder.createLoad(sema::boolType(), slot);
 }
 
-//x = v stores v and gives x. x op= v reads x once, combines it with v in their
-//common type (the type checker converted v to it) and converts the result back
-//to the type of x before the store. the value is computed before the address,
-//as c++17 orders assignments
+//x = v and x op= v, the value is computed before the address
 Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
     ast::Expr *target = node->target.get();
     const sema::Type *targetType = target->type;
@@ -464,10 +437,7 @@ Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
     return address;
 }
 
-//c ? a : b with branches. as a value it goes through a stack slot like &&.
-//when both arms are lvalues of one type the whole expression is an lvalue
-//((a > b) ? a : b) = 0 and the slot holds the address of the chosen arm.
-//select is never used: it would evaluate both arms
+//c ? a : b with branches, an lvalue when both arms are lvalues of one type
 Value *IRVisitor::emitConditional(ast::ConditionalExpr *node, bool wantAddress) {
     const sema::Type *slotType = wantAddress ? module.pointerType() : node->type;
     bool hasValue = wantAddress || !node->type->is(sema::TypeKind::Void);
@@ -497,8 +467,7 @@ Value *IRVisitor::emitConditional(ast::ConditionalExpr *node, bool wantAddress) 
     return builder.createLoad(slotType, slot);
 }
 
-// ---------------------------------------------------------------------------
-// implicit conversions, one CastKind at a time
+// ---- implicit conversions ----
 
 Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
     ast::Expr *sub = node->sub.get();
@@ -516,8 +485,7 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
         }
         return emitArithmeticConversion(emitRValue(sub), sub->type, node->type);
 
-    //the address of the array is the address of its first element. the gep
-    //with two zero indices says so in the types: from [N x T] to its first T
+    //an array decays to its first element: gep with two zero indices
     case ast::CastKind::ArrayToPointer: {
         Value *array = emitAddressOf(sub);
         std::vector<Value *> indices;
@@ -582,10 +550,7 @@ Value *IRVisitor::emitArithmeticConversion(Value *value, const sema::Type *from,
     return builder.createCast(op, value, from, to);
 }
 
-//the size of count objects of a type, in bytes, without knowing the target:
-//the address of element count of an array that starts at address 0
-//    %end = getelementptr %T, ptr null, i64 %count
-//    %bytes = ptrtoint ptr %end to i64
+//count * sizeof(type) in bytes, via getelementptr from null and ptrtoint
 Value *IRVisitor::sizeOf(const sema::Type *type, Value *count) {
     std::vector<Value *> indices;
     indices.push_back(count);

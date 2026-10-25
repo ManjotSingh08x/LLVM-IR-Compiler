@@ -191,8 +191,7 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
         return result;
     }
 
-    //arrays and functions are used through a pointer. this counts as an exact
-    //match, as it does in C++
+    //array and function decay count as an exact match
     const Type *value = from;
     if (from->is(TypeKind::Array)) {
         value = decay(from, table);
@@ -357,8 +356,7 @@ std::string mangleType(const Type *type) {
         return out + "E";
     }
     case TypeKind::Record: {
-        //a nested record is wrapped in N..E so that its parts cannot be read as
-        //separate parameters
+        //a nested record is wrapped in N..E so its parts are not read as parameters
         const RecordSymbol *record = asRecord(type);
         if (record->outer) return "N" + recordPath(record) + "E";
         return lengthPrefixed(record->name);
@@ -427,8 +425,7 @@ std::string toLLVMType(const Type *type) {
         out += ")";
         return out;
     }
-    //a record used inside another type is named, its layout is written once by
-    //toLLVMRecord. writing the layout here gave [4 x %struct.Point = type {...}]
+    //a record inside another type is named, its layout is written by toLLVMRecord
     case TypeKind::Record: {
         const RecordSymbol *rec = asRecord(type);
         return "%" + std::string(rec->isClass ? "class." : "struct.") + rec->mangledName;

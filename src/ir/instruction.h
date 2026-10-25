@@ -20,8 +20,7 @@ enum class InstCategory {
     Expression   //arithmetic, compares, casts, select: pure register values
 };
 
-//one instruction inside a basic block. when it produces a value, the value is
-//the instruction itself and is written %name
+//one instruction in a basic block, a value-producing instruction is its own %name
 class Instruction : public Value {
 public:
     Instruction(InstCategory category, const sema::Type *type, const std::string &name)
@@ -44,8 +43,7 @@ protected:
     BasicBlock  *parent = nullptr;
 };
 
-// ---------------------------------------------------------------------------
-// 1. return
+// ---- return ----
 
 //ret void, or ret <type> <value>
 class ReturnInst : public Instruction {
@@ -61,8 +59,7 @@ public:
     Value            *returnValue;  //null for ret void
 };
 
-// ---------------------------------------------------------------------------
-// 2. branches
+// ---- branches ----
 
 //br label %target, or br i1 %cond, label %target, label %falseTarget
 class BranchInst : public Instruction {
@@ -107,9 +104,7 @@ public:
     void dump(std::ostream &out) const override { out << "  unreachable\n"; }
 };
 
-// ---------------------------------------------------------------------------
-// 3. memory. pointers are the opaque ptr in llvm, so every memory instruction
-//    also names the type it allocates, reads, writes or indexes: the accessType
+// ---- memory ----
 
 class MemoryInst : public Instruction {
 public:
@@ -154,8 +149,7 @@ public:
     Value *address;
 };
 
-//%t1 = getelementptr inbounds [3 x i32], ptr %grid, i32 0, i32 %i
-//the access type is the type the first index steps over
+//getelementptr, accessType is the type the first index steps over
 class GEPInst : public MemoryInst {
 public:
     GEPInst(const sema::Type *sourceType, const sema::Type *pointerType, Value *base,
@@ -169,11 +163,9 @@ public:
     bool                 inBounds;
 };
 
-// ---------------------------------------------------------------------------
-// 4. calls
+// ---- calls ----
 
-//%t2 = call i32 @f(i32 1), call void @g(), or for a variadic callee
-//%t3 = call i32 (ptr, ...) @printf(ptr @.str, i32 1)
+//%t2 = call i32 @f(i32 1), variadic callees are written with their full type
 class CallInst : public Instruction {
 public:
     CallInst(Value *callee, const sema::FunctionType *calleeType, const std::vector<Value *> &args,
@@ -188,8 +180,7 @@ public:
     std::vector<Value *>      args;
 };
 
-// ---------------------------------------------------------------------------
-// 5. expressions: values computed from other values, no memory or control flow
+// ---- expressions ----
 
 class ExprInst : public Instruction {
 public:
@@ -207,8 +198,7 @@ enum class BinaryOpKind {
 
 bool isCompare(BinaryOpKind op);
 
-//%t3 = add i32 %t1, %t2 or %t4 = icmp slt i32 %t1, 0. operandType is the type of
-//both operands, the result is the same type, or bool for a compare
+//binary op or compare, operandType is the type of both operands
 class BinaryInst : public ExprInst {
 public:
     BinaryInst(BinaryOpKind op, const sema::Type *operandType, Value *lhs, Value *rhs,
@@ -260,9 +250,7 @@ public:
     const sema::Type *toType;
 };
 
-//%t5 = select i1 %isnull, ptr null, ptr %t4. only used to keep a null pointer
-//null when it is converted to a base class, never for ?: (which must not
-//evaluate both sides)
+//select, only to keep a null pointer null across a base class conversion
 class SelectInst : public ExprInst {
 public:
     SelectInst(Value *condition, Value *ifTrue, Value *ifFalse, const sema::Type *type, const std::string &name)

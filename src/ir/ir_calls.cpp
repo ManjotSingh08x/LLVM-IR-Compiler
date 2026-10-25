@@ -13,15 +13,9 @@ ast::Expr *withoutParens(ast::Expr *expr) {
 
 } // namespace
 
-// ---------------------------------------------------------------------------
-// calls
+// ---- calls ----
 
-//the callee is decided in this order:
-//  1. a function named directly (CallExpr::function): call @mangled, with this
-//     in front for a method
-//  2. a lambda: call @__lambda_L_C with the closure's address in front
-//  3. a function lvalue, as in (*fp)(2, 3): its address is the callee
-//  4. a function pointer: its value is the callee, call i32 %fp(...)
+//callee order: named function, lambda, function lvalue, function pointer
 Value *IRVisitor::emitCall(ast::CallExpr *node) {
     if (node->function) return emitDirectCall(node, node->function);
 
@@ -48,10 +42,7 @@ Value *IRVisitor::emitCall(ast::CallExpr *node) {
     return builder.createCall(target, signature, emitArguments(signature, node->args));
 }
 
-//a method is a global function that takes the object as its first argument.
-//the object may be of a class derived from the one the method belongs to, so
-//its address is moved to that base first: d.setAge(5) on a Dog passes the
-//address of the Animal inside d
+//a method takes the object, converted to the method's class, as its first argument
 Value *IRVisitor::emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn) {
     std::vector<Value *> args;
     ast::Expr *callee = withoutParens(node->callee.get());
@@ -75,8 +66,7 @@ Value *IRVisitor::emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn) 
         }
         args.push_back(adjustToBase(object, record, fn->parentRecord, false));
     } else if (callee->getKind() == ast::ASTKind::MemberExpr) {
-        //a static method called through an object: no this, but the object
-        //expression is still evaluated
+        //a static method through an object: no this, but the object is still evaluated
         emitIgnored(static_cast<ast::MemberExpr *>(callee)->base.get());
     }
 
@@ -86,9 +76,7 @@ Value *IRVisitor::emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn) 
     return builder.createCall(function, function->fnType, args);
 }
 
-//an argument for a reference parameter is the address of the object, which the
-//type checker marks only by isLValue, not with a cast. extra arguments of
-//printf and scanf were already promoted (float to double, char and bool to int)
+//a reference argument passes the address of the object
 std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signature, ast::NodeList<ast::Expr> &args) {
     std::vector<Value *> values;
     for (size_t i = 0; i < args.size(); i++) {
@@ -98,14 +86,7 @@ std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signatur
     return values;
 }
 
-// ---------------------------------------------------------------------------
-// lambdas
-//
-//  auto mixed = [squares, &trace](int v) { return v + squares + trace; };
-//
-//becomes a struct holding the captures and a function taking that struct:
-//  %closure.L.C = type { i32, ptr }      squares by copy, trace by address
-//  define internal i32 @__lambda_L_C(ptr %__closure, i32 %v)
+// ---- lambdas: a closure struct of captures plus a function taking it ----
 
 Function *IRVisitor::lambdaFunction(ast::LambdaExpr *lambda) {
     std::string name = lambdaFunctionName(lambda);
@@ -119,9 +100,7 @@ Function *IRVisitor::lambdaFunction(ast::LambdaExpr *lambda) {
     return module.createFunction(name, symTab.functionType(signature->returnType, params, false), Linkage::Internal);
 }
 
-//the body is lowered as a function of its own, in the middle of the function
-//that contains the lambda. the insertion point and the whole FunctionContext
-//are put aside and restored afterwards
+//the lambda body is lowered as its own function, saving and restoring the current context
 void IRVisitor::emitLambdaBody(ast::LambdaExpr *lambda) {
     if (emittedLambdas.count(lambda)) return;
     emittedLambdas.insert(lambda);
@@ -136,8 +115,7 @@ void IRVisitor::emitLambdaBody(ast::LambdaExpr *lambda) {
     startFunction(fn, signature->returnType);
     ctx().thisRecord = outerRecord;
 
-    //each capture is a field of the closure. a copy is used in place; a
-    //by-reference capture holds the variable's address, like a reference does
+    //each capture is a closure field, by-reference captures hold the address
     Argument *closure = fn->addArgument(module.pointerType(), "__closure");
     for (size_t i = 0; i < lambda->usedCaptures.size(); i++) {
         const ast::LambdaCapture &capture = lambda->usedCaptures[i];
@@ -161,8 +139,7 @@ void IRVisitor::emitLambdaBody(ast::LambdaExpr *lambda) {
     builder.restoreInsertPoint(saved);
 }
 
-//fills a closure object: each field gets the captured value, the captured
-//variable's address, or this
+//fills a closure with captured values, addresses, or this
 void IRVisitor::emitLambdaInto(Value *address, ast::LambdaExpr *lambda) {
     emitLambdaBody(lambda);
 

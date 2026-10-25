@@ -8,9 +8,7 @@
 
 namespace ast {
 
-//debugging visitor: prints one line per node, indented by depth, as
-//  role: KindName attributes <line:col>
-//the role says which child of the parent the node is, when that is not obvious
+//debugging visitor: one line per node, indented by depth, as role: Kind attrs <line:col>
 class ASTPrinter : public ASTVisitor<ASTPrinter> {
 public:
     explicit ASTPrinter(std::ostream &out) : out(out) {}
@@ -71,8 +69,7 @@ private:
     //writes the line for a node, attrs may be empty
     void line(const ASTNode &node, const std::string &attrs);
 
-    //visits a child one level deeper, labelled with its role. a null child
-    //prints nothing
+    //visits a child one level deeper, labelled with its role
     void child(const char *role, ASTNode *node);
 
     template <class T>

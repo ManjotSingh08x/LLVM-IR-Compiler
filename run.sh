@@ -61,8 +61,7 @@ for f in "${files[@]}"; do
     base="$(basename "$f" .ckp)"
     dir="$OUT_DIR/$base"
 
-    # a fresh folder per test, so a .ll left by an earlier run cannot be mistaken
-    # for one this run produced
+    # a fresh folder per test, so a stale .ll cannot pass
     rm -rf "$dir"
     mkdir -p "$dir"
     cp "$f" "$dir/$base.ckp"
@@ -95,8 +94,7 @@ for f in "${files[@]}"; do
         continue
     fi
 
-    # -c with the verifier on: -fsyntax-only cannot read IR at all, and release
-    # builds of clang skip the verifier unless asked for it
+    # -c with the verifier on, release clang skips it otherwise
     if ! "$CLANG" -x ir -c -fverify-intermediate-code -Wno-override-module "$ll" -o /dev/null \
             > "$dir/$base.verify.txt" 2>&1; then
         irInvalid=$((irInvalid + 1))

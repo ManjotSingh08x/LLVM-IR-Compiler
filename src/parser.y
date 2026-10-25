@@ -45,8 +45,7 @@ void        setDeclType(int index, const std::string &type);
 void        replaceDeclType(int index, const std::string &type);
 std::string lexemeAt(int index);
 
-//the names in a declaration are read before the parser reaches the end of the
-//declaration, they are kept here until the type name can be recorded for them
+//names in a declaration, held until the type name is known
 static std::vector<int> g_pendingNames;
 
 static void pendName(int index) {
@@ -68,8 +67,7 @@ static std::string typeNameAt(int index) {
     return name;
 }
 
-//ast construction helpers. the parser stack holds raw pointers, a node takes
-//ownership of its children when it is built from them
+//ast construction helpers, nodes take ownership of their children
 
 //line and column of a location, as the last two constructor arguments
 #define LOC(at) (at).first_line, (at).first_column
@@ -135,12 +133,9 @@ static ast::QualifiedName memberName(int classTok, const std::string &member, in
     return name;
 }
 
-//declarator types. a declarator builds the part of the type it writes with a
-//hole, a null inner, where the type name goes. the pieces are put together
-//from the outside in, so for *p[3] the array is outside the pointer
+//declarator types: built outside in, with a null inner as the hole for the type name
 
-//puts piece into the hole of chain. piece may have a hole of its own, which
-//becomes the hole of the result
+//puts piece into the hole of chain
 static std::unique_ptr<ast::TypeSpec> plug(std::unique_ptr<ast::TypeSpec> chain,
                                            std::unique_ptr<ast::TypeSpec> piece) {
     if (!chain) return piece;
@@ -163,8 +158,7 @@ static std::unique_ptr<ast::TypeSpec> pointers(int count, int line, int col) {
     return chain;
 }
 
-//one array per dimension, the first dimension outermost: [2][3] gives
-//Array [2] -> Array [3] -> (hole)
+//one array per dimension, first outermost: [2][3] is Array [2] -> Array [3]
 static std::unique_ptr<ast::TypeSpec> arrays(NodeList<ast::Expr> *dims, int line, int col) {
     std::unique_ptr<ast::TypeSpec> chain;
     NodeList<ast::Expr> sizes = take(dims);
@@ -212,8 +206,7 @@ static Declarator *referenceDeclarator(ast::QualifiedName *name, int line, int c
                           init);
 }
 
-//pointers written before a parenthesised declarator, int **(*p)[10], belong to
-//the type inside it
+//pointers before a parenthesised declarator belong to the type inside it
 static Declarator *addPointers(Declarator *declarator, int stars) {
     declarator->type = plug(std::move(declarator->type),
                             pointers(stars, declarator->line, declarator->col));
@@ -268,8 +261,7 @@ static void markStatic(NodeList<ast::Decl> *decls) {
     }
 }
 
-//a typedef is read as a declaration, then each VarDecl it gave becomes a
-//TypedefDecl. it names a type, so it cannot be initialised or qualified
+//a typedef is parsed as a declaration and each VarDecl becomes a TypedefDecl
 static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
     NodeList<ast::Decl> *typedefs = new NodeList<ast::Decl>();
     for (size_t i = 0; i < decls->size(); i++) {
@@ -479,8 +471,7 @@ class_definition
                                                                                  take($5), LOC(@1)); }
     ;
 
-//the access specifier is optional, as it is in C++, and more than one base may
-//be listed
+//the access specifier is optional and several bases may be listed
 inheritance_opt
     : /* empty */                     { $$ = new std::vector<ast::BaseSpecifier>(); }
     | TOK_COLON base_list             { $$ = $2; }
@@ -664,9 +655,7 @@ declaration
     | parenthesized_declarator TOK_SEMI               { $$ = $1; }
     ;
 
-//a parenthesised declarator after a type name. a class type is accepted
-//directly only with pointers in front, Dog *(*p)[3], or as struct Dog (*p)[3]:
-//inside a class, Dog ( would read as the start of a constructor
+//a parenthesised declarator after a type name, a class type needs pointers or struct first
 parenthesized_declarator
     : simple_type paren_suffix                        { applyPendingType(typeNameAt($1->tokIndex));
                                                         $$ = makeVarDecls($1, single($2)); }
@@ -677,15 +666,13 @@ parenthesized_declarator
                                                         $$ = makeVarDecls($1, single(addPointers($3, $2))); }
     ;
 
-//typedef takes any declarator a declaration does, typedef int *IntPtr, Row[3]
-//or typedef int (*BinaryOp)(int, int)
+//typedef takes any declarator: typedef int *IntPtr, Row[3]
 typedef_declaration
     : TOK_TYPEDEF declaration                         { $$ = makeTypedefs($2); }
     | TOK_TYPEDEF named_parenthesized_declaration     { $$ = makeTypedefs($2); }
     ;
 
-//at file scope, where there are no constructors, a class type may be followed
-//directly by the parenthesised declarator
+//at file scope a class type may be followed directly by a parenthesised declarator
 named_parenthesized_declaration
     : TOK_IDENTIFIER paren_suffix TOK_SEMI            { applyPendingType(typeNameAt($1));
                                                         $$ = makeVarDecls(typeSpec(ast::TypeSpecKind::Named, $1, LOC(@1)),
@@ -780,9 +767,7 @@ local_declaration
                                       { $$ = new ast::DeclStmt(take(makeTypedefs($2)), LOC(@1)); }
     ;
 
-//a block may also hold expressions, so a class type is never followed by a
-//parenthesised declarator here: Dog (*p)[3] has the shape of a call. struct
-//Dog (*p)[3] is used instead
+//in a block a class type is never followed by a parenthesised declarator, use struct Dog (*p)[3]
 local_declaration_body
     : simple_type init_declarator_list                { applyPendingType(typeNameAt($1->tokIndex));
                                                         $$ = makeVarDecls($1, $2); }
@@ -808,10 +793,7 @@ named_type_declarator_list
                                                       { $$ = append($1, $3); }
     ;
 
-//the parenthesised form is offered only here, in the declarator used for local
-//declarations of a named type. a function cannot be declared inside a block, so
-//Dog d(3) is unambiguous there. at file scope the same shape would collide with
-//a function declaration, which is the most vexing parse, so it is not offered
+//Dog d(3), local only to avoid the most vexing parse
 named_type_declarator
     : TOK_IDENTIFIER array_dimensions_opt initializer_opt
                                                       { pendName($1);
@@ -1065,8 +1047,7 @@ allocation_type
     | TOK_STRUCT TOK_IDENTIFIER       { $$ = typeSpec(ast::TypeSpecKind::Struct, $2, LOC(@1)); }
     ;
 
-//builds the NewExpr without its type, the new rule above fills that in. a star
-//after the type is read as the start of new int *[n], never as a product
+//a NewExpr without its type, a star after the type starts new int *[n]
 allocation_suffix_opt
     : /* empty */ %prec IDENTIFIER_EXPRESSION
                                       { $$ = new ast::NewExpr(ast::NewForm::Plain, 0, 0); }
@@ -1207,8 +1188,7 @@ static void writeAst(const char *sourcePath) {
     printer.print(g_program.get());
 }
 
-//builds the symbol table and type checks the tree. the tree is printed first
-//either way, since the semantic results are written into it
+//builds the symbol table and type checks, the tree is printed first either way
 static bool analyze(const char *sourcePath) {
     sema::SymbolTable table;
     sema::Diagnostics diags;
@@ -1229,9 +1209,7 @@ static bool analyze(const char *sourcePath) {
         return false;
     }
 
-    //the tree is correct, so it is lowered to llvm ir in outputs/<stem>/<stem>.ll.
-    //the ir phase can still meet something it cannot lower, which it reports
-    //the same way, and then no .ll is written
+    //lowers to llvm ir in outputs/<stem>/<stem>.ll, no .ll on error
     ir::Module module(table, sourcePath);
     ir::IRVisitor generator(module, table, diags);
     generator.generate(g_program.get());

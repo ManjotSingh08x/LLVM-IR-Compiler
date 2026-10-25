@@ -83,8 +83,7 @@ public:
     bool                  isUntil = false;
 };
 
-//every part but the body may be null. the init declarations live in their own
-//scope around the body
+//every part but the body may be null, init declarations get their own scope
 class ForStmt : public Stmt {
 public:
     ForStmt(std::unique_ptr<Stmt> init, std::unique_ptr<Expr> cond, std::unique_ptr<Expr> inc,

@@ -2,9 +2,7 @@
 
 #include "semantic/constants.h"
 
-//the life of objects: how they are initialised, constructed, destroyed,
-//allocated with new and freed with delete, and how a derived object is used
-//as one of its bases
+//object lifetime: initialization, construction, destruction, new, delete and base conversions
 
 namespace ir {
 
@@ -29,11 +27,9 @@ ast::Expr *referenceSource(ast::VarDecl *decl) {
 
 } // namespace
 
-// ---------------------------------------------------------------------------
-// initialization
+// ---- initialization ----
 
-//gives the object at address its first value, the way the declaration says.
-//used for locals, globals, static locals and fields with an initializer
+//gives the object at address its initial value
 void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl) {
     //a reference stores the address of the object it is bound to
     if (sema::asReference(type)) {
@@ -69,8 +65,7 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
     }
 }
 
-//one initializer value, which may itself be a brace list, a string for a char
-//array, or a lambda
+//one initializer value: a brace list, a string for a char array, or a lambda
 void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr) {
     if (expr->getKind() == ast::ASTKind::InitListExpr) {
         emitInitList(address, type, static_cast<ast::InitListExpr *>(expr));
@@ -95,9 +90,7 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     builder.createStore(type, emitRValue(expr), address);
 }
 
-//{ ... }. with a constructor the list is its arguments. otherwise it fills an
-//array element by element or a record field by field, and what the list leaves
-//out is zero, or default constructed, or (for a field) its in-class initializer
+//{ ... }: constructor arguments, or an element or field-wise fill, the rest zero or default constructed
 void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list) {
     if (list->constructor) {
         emitConstructorCall(list->constructor, address, list->inits);
@@ -148,9 +141,7 @@ void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitLi
     }
 }
 
-//a field that no initializer mentions: its in-class initializer (int start{0})
-//if it has one, otherwise default construction. while the initializer runs,
-//this is the object, since it may name other fields
+//a field without an initializer: its in-class initializer or default construction
 void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *record, const sema::Symbol *field) {
     ast::VarDecl *decl = RecordLayout::fieldDeclaration(field);
     if (decl == nullptr && !layout.needsConstruction(field->type)) return;  //int plain; needs no code
@@ -169,12 +160,9 @@ void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *re
     ctx().thisRecord = savedRecord;
 }
 
-// ---------------------------------------------------------------------------
-// construction
+// ---- construction ----
 
-//makes an object that has no initializer. a record runs the chosen
-//constructor, its default constructor, or the implicit one the compiler
-//writes; an array does that for each element; anything else is left alone
+//default-constructs an object with no initializer, element-wise for arrays
 void IRVisitor::emitDefaultConstruct(Value *address, const sema::Type *type, const sema::FunctionSymbol *chosen) {
     if (const sema::ArrayType *array = sema::asArray(type)) {
         if (!layout.needsConstruction(type)) return;
@@ -224,8 +212,7 @@ void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value
     for (const sema::Symbol *field : record->fields) emitFieldDefaultInit(thisPtr, record, field);
 }
 
-// ---------------------------------------------------------------------------
-// destruction
+// ---- destruction ----
 
 //the end of every destructor: fields in reverse order, then bases in reverse
 void IRVisitor::emitMemberDestruction(const sema::RecordSymbol *record, Value *thisPtr) {
@@ -259,10 +246,7 @@ Function *IRVisitor::destructorFunction(const sema::RecordSymbol *record) {
     return implicitStructor(record, false);
 }
 
-//the constructor or destructor the compiler writes for a record that has none
-//but needs one: class_<path>_C_v or class_<path>_D_v, the names a user default
-//constructor or destructor would get. the body is written later, see
-//emitSynthesizedStructors
+//the implicit constructor or destructor for a record that needs one, body emitted later
 Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isConstructor) {
     std::string name = "class_" + RecordLayout::recordPath(record) + (isConstructor ? "_C_v" : "_D_v");
     Function *fn = module.findFunction(name);
@@ -279,15 +263,7 @@ Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isC
     return fn;
 }
 
-// ---------------------------------------------------------------------------
-// loops over the elements of an array
-//
-//    store i64 <begin>, ptr %i               ; forward
-//  arr.cond:  %done = icmp uge i64 %i, <end> ; leave once i reaches end
-//  arr.body:  <action on element i>  %i = %i + 1
-//
-//destruction walks backwards, from end - 1 down to begin, so the last element
-//made is the first destroyed
+// ---- array element loops, destruction runs backwards ----
 
 void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Value *begin, Value *end,
                                 ElementAction action, const sema::FunctionSymbol *ctor) {
@@ -338,21 +314,16 @@ void IRVisitor::emitElementAction(Value *element, const sema::Type *elementType,
     }
 }
 
-// ---------------------------------------------------------------------------
-// fields and base classes
+// ---- fields and base classes ----
 
-//the address of a field of an object. an inherited field lives inside a base
-//subobject, so the address is moved there first
+//the address of a field, moved into the base subobject when inherited
 Value *IRVisitor::fieldAddress(Value *object, const sema::RecordSymbol *objectRecord, const sema::Symbol *field) {
     const sema::RecordSymbol *owner = field->parentRecord;
     Value *base = adjustToBase(object, objectRecord, owner, false);
     return builder.createStructGEP(owner->type, base, RecordLayout::fieldIndex(owner, field));
 }
 
-//the address of the base subobject inside a derived object: one struct gep per
-//level of inheritance. Registered -> Trackable is index 1 of %class.Registered.
-//for a pointer conversion a null pointer must stay null, and a gep with a non
-//zero offset would move it, so then the result is chosen with select
+//the address of a base subobject, a null pointer stays null via select
 Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, const sema::RecordSymbol *to,
                                bool keepNull) {
     if (from == to || from == nullptr || to == nullptr) return address;
@@ -375,8 +346,7 @@ Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, c
     return builder.createSelect(isNull, module.getNull(module.pointerType()), result, module.pointerType());
 }
 
-// ---------------------------------------------------------------------------
-// new and delete
+// ---- new and delete ----
 
 Value *IRVisitor::callMalloc(Value *bytes) {
     Function *fn = module.getRuntimeMalloc();
@@ -392,13 +362,9 @@ void IRVisitor::callFree(Value *pointer) {
     builder.createCall(fn, fn->fnType, args);
 }
 
-//new T allocates sizeof(T) bytes with malloc and initialises them like a
-//variable. new T[n] allocates n elements. when the elements have destructors,
-//delete[] must know n, so 8 more bytes in front of the elements hold it (the
-//array cookie) and the pointer returned points past them
+//new T and new T[n], with an 8 byte count cookie in front when elements have destructors
 Value *IRVisitor::emitNew(ast::NewExpr *node) {
-    //NewExpr::type is the type as written; the checked type of the expression
-    //is the one in the Expr base: a pointer to the allocated element
+    //the expression type is a pointer to the element, NewExpr::type is as written
     const sema::Type *resultType = static_cast<ast::Expr *>(node)->type;
     const sema::Type *element = sema::asPointer(resultType)->pointee;
 
@@ -454,9 +420,7 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
     return elements;
 }
 
-//delete p runs the destructor and frees the memory. deleting null does
-//nothing, so the destructor call is skipped for null. delete[] reads the
-//element count from the cookie in front of the elements
+//delete and delete[], null skips the destructor, delete[] reads the cookie
 Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     Value *pointer = emitRValue(node->operand.get());
     const sema::Type *element = sema::asPointer(node->operand->type)->pointee;

@@ -21,10 +21,7 @@ enum class ValueKind {
     Instruction
 };
 
-//anything an instruction can use as an operand: a constant, a function
-//argument, a global, a function, a block (as a branch target) or the result of
-//another instruction. every value has a sema type, which says how it is
-//spelled in llvm, and a name
+//anything an instruction can use as an operand, with a sema type and a name
 class Value {
 public:
     Value(ValueKind kind, const sema::Type *type, const std::string &name)
@@ -95,8 +92,7 @@ enum class Linkage {
     Private     //only this file and nameless: string literals
 };
 
-//a global variable. as an operand it is the address of the variable, so its
-//own type is a pointer and valueType is the type of what it holds
+//a global variable, as an operand it is its address and valueType is what it holds
 class GlobalVariable : public Value {
 public:
     GlobalVariable(const std::string &name, const sema::Type *valueType, const sema::Type *pointerType,

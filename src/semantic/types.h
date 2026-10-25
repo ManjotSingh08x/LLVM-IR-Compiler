@@ -13,13 +13,7 @@ namespace sema {
 class RecordSymbol;
 class SymbolTable;
 
-//the semantic type of a declaration or an expression. compound types point at
-//the type they are built from, so int **(*p)[10] is
-//  Pointer -> Array 10 -> Pointer -> Pointer -> Int
-//
-//the builtin types are single shared objects, intType() and so on. compound
-//types are made by the SymbolTable, which owns them. two types are compared
-//with isSameType, never by address
+//semantic type, compare with isSameType, never by address
 enum class TypeKind {
     Void, Bool, Char, Int, Float, Double,
     Null,     //the type of the null literal, converts to any pointer
@@ -57,8 +51,7 @@ public:
     const Type *referee;
 };
 
-//a size of 0 is an unsized [], which only appears until the size is known
-//from an initializer or the array is turned into a pointer as a parameter
+//a size of 0 is an unsized [] until its size is known
 class ArrayType : public Type {
 public:
     ArrayType(const Type *element, uint64_t size)
@@ -79,8 +72,7 @@ public:
     bool                      isVariadic;  //printf and scanf
 };
 
-//a struct or class. records are told apart by their declaration, not by their
-//contents
+//a struct or class, identified by its declaration
 class RecordType : public Type {
 public:
     explicit RecordType(RecordSymbol *record) : Type(TypeKind::Record), record(record) {}
@@ -88,8 +80,7 @@ public:
     RecordSymbol *record;
 };
 
-//the type of a lambda. every lambda has its own. the signature is known once
-//the body has been checked, since the return type comes from its returns
+//a lambda's own type, its signature known once the body is checked
 class ClosureType : public Type {
 public:
     explicit ClosureType(ast::LambdaExpr *lambda) : Type(TypeKind::Closure), lambda(lambda) {}
@@ -128,30 +119,25 @@ bool isError(const Type *type);
 //structural equality: same kind and same parts, records by declaration
 bool isSameType(const Type *a, const Type *b);
 
-//true when derived has base among its bases, at any depth. a record is not
-//derived from itself
+//true when base is a base of derived at any depth
 bool isDerivedFrom(const RecordSymbol *derived, const RecordSymbol *base);
 
 //the referred type for a reference, the type itself otherwise
 const Type *stripReference(const Type *type);
 
-//what an array or function becomes when its value is used: a pointer to the
-//first element, or a pointer to the function. other types are unchanged
+//array-to-pointer and function-to-pointer decay
 const Type *decay(const Type *type, SymbolTable &table);
 
 //bool and char become int, the integer promotion
 const Type *promote(const Type *type);
 
-//the type both operands of an arithmetic operator are converted to: double,
-//then float, then int
+//the common arithmetic type: double, then float, then int
 const Type *commonArithmeticType(const Type *a, const Type *b);
 
-//how well a value converts to a type, best first. overload resolution prefers
-//the candidate whose arguments convert best
+//how well a value converts to a type, best first
 enum class ConversionRank { Exact, Promotion, Conversion, Impossible };
 
-//the casts that turn a value into a target type, in order. the type checker
-//wraps the expression in one ImplicitCastExpr per step
+//the implicit casts from a value to a target type, in order
 struct ConversionStep {
     ast::CastKind kind;
     const Type   *result;
@@ -162,8 +148,7 @@ struct Conversion {
     std::vector<ConversionStep> steps;
 };
 
-//the implicit conversion from a value of type from to type to. isLValue says
-//whether the value names an object, which a reference needs to bind to it
+//the implicit conversion from type from to type to
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table);
 
 //C style spelling, for messages and dumps: int **(*)[10]
@@ -172,8 +157,7 @@ std::string typeToString(const Type *type);
 //the type code used in mangled names, see the README
 std::string mangleType(const Type *type);
 
-//the llvm type spelling a value of this type is stored as. pointers and references
-//are all the opaque ptr, the pointee stays known only in our type.
+//the llvm type a value is stored as, pointers are opaque ptr
 std::string toLLVMType(const Type *type);
 
 //the llvm record layout spelling: bases in order, then fields

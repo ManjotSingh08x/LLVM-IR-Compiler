@@ -134,8 +134,7 @@ std::string paramList(const TypeSpec *fn) {
     return out + ")";
 }
 
-//spells a written type the way C does, built from the outside in: inside is
-//what has been spelled so far around the name. int **(*)[10], int (*)(int)
+//spells a written type C style, built outside in: int **(*)[10], int (*)(int)
 std::string typeString(const TypeSpec *type, const std::string &inside) {
     if (type == nullptr) return "?" + inside;
     switch (type->specKind) {

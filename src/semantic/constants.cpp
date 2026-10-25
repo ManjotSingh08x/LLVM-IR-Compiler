@@ -13,8 +13,7 @@ int digitValue(char c) {
     return 99;
 }
 
-//reads one character of a char or string literal body starting at i, which
-//may be an escape, and moves i past it
+//reads one possibly escaped character at i and advances i
 long long readChar(const std::string &text, size_t &i) {
     if (text[i] != '\\') return (unsigned char)text[i++];
 

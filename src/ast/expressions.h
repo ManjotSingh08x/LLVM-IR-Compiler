@@ -15,8 +15,7 @@ enum class BinaryOp {
 
 enum class AssignOp { Assign, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign };
 
-//literals keep their source spelling, the value is worked out during semantic
-//analysis
+//literals keep their source spelling, the value is computed during semantic analysis
 class IntLiteral : public Expr {
 public:
     IntLiteral(std::string spelling, int line, int col)
@@ -152,11 +151,10 @@ public:
     std::unique_ptr<Expr> callee;
     NodeList<Expr>        args;
 
-    //the function called by name, null for a call through a function pointer
-    //or a lambda
+    //the function called by name, null for function pointers and lambdas
     sema::FunctionSymbol *function = nullptr;
 };
-// f(x)[i] is also a valid subscript, so base is an expression. And index is also an expression
+//a[i], where base may be any expression: f(x)[i]
 class ArraySubscriptExpr : public Expr {
 public:
     ArraySubscriptExpr(std::unique_ptr<Expr> base, std::unique_ptr<Expr> index, int line, int col)
@@ -242,13 +240,11 @@ public:
     std::unique_ptr<CompoundStmt> body;
 
     sema::Scope                  *scope = nullptr;  //holds the parameters
-    //every variable the body uses from the enclosing function, both the listed
-    //ones and the ones taken by a [=] or [&] default
+    //variables the body uses from the enclosing function, listed or captured by default
     std::vector<LambdaCapture>    usedCaptures;
 };
 
-//a conversion the source leaves implicit. the type checker wraps the converted
-//expression in one of these, so later passes see every conversion
+//a conversion the source leaves implicit, inserted by the type checker
 enum class CastKind {
     IntegralCast,       //between bool, char and int
     IntegralToFloating,

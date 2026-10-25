@@ -156,7 +156,7 @@ public:
     //or a lambda
     sema::FunctionSymbol *function = nullptr;
 };
-
+// f(x)[i] is also a valid subscript, so base is an expression. And index is also an expression
 class ArraySubscriptExpr : public Expr {
 public:
     ArraySubscriptExpr(std::unique_ptr<Expr> base, std::unique_ptr<Expr> index, int line, int col)

@@ -1,7 +1,0 @@
-test/test19_access_errors.ckp line: 20 col: 16 semantic error: 'shut' is a private member of 'Base'
-test/test19_access_errors.ckp line: 34 col: 16 semantic error: 'open' cannot be used here because 'Hidden' inherits 'Base' as private
-test/test19_access_errors.ckp line: 55 col: 6 semantic error: 'guarded' is a protected member of 'Base'
-test/test19_access_errors.ckp line: 56 col: 6 semantic error: 'shut' is a private member of 'Base'
-test/test19_access_errors.ckp line: 57 col: 23 semantic error: 'guarded' is a protected member of 'Base'
-test/test19_access_errors.ckp line: 60 col: 29 semantic error: 'invisible' is a private member of 'WithMethods'
-6 semantic error(s) found.

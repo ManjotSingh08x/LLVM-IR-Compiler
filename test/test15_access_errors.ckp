@@ -1,0 +1,55 @@
+class Base {
+public:
+    int open;
+    int readOpen() { return open + guarded + shut; }
+protected:
+    int guarded;
+private:
+    int shut;
+};
+
+class Derived : public Base {
+public:
+    int readInherited() {
+        return open + guarded;
+    }
+    int readPrivate() {
+        return shut;
+    }
+};
+
+class Hidden : private Base {
+public:
+    int readOwn() { return open; }
+};
+
+class FromHidden : public Hidden {
+public:
+    int reach() {
+        return open;
+    }
+};
+
+class WithMethods {
+public:
+    int visible() { return 1; }
+private:
+    int invisible() { return 2; }
+};
+
+int main() {
+    Base b;
+    Derived d;
+    WithMethods w;
+
+    b.open = 1;
+    int ok = b.open + d.open + w.visible();
+
+    b.guarded = 2;
+    b.shut = 3;
+    int viaDerived = d.guarded;
+
+    int called = w.invisible();
+
+    return ok + viaDerived + called;
+}

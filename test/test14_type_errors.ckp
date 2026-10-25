@@ -1,0 +1,57 @@
+struct Point {
+    int x;
+    int y;
+};
+
+int takesInt(int a) {
+    return a;
+}
+
+int main() {
+    int a = undeclaredName;
+
+    int b = later;
+    int later = 1;
+
+    int twice = 1;
+    int twice = 2;
+
+    Point p;
+    int fromStruct = p;
+
+    7 = a;
+    takesInt(1) = a;
+
+    int plain = 5;
+    int bad = *plain;
+    int worse = plain[0];
+
+    int *addr = &42;
+
+    int sum = p + 1;
+    int cond = p ? 1 : 2;
+
+    double d = 1.5;
+    int mask = d & 1;
+    int rem = d % 2;
+
+    int missing = p.z;
+    int notClass = plain.x;
+
+    Point *pp = &p;
+    int viaDot = pp.x;
+    int viaArrow = p->x;
+
+    int arr[2] = 5;
+    int full[2] = {1, 2, 3};
+    Point xy = {1, 2, 3};
+
+    int sized[plain];
+    int negative[-1];
+
+    auto noInit;
+
+    delete plain;
+
+    return this->x;
+}

@@ -1,5 +1,0 @@
-// Tests: declaration with a missing variable name
-int missingName() {
-    int = 3;
-    return 0;
-}

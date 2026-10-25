@@ -134,7 +134,7 @@ public:
     Function *findFunction(const std::string &name) const;
 
     //the c library functions new and delete are lowered to. they are not
-    //symbols of the source program, see docs/ir-implementation-plan.md 1.2
+    //symbols of the source program
     Function *getRuntimeMalloc();
     Function *getRuntimeFree();
     Function *getRuntimeAtexit();   //declare i32 @atexit(ptr), runs global destructors

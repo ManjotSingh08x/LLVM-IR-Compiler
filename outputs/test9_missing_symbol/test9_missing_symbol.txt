@@ -1,2 +1,0 @@
-test/test9_missing_symbol.ckp line: 4 col: 5 syntax error: unexpected TOK_RETURN, expecting TOK_SEMI
-1 syntax error(s) found.

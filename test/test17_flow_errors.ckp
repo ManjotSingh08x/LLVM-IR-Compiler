@@ -1,0 +1,73 @@
+struct Point {
+    int x;
+};
+
+int main() {
+    int i = 0;
+    Point p;
+
+    break;
+    continue;
+
+    goto nowhere;
+
+    goto here;
+here:
+    i++;
+
+here:
+    i++;
+
+    switch (p) {
+        case 1:
+            break;
+    }
+
+    double d = 1.5;
+    switch (d) {
+        case 1:
+            break;
+    }
+
+    switch (i) {
+        case 1:
+            break;
+        case 1:
+            break;
+        case i:
+            break;
+        case 2 + 3:
+            break;
+        default:
+            break;
+        default:
+            break;
+    }
+
+    case 7:
+        i++;
+    default:
+        i++;
+
+    if (p) {
+        i++;
+    }
+    while (p) {
+        i++;
+    }
+    for (int j = 0; p; j++) {
+        i++;
+    }
+
+    int *ptr = &i;
+    if (ptr) {
+        i++;
+    }
+
+    for (int k = 0; k < 3; k++) {
+        i += k;
+    }
+    i = k;
+
+    return i;
+}

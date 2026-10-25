@@ -1,7 +1,6 @@
 #include "ir/ir_visitor.h"
 
-//the passes over the program, the shape of every function body, and globals.
-//see docs/ir-codegen-explained.md for the reasoning behind each step
+//the passes over the program, the shape of every function body, and globals
 
 namespace ir {
 

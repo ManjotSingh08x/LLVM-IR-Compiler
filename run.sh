@@ -28,6 +28,9 @@ else
     echo
 fi
 
+# start from empty output folders, so nothing is left over from an earlier run
+# or from a test file that has since been removed
+rm -rf "$OUT_DIR" "$RUN_DIR"
 mkdir -p "$OUT_DIR" "$RUN_DIR"
 
 if ! command -v "$CLANG" > /dev/null 2>&1; then
@@ -35,21 +38,26 @@ if ! command -v "$CLANG" > /dev/null 2>&1; then
     CLANG=""
 fi
 
-shopt -s nullglob
-files=("$TEST_DIR"/*.ckp)
-shopt -u nullglob
+# every .ckp file in test/, whatever its name. files are run in the order of the
+# first number in their name, so test2 comes before test10; files without a
+# number come last, in alphabetical order
+files=()
+while IFS=$'\t' read -r _ _ path; do
+    files+=("$path")
+done < <(
+    shopt -s nullglob
+    for f in "$TEST_DIR"/*.ckp; do
+        name="$(basename "$f")"
+        number="$(printf '%s' "$name" | sed -nE 's/^[^0-9]*([0-9]+).*/\1/p')"
+        [ -z "$number" ] && number=999999999
+        printf '%d\t%s\t%s\n' "$((10#$number))" "$name" "$f"
+    done | sort -t $'\t' -k1,1n -k2,2
+)
 
 if [ ${#files[@]} -eq 0 ]; then
     echo "No test files found in $TEST_DIR/"
     exit 1
 fi
-
-
-IFS=$'\n' files=($(printf '%s\n' "${files[@]}" \
-    | sed -E 's|.*/test([0-9]+)_|\1 &|' \
-    | sort -n -k1,1 \
-    | cut -d' ' -f2-))
-unset IFS
 
 parsed=0
 rejected=0
@@ -61,9 +69,7 @@ for f in "${files[@]}"; do
     base="$(basename "$f" .ckp)"
     dir="$OUT_DIR/$base"
 
-    # a fresh folder per test, so a .ll left by an earlier run cannot be mistaken
-    # for one this run produced
-    rm -rf "$dir"
+    # one folder per test, with a copy of the source file for reference
     mkdir -p "$dir"
     cp "$f" "$dir/$base.ckp"
     outfile="$dir/$base.txt"

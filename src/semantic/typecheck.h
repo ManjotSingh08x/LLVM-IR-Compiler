@@ -115,6 +115,7 @@ private:
     RecordSymbol *thisRecord(int line, int col);
     bool   memberOfThis(Symbol *member, int line, int col);
     void   checkAccess(Symbol *member, const Lookup &lookup, int line, int col);
+    void   checkBaseConversion(const Type *from, const Type *to, int line, int col, const std::string &what);
     const Type *finishDeclRef(ast::DeclRefExpr *node, const Lookup &lookup);
     bool   findMember(ast::MemberExpr *node, Lookup &result);
     const Type *finishMember(ast::MemberExpr *node, const Lookup &lookup);

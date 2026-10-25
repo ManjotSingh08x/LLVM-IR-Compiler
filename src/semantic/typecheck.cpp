@@ -50,6 +50,42 @@ bool isWithin(const RecordSymbol *context, const RecordSymbol *record) {
     return false;
 }
 
+//a base link is usable from `here`: a public base always, a private base only
+//inside the derived class itself, a protected base also inside a class derived
+//from it
+bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, const BaseClass &base) {
+    if (base.access == ast::AccessKind::Private) return isWithin(here, derived);
+    if (base.access == ast::AccessKind::Protected) {
+        return isWithin(here, derived) || (here && isDerivedFrom(here, derived));
+    }
+    return true;
+}
+
+//how many distinct base subobjects of this type the derived class holds. more
+//than one makes naming it ambiguous, the same way a member reached through two
+//bases is
+unsigned countBasePaths(const RecordSymbol *derived, const RecordSymbol *base) {
+    unsigned total = 0;
+    for (const BaseClass &parent : derived->bases) {
+        if (parent.record == base) {
+            total++;
+        } else {
+            total += countBasePaths(parent.record, base);
+        }
+    }
+    return total;
+}
+
+//the chain of bases walked from derived down to base, the first one found
+bool findBaseChain(const RecordSymbol *derived, const RecordSymbol *base, std::vector<BaseClass> &chain) {
+    for (const BaseClass &parent : derived->bases) {
+        chain.push_back(parent);
+        if (parent.record == base || findBaseChain(parent.record, base, chain)) return true;
+        chain.pop_back();
+    }
+    return false;
+}
+
 bool hasCapture(const ast::LambdaExpr *lambda, ast::LambdaCapture::Kind kind, const std::string &name) {
     for (const ast::LambdaCapture &capture : lambda->usedCaptures) {
         if (capture.kind == kind && capture.name == name) return true;
@@ -385,11 +421,13 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     for (const BaseClass &base : record->bases) {
         Lookup inBase;
         if (!lookupMember(base.record, name, inBase)) continue;
-        if (found && inBase.symbols[0]->parentRecord != result.symbols[0]->parentRecord) {
+        //there is no virtual inheritance here, so every base is its own
+        //subobject: reaching the name through a second base is ambiguous even
+        //when both paths end at one declaration in a shared grandparent
+        if (found) {
             result.ambiguous = true;
             continue;
         }
-        if (found) continue;
         found = true;
         result.symbols = inBase.symbols;
         result.ambiguous = inBase.ambiguous;
@@ -489,13 +527,7 @@ void TypeChecker::checkAccess(Symbol *member, const Lookup &lookup, int line, in
 
     RecordSymbol *derived = lookup.namingRecord;
     for (const BaseClass &base : lookup.path) {
-        bool inherited = true;
-        if (base.access == ast::AccessKind::Private) {
-            inherited = isWithin(here, derived);
-        } else if (base.access == ast::AccessKind::Protected) {
-            inherited = isWithin(here, derived) || (here && isDerivedFrom(here, derived));
-        }
-        if (!inherited) {
+        if (!isBaseAccessible(here, derived, base)) {
             diags.error(line, col, "'" + member->name + "' cannot be used here because '" + derived->qualifiedName()
                                        + "' inherits '" + base.record->qualifiedName() + "' as "
                                        + accessWord(base.access));
@@ -713,6 +745,40 @@ const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     return expr->type;
 }
 
+//Derived -> Base reaches the same subobject that s.member would, so it needs
+//the same base to be accessible. the member lookup checks this for s.member,
+//this checks it for the conversion through a pointer, a reference or a copy
+void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line, int col,
+                                      const std::string &what) {
+    const PointerType *fromPointer = asPointer(from);
+    const PointerType *toPointer = asPointer(to);
+    RecordSymbol *derived = asRecord(fromPointer ? fromPointer->pointee : stripReference(from));
+    RecordSymbol *base = asRecord(toPointer ? toPointer->pointee : stripReference(to));
+    if (derived == nullptr || base == nullptr || derived == base) return;
+
+    if (countBasePaths(derived, base) > 1) {
+        diags.error(line, col, "'" + derived->qualifiedName() + "' has more than one '" + base->qualifiedName()
+                                   + "' base, so this conversion in " + what + " is ambiguous");
+        return;
+    }
+
+    std::vector<BaseClass> chain;
+    if (!findBaseChain(derived, base, chain)) return;
+
+    RecordSymbol *here = contextRecord();
+    RecordSymbol *step = derived;
+    for (const BaseClass &link : chain) {
+        if (!isBaseAccessible(here, step, link)) {
+            diags.error(line, col, "'" + derived->qualifiedName() + "' cannot be converted to '"
+                                       + base->qualifiedName() + "' in " + what + " because '"
+                                       + step->qualifiedName() + "' inherits '"
+                                       + link.record->qualifiedName() + "' as " + accessWord(link.access));
+            return;
+        }
+        step = link.record;
+    }
+}
+
 bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, const std::string &what) {
     Conversion conversion = findConversion(expr->type, expr->isLValue, to, table);
     if (conversion.rank == ConversionRank::Impossible) {
@@ -726,6 +792,9 @@ bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, cons
     }
     bool bindsReference = asReference(to) != nullptr;
     for (const ConversionStep &step : conversion.steps) {
+        if (step.kind == ast::CastKind::DerivedToBase) {
+            checkBaseConversion(expr->type, step.result, expr->line, expr->col, what);
+        }
         wrap(expr, step.kind, step.result);
         //a reference binds to the base part of the same object
         if (bindsReference) expr->isLValue = true;

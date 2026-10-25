@@ -7,8 +7,7 @@
 
 namespace sema {
 
-//literals keep their source spelling in the tree, quotes and escapes
-//included, these work out their values
+//work out literal values from their source spelling
 
 //decimal, 0x1F, 0755 and 0b1010. false when the value does not fit in an int
 bool intLiteralValue(const std::string &spelling, long long &value);
@@ -19,13 +18,10 @@ long long charLiteralValue(const std::string &spelling);
 //the number of characters a string literal holds, without the closing \0
 size_t stringLiteralLength(const std::string &spelling);
 
-//the characters a string literal holds with its escapes worked out, without
-//the quotes and without the closing \0. always stringLiteralLength() long
+//a string literal's characters with escapes resolved, without quotes or the closing \0
 std::string decodeStringLiteral(const std::string &spelling);
 
-//works out an integer constant expression: literals, + - * / % and the other
-//arithmetic, bitwise, logical and comparison operators, and ?:. false when the
-//expression is not a constant, as for anything naming a variable
+//evaluates an integer constant expression, false when it is not constant
 bool evaluateConstant(const ast::Expr *expr, long long &value);
 
 } // namespace sema

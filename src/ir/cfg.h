@@ -14,9 +14,7 @@ namespace ir {
 class Function;
 class Module;
 
-//a straight run of instructions that is only entered at the top and only left
-//by the terminator at the bottom. the blocks of a function, with the branches
-//between them as edges, form its control flow graph
+//a run of instructions entered only at the top and left only by its terminator
 class BasicBlock : public Value {
 public:
     BasicBlock(const std::string &label, Function *parent)
@@ -31,8 +29,7 @@ public:
     //adds an instruction at the end of the block
     void append(std::unique_ptr<Instruction> inst);
 
-    //adds an alloca after the allocas already at the top of the block. only
-    //used on the entry block, see IRBuilder::createEntryAlloca
+    //adds an alloca after the existing ones, entry block only
     void insertAlloca(std::unique_ptr<Instruction> inst);
 
     void dump(std::ostream &out) const;
@@ -59,27 +56,20 @@ public:
 
     Argument *addArgument(const sema::Type *type, const std::string &baseName);
 
-    //makes a block owned by the function. it is not part of the output until
-    //placeBlock puts it in the layout, which the builder does when it starts
-    //writing into the block, so blocks appear in the order they are filled
+    //makes a block owned by the function, placed in the layout once written into
     BasicBlock *createBlock(const std::string &label);
     void        placeBlock(BasicBlock *block);
     BasicBlock *getEntryBlock() const { return layout.empty() ? nullptr : layout.front(); }
     bool        isDefinition() const { return !layout.empty(); }
 
-    //every local name (arguments, instruction results and block labels) shares
-    //one namespace per function. the first request for a name gets it, later
-    //ones get name.1, name.2, ...
+    //a unique local name within the function: name, name.1, name.2, ...
     std::string uniqueName(const std::string &base);
     std::string nextTempName();
 
-    //keeps an instruction that was made while no block could take it (code
-    //after a return). it is never written out, but stays alive so the values
-    //that use it are valid objects
+    //keeps an instruction built after a terminator alive without writing it
     void discard(std::unique_ptr<Instruction> inst);
 
-    //removes the blocks that cannot be reached from entry and ends every block
-    //left without a terminator with a return of the zero value
+    //drops unreachable blocks and ends unterminated ones with a zero return
     void finalizeCFG(Module &module);
 
     void dump(std::ostream &out) const;
@@ -97,15 +87,13 @@ private:
     unsigned                                  tempCounter = 0;
 };
 
-//the whole translation unit: types, globals and functions, and the owner of
-//every constant
+//the translation unit: types, globals, functions and every constant
 class Module {
 public:
     Module(sema::SymbolTable &symTab, const std::string &sourceName)
         : symTab(symTab), sourceName(sourceName) {}
 
-    //the type given to address values: what they point at is tracked by the
-    //code that made them, llvm only sees ptr
+    //the type of address values, llvm only sees ptr
     const sema::Type *pointerType();
 
     //constants. integers are wrapped to the width of their type
@@ -125,16 +113,14 @@ public:
                                  const Constant *initializer, Linkage linkage, bool isConstant);
     GlobalVariable *findGlobal(const std::string &name) const;
 
-    //a private constant for a string literal, one per distinct contents:
-    //@.str = private unnamed_addr constant [6 x i8] c"hello\00"
+    //a private constant per distinct string literal, @.str
     GlobalVariable *getStringLiteral(const std::string &bytesWithNull);
 
     //functions
     Function *createFunction(const std::string &name, const sema::FunctionType *fnType, Linkage linkage);
     Function *findFunction(const std::string &name) const;
 
-    //the c library functions new and delete are lowered to. they are not
-    //symbols of the source program
+    //the c library functions new and delete lower to
     Function *getRuntimeMalloc();
     Function *getRuntimeFree();
     Function *getRuntimeAtexit();   //declare i32 @atexit(ptr), runs global destructors
@@ -143,8 +129,7 @@ public:
     void addRecord(const sema::RecordSymbol *record) { records.push_back(record); }
     void addClosure(const ast::LambdaExpr *lambda) { closures.push_back(lambda); }
 
-    //the function run before main, listed in @llvm.global_ctors. null until a
-    //global needs code to initialise or destroy it
+    //the function run before main via @llvm.global_ctors, null until needed
     Function *globalInit = nullptr;
 
     void dump(std::ostream &out) const;

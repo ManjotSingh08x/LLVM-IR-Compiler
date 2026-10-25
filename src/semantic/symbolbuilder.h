@@ -11,28 +11,7 @@
 
 namespace sema {
 
-//first semantic pass: builds the scope tree and declares every name in it.
-//it resolves every written type and gives functions, globals and static
-//members their mangled names. it does not look at what names are used for,
-//that is the type checker's work
-//
-//it runs in two passes over the file, because a class body sees all of its
-//members at once:
-//  1. declarations: every record with all its members and every function
-//     signature and global, so a method body can use a member declared below it
-//  2. bodies: the scopes of every function, block and lambda with their
-//     parameters and locals. a method's scope sits inside its record's scope,
-//     also for a definition written outside the class, so a member is found
-//     by its plain name
-//
-//mangling, with every name written as its length then the name:
-//  global_<name>_<params>              global_3add_ii
-//  class_<record>_<name>_<params>      class_6Animal_6setAge_i
-//  class_<record>_C_<params>           constructor, class_6Animal_C_i
-//  class_<record>_D_<params>           destructor, class_6Animal_D_v
-//  global_<name>, class_<record>_<name>  global and static member variables
-//a nested record writes each enclosing record first: class_5Outer5Inner_1f_v.
-//main, printf and scanf keep their names so the program links
+//first semantic pass: builds the scope tree, resolves types and mangles names
 class SymbolBuilder : public ast::ASTVisitor<SymbolBuilder> {
 public:
     SymbolBuilder(SymbolTable &table, Diagnostics &diags) : table(table), diags(diags) {}
@@ -53,8 +32,7 @@ public:
     void visitCaseStmt(ast::CaseStmt *node);
     void visitDefaultStmt(ast::DefaultStmt *node);
 
-    //expressions: walked only to reach lambdas, which open scopes, and the
-    //types written in new
+    //expressions: walked only for lambdas and the types in new
     void visitParenExpr(ast::ParenExpr *node);
     void visitUnaryExpr(ast::UnaryExpr *node);
     void visitBinaryExpr(ast::BinaryExpr *node);

@@ -134,8 +134,7 @@ void CallInst::dump(std::ostream &out) const {
     out << "  ";
     if (!type->is(sema::TypeKind::Void)) out << "%" << name << " = ";
     out << "call ";
-    //a variadic callee is written with its whole type, so llvm knows which
-    //arguments are the fixed ones
+    //a variadic callee is written with its full type
     if (calleeType->isVariadic) {
         out << formatType(calleeType);
     } else {
@@ -144,8 +143,7 @@ void CallInst::dump(std::ostream &out) const {
     out << " " << callee->getOperand() << "(";
     for (size_t i = 0; i < args.size(); i++) {
         if (i > 0) out << ", ";
-        //a fixed parameter is written with its declared type, an extra
-        //argument of a variadic call with the type it already has
+        //fixed parameters use the declared type, variadic extras their own
         if (i < calleeType->params.size()) {
             out << formatType(calleeType->params[i]) << " " << args[i]->getOperand();
         } else {

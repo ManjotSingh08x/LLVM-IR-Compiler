@@ -50,9 +50,7 @@ bool isWithin(const RecordSymbol *context, const RecordSymbol *record) {
     return false;
 }
 
-//a base link is usable from `here`: a public base always, a private base only
-//inside the derived class itself, a protected base also inside a class derived
-//from it
+//a base link is accessible from here: public always, private in derived, protected in further derived
 bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, const BaseClass &base) {
     if (base.access == ast::AccessKind::Private) return isWithin(here, derived);
     if (base.access == ast::AccessKind::Protected) {
@@ -61,9 +59,7 @@ bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, con
     return true;
 }
 
-//how many distinct base subobjects of this type the derived class holds. more
-//than one makes naming it ambiguous, the same way a member reached through two
-//bases is
+//how many base subobjects of this type derived holds, more than one is ambiguous
 unsigned countBasePaths(const RecordSymbol *derived, const RecordSymbol *base) {
     unsigned total = 0;
     for (const BaseClass &parent : derived->bases) {
@@ -195,8 +191,7 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     Symbol *symbol = node->symbol;
     if (symbol == nullptr) return;
 
-    //auto takes the type of its initializer, after arrays and functions turn
-    //into pointers
+    //auto takes its initializer's decayed type
     if (symbol->type->is(TypeKind::Auto)) {
         std::unique_ptr<ast::Expr> *value = &node->init;
         if (node->initStyle == ast::InitStyle::Brace) {
@@ -344,9 +339,7 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     }
 }
 
-//the constructor that builds a record from these already checked arguments.
-//a record without constructors has an implicit default and copy constructor,
-//which have no symbol, so null is returned for them
+//the constructor for these arguments, null for implicit ones
 FunctionSymbol *TypeChecker::construct(RecordSymbol *record, ast::NodeList<ast::Expr> &args, int line, int col) {
     if (record->constructors.empty()) {
         if (args.empty()) return nullptr;
@@ -408,8 +401,7 @@ TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, i
     return result;
 }
 
-//the record's own members first, then each base. a name found through two
-//different bases is ambiguous
+//own members first, then each base, ambiguous when found through two
 bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lookup &result) {
     if (const std::vector<Symbol *> *found = record->members->find(name)) {
         result.symbols = *found;
@@ -421,9 +413,7 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     for (const BaseClass &base : record->bases) {
         Lookup inBase;
         if (!lookupMember(base.record, name, inBase)) continue;
-        //there is no virtual inheritance here, so every base is its own
-        //subobject: reaching the name through a second base is ambiguous even
-        //when both paths end at one declaration in a shared grandparent
+        //every base is its own subobject, so a second path is ambiguous
         if (found) {
             result.ambiguous = true;
             continue;
@@ -438,8 +428,7 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     return found;
 }
 
-//a local used inside a lambda must be captured by it and by every lambda in
-//between, by its capture list or by a [=] or [&] default
+//a local used in a lambda must be captured by it and every enclosing lambda
 void TypeChecker::captureVariable(Symbol *symbol, const std::vector<Scope *> &lambdas, int line, int col) {
     for (Scope *scope : lambdas) {
         ast::LambdaExpr *lambda = scope->lambda;
@@ -458,8 +447,7 @@ void TypeChecker::captureVariable(Symbol *symbol, const std::vector<Scope *> &la
     }
 }
 
-//the record this points at here, or null with an error when there is no this:
-//outside a method, in a static method, or in a lambda that does not capture it
+//the record this points at, or null with an error when there is no this
 RecordSymbol *TypeChecker::thisRecord(int line, int col) {
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Lambda) {
@@ -484,8 +472,7 @@ RecordSymbol *TypeChecker::thisRecord(int line, int col) {
     return nullptr;
 }
 
-//a field or method named without an object belongs to this, which must exist
-//and be of the member's record or a record derived from it
+//a member named without an object belongs to this
 bool TypeChecker::memberOfThis(Symbol *member, int line, int col) {
     RecordSymbol *record = thisRecord(line, col);
     if (record == nullptr) return false;
@@ -505,9 +492,7 @@ RecordSymbol *TypeChecker::contextRecord() {
     return nullptr;
 }
 
-//a private member is usable inside its record, a protected one also inside
-//records derived from it. a base inherited as private or protected makes its
-//members private or protected in the derived record
+//private members are usable in their record, protected also in derived records
 void TypeChecker::checkAccess(Symbol *member, const Lookup &lookup, int line, int col) {
     RecordSymbol *owner = member->parentRecord;
     if (owner == nullptr) return;
@@ -630,16 +615,14 @@ const Type *TypeChecker::finishMember(ast::MemberExpr *node, const Lookup &looku
         return setType(node, errorType(), false);
     }
     checkAccess(symbol, lookup, node->line, node->col);
-    //through a pointer the object is always in memory; with . the member is an
-    //lvalue when the object is, and a static member always is
+    //through a pointer the member is an lvalue, with . when the object is, static always
     bool isLValue = node->isArrow || node->base->isLValue || symbol->kind == SymbolKind::Variable;
     return setType(node, symbol->type, isLValue);
 }
 
 //calls
 
-//the best candidate for these arguments. a candidate is better than another
-//when none of its arguments converts worse and at least one converts better
+//the best overload: no argument converts worse and at least one better
 FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> &candidates,
                                             ast::NodeList<ast::Expr> &args, const std::string &name,
                                             int line, int col) {
@@ -695,8 +678,7 @@ FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> 
     return nullptr;
 }
 
-//converts each argument to its parameter. arguments past the parameters of a
-//variadic function get the C promotions instead
+//converts each argument to its parameter, variadic extras get the C promotions
 void TypeChecker::applyArguments(const FunctionType *signature, ast::NodeList<ast::Expr> &args,
                                  const std::string &name, int line, int col) {
     if (args.size() < signature->params.size() || (args.size() > signature->params.size() && !signature->isVariadic)) {
@@ -734,8 +716,7 @@ const Type *TypeChecker::check(std::unique_ptr<ast::Expr> &expr) {
     return type ? type : errorType();
 }
 
-//uses an array or a function as a pointer, as every operator but & and
-//sizeof does
+//array and function decay, for every operator but & and sizeof
 const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     if (expr->type->is(TypeKind::Array)) {
         wrap(expr, ast::CastKind::ArrayToPointer, decay(expr->type, table));
@@ -745,9 +726,7 @@ const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     return expr->type;
 }
 
-//Derived -> Base reaches the same subobject that s.member would, so it needs
-//the same base to be accessible. the member lookup checks this for s.member,
-//this checks it for the conversion through a pointer, a reference or a copy
+//Derived -> Base needs the base to be accessible, as member access does
 void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line, int col,
                                       const std::string &what) {
     const PointerType *fromPointer = asPointer(from);
@@ -919,8 +898,7 @@ const Type *TypeChecker::visitForStmt(ast::ForStmt *node) {
     return nullptr;
 }
 
-//a lambda takes its return type from its first return, every other return
-//must give the same type
+//a lambda's return type comes from its first return, later ones must match
 const Type *TypeChecker::visitReturnStmt(ast::ReturnStmt *node) {
     if (context.lambda) {
         const Type *type = voidType();
@@ -969,8 +947,7 @@ const Type *TypeChecker::visitContinueStmt(ast::ContinueStmt *node) {
     return nullptr;
 }
 
-//a goto may name a label further down, so gotos are resolved once the whole
-//function has been seen
+//gotos are resolved after the whole function, labels may come later
 const Type *TypeChecker::visitGotoStmt(ast::GotoStmt *node) {
     context.gotos.push_back(node);
     return nullptr;
@@ -1171,8 +1148,7 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     }
 
     switch (node->op) {
-    //pointer arithmetic: pointer + int, int + pointer, pointer - int and the
-    //distance between two pointers
+    //pointer arithmetic: pointer +/- int and pointer - pointer
     case ast::BinaryOp::Add:
         if (isObjectPointer(left) && isIntegral(right)) {
             convert(node->rhs, intType(), "an operand");
@@ -1193,8 +1169,7 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
         }
         break;
 
-    //pointers compare with pointers to the same type, to a base, to void or
-    //to null. one side is converted to the other
+    //pointers compare with the same type, a base, void or null
     case ast::BinaryOp::Eq:
     case ast::BinaryOp::Ne:
     case ast::BinaryOp::Lt:
@@ -1252,9 +1227,7 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
                                                    + "' and '" + typeToString(value) + "')");
             return setType(node, errorType(), false);
         }
-        //x op= v works like x = x op v: both sides meet in their common type
-        //and only the result is converted back to the target. converting v to
-        //the target first would make int x *= 2.5 multiply by 2
+        //x op= v: both sides meet in their common type, only the result converts back
         convert(node->value, commonArithmeticType(promote(target), promote(value)), "an assignment");
         break;
     }
@@ -1296,8 +1269,7 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
     return setType(node, errorType(), false);
 }
 
-//a call by name or through a member is resolved against the overloads with the
-//arguments. any other callee is a value: a function pointer or a lambda
+//calls by name or member use overload resolution, other callees are values
 const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
     for (std::unique_ptr<ast::Expr> &arg : node->args) check(arg);
 
@@ -1430,9 +1402,7 @@ const Type *TypeChecker::visitNewExpr(ast::NewExpr *node) {
 
     case ast::NewForm::Array:
     case ast::NewForm::ArrayInit: {
-        //new T[n][3][4]: n may be any integer, the inner sizes are part of the
-        //element type and must be constants. the result points at the first
-        //element, an int (*)[3][4]
+        //new T[n][3][4]: inner sizes must be constants, the result is int (*)[3][4]
         const Type *count = check(node->dims[0]);
         if (!isError(count)) {
             count = decayValue(node->dims[0]);
@@ -1478,8 +1448,7 @@ const Type *TypeChecker::visitDeleteExpr(ast::DeleteExpr *node) {
     return setType(node, voidType(), false);
 }
 
-//a brace list only has a type where something is initialised from it, which
-//initFromList handles
+//a brace list has no type of its own, initFromList handles it
 const Type *TypeChecker::visitInitListExpr(ast::InitListExpr *node) {
     if (node->type) return node->type;
     diags.error(node->line, node->col, "a brace list can only initialise a variable");

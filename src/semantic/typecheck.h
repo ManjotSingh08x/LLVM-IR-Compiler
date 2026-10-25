@@ -11,21 +11,7 @@
 
 namespace sema {
 
-//second semantic pass: works out the type of every expression and checks
-//that each use fits. it runs over the scope tree the symbol builder made and
-//writes its results into the tree:
-//  - Expr::type and Expr::isLValue on every expression
-//  - the symbol every name, member and call resolves to
-//  - an ImplicitCastExpr around every value the source converts silently
-//  - the constructor a declaration or new runs, the target of every goto
-//
-//a name is found from the innermost scope outwards. in blocks, functions and
-//the global scope only names declared before the use count, as in C++. a
-//record scope sees all its members and those of its bases, so a method may
-//use a member declared below it
-//
-//an expression that fails gets the error type, which every later check lets
-//through quietly, so one mistake gives one message
+//second semantic pass: types every expression, resolves names and inserts implicit casts
 class TypeChecker : public ast::ASTVisitor<TypeChecker, const Type *> {
 public:
     TypeChecker(SymbolTable &table, Diagnostics &diags) : table(table), diags(diags) {}

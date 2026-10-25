@@ -182,8 +182,7 @@ void SymbolBuilder::declareMethod(ast::FunctionDecl *node, RecordSymbol *record,
         diags.error(node->line, node->col, "a destructor takes no parameters");
     }
 
-    //overloads of one name share a list. constructors are found through the
-    //record, so they are compared against its constructor list
+    //overloads share a list, constructors are compared against the record's
     std::vector<Symbol *> existing;
     if (isConstructor) {
         existing.assign(record->constructors.begin(), record->constructors.end());
@@ -336,8 +335,7 @@ void SymbolBuilder::declareGlobal(ast::VarDecl *node) {
     if (symbol) setMangledName(symbol, "global_" + lengthPrefixed(symbol->name));
 }
 
-//int Counter::total = 0; gives the storage of a static member declared in its
-//class
+//int Counter::total = 0; defines a static member declared in its class
 void SymbolBuilder::defineStaticMember(ast::VarDecl *node) {
     RecordSymbol *record = findRecordPath(node->name, node->line, node->col);
     if (record == nullptr) return;
@@ -422,8 +420,7 @@ Symbol *SymbolBuilder::declareVariable(ast::VarDecl *node, Scope *scope, SymbolK
     return symbol;
 }
 
-//the aliased type is resolved once, here, so every later use of the name is
-//the type itself and nothing after this pass sees the typedef
+//the aliased type is resolved once here, later passes never see the typedef
 Symbol *SymbolBuilder::declareTypedef(ast::TypedefDecl *node, Scope *scope) {
     const Type *type = resolveType(node->type.get(), scope, true);
     if (type->is(TypeKind::Auto)) {
@@ -481,8 +478,7 @@ void SymbolBuilder::buildFunction(ast::FunctionDecl *node) {
     current = scope;
     declareParams(node->params, fn->signature());
 
-    //the parameters and the outermost block of the body share one scope, a
-    //local cannot reuse a parameter's name
+    //parameters and the outer block share one scope
     node->body->scope = scope;
     visit(node->body.get());
     current = saved;
@@ -528,8 +524,7 @@ void SymbolBuilder::visitDeclStmt(ast::DeclStmt *node) {
         }
         if (decl->getKind() != ast::ASTKind::VarDecl) continue;
         ast::VarDecl *var = static_cast<ast::VarDecl *>(decl.get());
-        //the name is in scope from its declarator on, so the initializer could
-        //name it. the type checker reports such a use where it matters
+        //the name is in scope from its declarator on
         declareVariable(var, current, SymbolKind::Variable);
         buildInitializer(var, current);
     }
@@ -832,8 +827,7 @@ const Type *SymbolBuilder::findTypeName(const std::string &name, Scope *scope) {
     return nullptr;
 }
 
-//the record named by every part of a qualified name but the last: A::B::f
-//gives B inside A
+//the record named by every part but the last: A::B::f gives B
 RecordSymbol *SymbolBuilder::findRecordPath(const ast::QualifiedName &name, int line, int col) {
     RecordSymbol *record = nullptr;
     Scope *scope = table.global();

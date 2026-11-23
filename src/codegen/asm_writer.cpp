@@ -1,6 +1,7 @@
 #include "codegen/asm_writer.h"
 
 #include "codegen/isel.h"
+#include "codegen/peephole.h"
 #include "ir/ir_types.h"
 
 namespace codegen {
@@ -32,8 +33,8 @@ bool isAllZero(const ir::Constant *constant) {
 
 } // namespace
 
-AsmWriter::AsmWriter(ir::Module &module, passes::AnalysisManager &am)
-    : module(module), am(am), layout(module.symTab) {}
+AsmWriter::AsmWriter(ir::Module &module, passes::AnalysisManager &am, int optLevel)
+    : module(module), am(am), layout(module.symTab), optLevel(optLevel) {}
 
 bool AsmWriter::write(std::ostream &out) {
     int id = 0;
@@ -45,6 +46,7 @@ bool AsmWriter::write(std::ostream &out) {
             errorText = emitter.error();
             return false;
         }
+        if (optLevel >= 1) peephole(lines);
         out << "\n";
         for (const std::string &text : lines) out << text << "\n";
     }

@@ -42,22 +42,23 @@ int main() {
     return 0;
 }
 
+// the call graph of the unoptimized program (-O1 inlines leaf, middle, top and twice)
 // per-function facts, in any order
-// CG-DAG: function @{{[A-Za-z0-9_]*}}leaf{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}middle{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 2{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}fact{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 2, recursive{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}ping{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 3, recursive{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}pong{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1, recursive{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}twice{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 0, address taken{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}applyTo{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1, has indirect call{{$}}
-// CG-DAG: function @{{[A-Za-z0-9_]*}}unused{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 0{{$}}
-// CG-DAG: function @printf: declaration, variadic, size 0, call sites 4{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}leaf{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}middle{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 2{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}fact{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 2, recursive{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}ping{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 3, recursive{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}pong{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1, recursive{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}twice{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 0, address taken{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}applyTo{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1, has indirect call{{$}}
+// CG-O0-DAG: function @{{[A-Za-z0-9_]*}}unused{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 0{{$}}
+// CG-O0-DAG: function @printf: declaration, variadic, size 0, call sites 4{{$}}
 
 // bottom-up: every callee before its callers, ping and pong share one component
-// CG-LABEL: bottom-up:
-// CG: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}leaf{{[A-Za-z0-9_]*}}{{$}}
-// CG: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}middle{{[A-Za-z0-9_]*}}{{$}}
-// CG: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}top{{[A-Za-z0-9_]*}}{{$}}
-// CG: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}fact{{[A-Za-z0-9_]*}} (recursive)
-// CG: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}p{{[io]}}ng{{[A-Za-z0-9_]*}} @{{[A-Za-z0-9_]*}}p{{[io]}}ng{{[A-Za-z0-9_]*}} (recursive)
-// CG: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}main{{$}}
+// CG-O0-LABEL: bottom-up:
+// CG-O0: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}leaf{{[A-Za-z0-9_]*}}{{$}}
+// CG-O0: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}middle{{[A-Za-z0-9_]*}}{{$}}
+// CG-O0: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}top{{[A-Za-z0-9_]*}}{{$}}
+// CG-O0: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}fact{{[A-Za-z0-9_]*}} (recursive)
+// CG-O0: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}p{{[io]}}ng{{[A-Za-z0-9_]*}} @{{[A-Za-z0-9_]*}}p{{[io]}}ng{{[A-Za-z0-9_]*}} (recursive)
+// CG-O0: scc {{[0-9]+}}: @{{[A-Za-z0-9_]*}}main{{$}}

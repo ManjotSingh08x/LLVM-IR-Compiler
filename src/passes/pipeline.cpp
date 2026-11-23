@@ -1,5 +1,8 @@
 #include "passes/pipeline.h"
 
+#include "passes/const_prop_dense.h"
+#include "passes/inline.h"
+#include "passes/local_dag.h"
 #include "passes/loop_rotate.h"
 #include "passes/simplify_cfg.h"
 
@@ -18,9 +21,17 @@ GlobalPassManager buildPipeline(int optLevel) {
     pipeline.addModule(std::move(cleanup));
     if (optLevel == 0) return pipeline;
 
-    //stage 2, -O1 and up: inline (global). not written yet
-    //stage 3, -O1 and up: local_dag, const_prop_dense, local_dag, simplify_cfg. not written yet
-    pipeline.addModule(std::unique_ptr<ModulePassManager>(new ModulePassManager()));
+    //stage 2, -O1 and up: inlining sees every function after stage 1, callees first
+    pipeline.addGlobal(std::unique_ptr<GlobalPass>(new Inliner()));
+
+    //stage 3, -O1 and up: the local and dense optimizations of the alloca form. the second
+    //local_dag folds what constant propagation substituted, simplify_cfg the branches it decided
+    std::unique_ptr<ModulePassManager> scalar(new ModulePassManager());
+    scalar->add(std::unique_ptr<FunctionPass>(new LocalDAG()));
+    scalar->add(std::unique_ptr<FunctionPass>(new ConstPropDense()));
+    scalar->add(std::unique_ptr<FunctionPass>(new LocalDAG()));
+    scalar->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
+    pipeline.addModule(std::move(scalar));
     if (optLevel == 1) return pipeline;
 
     //stage 4, -O2 and up: mem2reg, sccp, instsimplify, loop_simplify, licm, iv_strength_reduce,

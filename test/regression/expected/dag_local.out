@@ -1,0 +1,5 @@
+ident 3 3 24 0 3 3
+dead 6
+twice 42 alias 7 7
+global 5 3
+float -nan 0.000000 -0.000000

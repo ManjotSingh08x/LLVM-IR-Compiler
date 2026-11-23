@@ -76,20 +76,20 @@ int main() {
     return 0;
 }
 
-// rotated: the guard ends the entry block, the test is the last block of the loop
+// rotated: the entry block ends in the guard and the loop jumps back from its bottom.
+// at -O0 the canonical blocks stay (a preheader, the test as the loop's last block);
+// from -O1 on simplify_cfg merges them
 // IR-LABEL: define {{.*}}sumTo
-// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %for.body{{[.0-9]*}}.preheader, label %for.end
-// IR: for.cond{{[.0-9]*}}:
-// IR-NEXT: load i32
-// IR: icmp slt
-// IR-NEXT: br i1 {{%[A-Za-z0-9_.]+}}, label %for.body{{[.0-9]*}}, label %for.end
+// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %for.body{{[.0-9a-z]*}}, label %for.end
+// IR-O0: for.cond{{[.0-9]*}}:
+// IR-O0-NEXT: load i32
+// IR-O0: icmp slt
+// IR-O0-NEXT: br i1 {{%[A-Za-z0-9_.]+}}, label %for.body{{[.0-9]*}}, label %for.end
+// IR-GE1: br i1 {{%[A-Za-z0-9_.]+}}, label %for.body{{[.0-9]*}}, label %for.end
 // IR-LABEL: define {{.*}}countDown
-// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %while.body{{[.0-9]*}}.preheader, label %while.end
-// IR: while.cond{{[.0-9]*}}:
-// IR-NEXT: load i32
-// IR: icmp sgt
-// IR-NEXT: br i1 {{%[A-Za-z0-9_.]+}}, label %while.body{{[.0-9]*}}, label %while.end
-// not rotated: the header with the call stays first
+// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %while.body{{[.0-9a-z]*}}, label %while.end
+// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %while.body{{[.0-9]*}}, label %while.end
+// not rotated: the header with the call or the && stays first
 // IR-LABEL: define {{.*}}conditionWithCall
 // IR: br label %while.cond
 // IR-EMPTY:

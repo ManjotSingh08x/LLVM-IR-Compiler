@@ -42,10 +42,11 @@ int main() {
     return 0;
 }
 
+// -O0 keeps the canonical blocks (from -O1 on, simplify_cfg bypasses them again)
 // the two ways into the while loop meet in a new preheader
-// IR-LABEL: define {{.*}}twoEntries
-// IR: while.{{(cond|body)}}{{[.0-9]*}}.preheader:
+// IR-O0-LABEL: define {{.*}}twoEntries
+// IR-O0: while.{{(cond|body)}}{{[.0-9]*}}.preheader:
 // the loop's exit edge gets its own block, the goto keeps the old one
-// IR-LABEL: define {{.*}}sharedExit
-// IR: {{[A-Za-z0-9_.]+}}.loopexit:
-// IR-LABEL: define {{.*}}main
+// IR-O0-LABEL: define {{.*}}sharedExit
+// IR-O0: {{[A-Za-z0-9_.]+}}.loopexit:
+// IR-O0-LABEL: define {{.*}}main

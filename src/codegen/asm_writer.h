@@ -16,7 +16,8 @@ namespace codegen {
 //  .init_array  the function that runs global constructors before main
 class AsmWriter {
 public:
-    AsmWriter(ir::Module &module, passes::AnalysisManager &am);
+    //optLevel 1 and up runs the peephole pass over each function
+    AsmWriter(ir::Module &module, passes::AnalysisManager &am, int optLevel);
 
     //false when a function uses ir the backend cannot lower, see error()
     bool write(std::ostream &out);
@@ -31,6 +32,7 @@ private:
     passes::AnalysisManager &am;
     TargetLayout             layout;
     ConstantPool             pool;
+    int                      optLevel;
     std::string              errorText;
 };
 

@@ -1,0 +1,58 @@
+// regression: peephole (dragon 8.7, -O1 and up). comparisons with zero, zero assignments,
+// increments and decrements, chains of jumps, and code after a return. the output must not
+// change; the ASM lines check the rewritten instructions
+
+int classify(int x) {
+    if (x == 0) return 0;
+    if (x < 0) return -1;
+    return 1;
+}
+
+int countBits(int v) {
+    int n = 0;
+    while (v != 0) {
+        n = n + (v & 1);
+        v = v >> 1;
+    }
+    return n;
+}
+
+int clampSteps(int x) {
+    int steps = 0;
+    while (x > 100) {
+        x = x - 1;
+        steps = steps + 1;
+    }
+    while (x < 0) {
+        x = x + 1;
+        steps = steps - 1;
+    }
+    return steps;
+}
+
+int chain(int a) {
+    int r = 0;
+    if (a > 10) {
+        if (a > 20) {
+            r = 2;
+        } else {
+            r = 1;
+        }
+    }
+    return r;
+}
+
+int main() {
+    printf("classify %d %d %d\n", classify(0), classify(-9), classify(4));
+    printf("bits %d %d %d\n", countBits(0), countBits(255), countBits(1023));
+    printf("clamp %d %d %d\n", clampSteps(105), clampSteps(-3), clampSteps(50));
+    printf("chain %d %d %d\n", chain(5), chain(15), chain(25));
+    return 0;
+}
+
+// -O1 and up: no compare with zero (test instead), no mov $0 into a register (xor instead)
+// ASM-GE1-NOT: cmpl $0, %
+// ASM-GE1-NOT: cmpq $0, %
+// ASM-GE1-NOT: movl $0, %e
+// at -O0 the compares with zero are still there
+// ASM-O0: cmpl $0, %

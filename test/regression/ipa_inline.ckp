@@ -1,0 +1,119 @@
+// regression: inlining (-O1 and up). small functions, a function with one call site, a function
+// with several returns, a void function, a method and a lambda are inlined; a recursive function,
+// a big function called twice and a call through a function pointer are not. a callee with a
+// local array is inlined into a loop that runs a million times: its alloca must move to the
+// caller's entry block, or every iteration grows the stack until it overflows
+
+typedef int (*Unary)(int);
+
+int square(int x) { return x * x; }
+
+int callsSquare(int y) { return square(y) + 1; }
+
+int multiReturn(int x) {
+    if (x < 0) return -1;
+    if (x == 0) return 0;
+    return 1;
+}
+
+void bump(int *p) { *p = *p + 1; }
+
+int fact(int n) {
+    if (n <= 1) return 1;
+    return n * fact(n - 1);
+}
+
+int withArray(int n) {
+    int buf[16];
+    for (int i = 0; i < 16; i++) buf[i] = n + i;
+    int s = 0;
+    for (int i = 0; i < 16; i += 5) s += buf[i];
+    return s;
+}
+
+int onlyOnce(int x) {
+    int a = x * 3;
+    int b = a + 7;
+    int c = b * b;
+    int d = c % 101;
+    int e = d + a;
+    int f = e * 2 - b;
+    int g = f % 17;
+    int h = g + c;
+    int i = h - d;
+    int j = i * 5;
+    int k = j % 1000;
+    int l = k + e;
+    int m = l - f;
+    int n = m * 3;
+    return n % 9973;
+}
+
+int bigTwice(int x) {
+    int a = x * 3;
+    int b = a + 7;
+    int c = b * b;
+    int d = c % 101;
+    int e = d + a;
+    int f = e * 2 - b;
+    int g = f % 17;
+    int h = g + c;
+    int i = h - d;
+    int j = i * 5;
+    int k = j % 1000;
+    int l = k + e;
+    int m = l - f;
+    int n = m * 3;
+    return n % 9973;
+}
+
+class Counter {
+public:
+    int value;
+    void add(int v) { this->value = this->value + v; }
+    int get() { return this->value; }
+};
+
+int main() {
+    printf("square %d calls %d\n", square(7), callsSquare(5));
+    printf("sign %d %d %d\n", multiReturn(-4), multiReturn(0), multiReturn(9));
+    int n = 41;
+    bump(&n);
+    printf("bump %d\n", n);
+    printf("fact %d\n", fact(8));
+    printf("once %d big %d %d\n", onlyOnce(12), bigTwice(3), bigTwice(4));
+
+    int total = 0;
+    for (int r = 0; r < 1000000; r++) total = (total + withArray(r)) % 1000003;
+    printf("array %d\n", total);
+
+    Counter c;
+    c.value = 10;
+    c.add(5);
+    c.add(-2);
+    printf("counter %d\n", c.get());
+
+    auto triple = [](int v) { return v * 3; };
+    printf("lambda %d\n", triple(14));
+
+    Unary op = square;
+    printf("pointer %d\n", op(9));
+    return 0;
+}
+
+// after inlining main still calls the recursive function and the big one twice. the call through
+// the pointer becomes a direct call to square once local_dag forwards the stored address into the
+// load (after inlining has run, so it stays a call)
+// IR-LABEL: define i32 @main
+// IR-GE1-DAG: call i32 @{{[A-Za-z0-9_]*}}fact
+// IR-GE1-DAG: call i32 @{{[A-Za-z0-9_]*}}bigTwice
+// IR-GE1-DAG: call i32 @{{[A-Za-z0-9_]*}}bigTwice
+// IR-GE1-DAG: call i32 @{{[A-Za-z0-9_]*}}square{{[A-Za-z0-9_]*}}(i32 9)
+// IR-GE1-NOT: call {{.*}}@{{[A-Za-z0-9_]*}}{{(callsSquare|multiReturn|bump|withArray|onlyOnce|3add|3get)}}
+// at -O0 nothing is inlined
+// IR-O0: call i32 @{{[A-Za-z0-9_]*}}square
+// the call graph after inlining: no direct call is left to the inlined functions
+// CG-GE1-DAG: function @{{[A-Za-z0-9_]*}}6square{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 1, address taken
+// CG-GE1-DAG: function @{{[A-Za-z0-9_]*}}onlyOnce{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 0{{$}}
+// CG-GE1-DAG: function @{{[A-Za-z0-9_]*}}bigTwice{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 2{{$}}
+// CG-GE1-DAG: function @{{[A-Za-z0-9_]*}}fact{{[A-Za-z0-9_]*}}: definition, size {{[0-9]+}}, call sites 2, recursive{{$}}

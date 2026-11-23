@@ -6,8 +6,7 @@ namespace codegen {
 
 bool emitAssembly(ir::Module &module, passes::AnalysisManager &am, int optLevel, std::ostream &out,
                   std::string &error) {
-    (void)optLevel;  //-O2 adds the peephole pass here
-    AsmWriter writer(module, am);
+    AsmWriter writer(module, am, optLevel);
     if (writer.write(out)) return true;
     error = writer.error();
     return false;

@@ -1,0 +1,55 @@
+// regression: const_prop_dense (dragon 9.4). constants carried through variables across blocks,
+// a join of equal constants stays constant, a join of different ones does not, a loop that keeps a
+// variable constant, a loop that changes it, and branches decided by a propagated constant.
+// the flag comes from stdin (test/regression/inputs): 1
+
+int calls = 0;
+
+void neverCalled() {
+    calls = calls + 1;
+    printf("this must never print\n");
+}
+
+int main() {
+    int flag;
+    scanf("%d", &flag);
+
+    //equal on both paths: 10 after the join
+    int a = 5;
+    int b;
+    if (flag) {
+        b = a * 2;
+    } else {
+        b = 10;
+    }
+
+    //different on the two paths: not a constant
+    int c;
+    if (flag) {
+        c = 1;
+    } else {
+        c = 2;
+    }
+
+    //k never changes inside the loop, i does
+    int k = 3;
+    int total = 0;
+    for (int i = 0; i < 10; i++) total = total + k;
+
+    //a debug switch turned off by a constant: the call disappears
+    int debug = 0;
+    if (debug) neverCalled();
+    int level = 2;
+    if (level > 5) neverCalled();
+
+    double scale = 1.5;
+    double area = scale * 4.0;
+
+    printf("b %d c %d total %d area %.2f calls %d\n", b, c, total, area, calls);
+    return 0;
+}
+
+// -O1 and up: b is 10 and area is 6.0 where they are printed, c is still loaded, no call is left
+// IR-LABEL: define i32 @main
+// IR-GE1-NOT: call void @{{[A-Za-z0-9_]*}}neverCalled
+// IR-GE1: call i32 (ptr, ...) @printf(ptr %{{[A-Za-z0-9_.]+}}, i32 10, i32 %{{[A-Za-z0-9_.]+}}, i32 %{{[A-Za-z0-9_.]+}}, double 0x4018000000000000, i32 %{{[A-Za-z0-9_.]+}})

@@ -2,8 +2,11 @@
 
 #include "passes/const_prop_dense.h"
 #include "passes/inline.h"
+#include "passes/instsimplify.h"
 #include "passes/local_dag.h"
 #include "passes/loop_rotate.h"
+#include "passes/mem2reg.h"
+#include "passes/sccp.h"
 #include "passes/simplify_cfg.h"
 
 namespace passes {
@@ -34,9 +37,16 @@ GlobalPassManager buildPipeline(int optLevel) {
     pipeline.addModule(std::move(scalar));
     if (optLevel == 1) return pipeline;
 
-    //stage 4, -O2 and up: mem2reg, sccp, instsimplify, loop_simplify, licm, iv_strength_reduce,
-    //loop_unswitch, simplify_cfg, instsimplify, cse, dce, sink. not written yet
-    pipeline.addModule(std::unique_ptr<ModulePassManager>(new ModulePassManager()));
+    //stage 4, -O2 and up: ssa, then the sparse and data-flow optimizations on it.
+    //still to come (step 7): loop_simplify, licm, iv_strength_reduce, loop_unswitch after the first
+    //instsimplify, and cse, dce, sink at the end
+    std::unique_ptr<ModulePassManager> ssa(new ModulePassManager());
+    ssa->add(std::unique_ptr<FunctionPass>(new Mem2Reg()));
+    ssa->add(std::unique_ptr<FunctionPass>(new SCCP()));
+    ssa->add(std::unique_ptr<FunctionPass>(new InstSimplify()));
+    ssa->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
+    ssa->add(std::unique_ptr<FunctionPass>(new InstSimplify()));
+    pipeline.addModule(std::move(ssa));
 
     //-O3 runs the -O2 stages, only codegen differs
     return pipeline;

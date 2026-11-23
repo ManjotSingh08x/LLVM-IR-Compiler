@@ -1,0 +1,164 @@
+// stress: data structures on the heap. a linked list built with new and freed with delete, a
+// stack class over an array, a queue as a ring buffer, a binary search tree with recursive
+// insert and walk, and structs passed around by pointer
+
+struct Node {
+    int value;
+    Node *next;
+};
+
+struct Tree {
+    int key;
+    int count;
+    Tree *left;
+    Tree *right;
+};
+
+class Stack {
+public:
+    int items[64];
+    int top;
+    Stack() { this->top = 0; }
+    void push(int v) {
+        this->items[this->top] = v;
+        this->top++;
+    }
+    int pop() {
+        this->top--;
+        return this->items[this->top];
+    }
+    bool empty() { return this->top == 0; }
+};
+
+class Ring {
+public:
+    int slots[8];
+    int head;
+    int size;
+    Ring() {
+        this->head = 0;
+        this->size = 0;
+    }
+    bool put(int v) {
+        if (this->size == 8) return false;
+        this->slots[(this->head + this->size) % 8] = v;
+        this->size++;
+        return true;
+    }
+    int take() {
+        int v = this->slots[this->head];
+        this->head = (this->head + 1) % 8;
+        this->size--;
+        return v;
+    }
+};
+
+Node *pushFront(Node *list, int v) {
+    Node *n = new Node;
+    n->value = v;
+    n->next = list;
+    return n;
+}
+
+Node *reverse(Node *list) {
+    Node *prev = nullptr;
+    while (list != nullptr) {
+        Node *next = list->next;
+        list->next = prev;
+        prev = list;
+        list = next;
+    }
+    return prev;
+}
+
+int sumList(Node *list) {
+    int s = 0;
+    int pos = 1;
+    while (list != nullptr) {
+        s += list->value * pos;
+        pos++;
+        list = list->next;
+    }
+    return s;
+}
+
+void freeList(Node *list) {
+    while (list != nullptr) {
+        Node *next = list->next;
+        delete list;
+        list = next;
+    }
+}
+
+Tree *insert(Tree *t, int key) {
+    if (t == nullptr) {
+        Tree *n = new Tree;
+        n->key = key;
+        n->count = 1;
+        n->left = nullptr;
+        n->right = nullptr;
+        return n;
+    }
+    if (key == t->key) {
+        t->count++;
+    } else if (key < t->key) {
+        t->left = insert(t->left, key);
+    } else {
+        t->right = insert(t->right, key);
+    }
+    return t;
+}
+
+int depth(Tree *t) {
+    if (t == nullptr) return 0;
+    int l = depth(t->left);
+    int r = depth(t->right);
+    return 1 + (l > r ? l : r);
+}
+
+int walk(Tree *t, int acc) {
+    if (t == nullptr) return acc;
+    acc = walk(t->left, acc);
+    acc = (acc * 7 + t->key * t->count) % 1000003;
+    return walk(t->right, acc);
+}
+
+void freeTree(Tree *t) {
+    if (t == nullptr) return;
+    freeTree(t->left);
+    freeTree(t->right);
+    delete t;
+}
+
+int main() {
+    Node *list = nullptr;
+    for (int i = 1; i <= 50; i++) list = pushFront(list, i * i % 37);
+    int before = sumList(list);
+    list = reverse(list);
+    printf("list %d %d first %d\n", before, sumList(list), list->value);
+    freeList(list);
+
+    Stack s;
+    for (int i = 0; i < 20; i++) s.push(i * 3);
+    int popped = 0;
+    while (!s.empty()) popped = popped * 2 % 10007 + s.pop();
+    printf("stack %d\n", popped);
+
+    Ring r;
+    int rejected = 0;
+    int drained = 0;
+    for (int i = 0; i < 30; i++) {
+        if (!r.put(i)) rejected++;
+        if (i % 3 == 2) drained += r.take();
+    }
+    while (r.size > 0) drained += r.take() * 2;
+    printf("ring %d %d\n", rejected, drained);
+
+    Tree *root = nullptr;
+    int keys[12] = {50, 30, 70, 20, 40, 60, 80, 30, 65, 20, 85, 50};
+    for (int i = 0; i < 12; i++) root = insert(root, keys[i]);
+    for (int i = 0; i < 40; i++) root = insert(root, (i * 37) % 101);
+    printf("tree depth %d walk %d\n", depth(root), walk(root, 0));
+    freeTree(root);
+    return 0;
+}

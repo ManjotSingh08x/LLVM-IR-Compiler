@@ -1,0 +1,5 @@
+loop 18 5
+switch 25
+zero trip 4
+same 7
+convert 1000000000 0.333333343 -56 -3 -1

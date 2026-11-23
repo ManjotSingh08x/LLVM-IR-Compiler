@@ -25,6 +25,9 @@ public:
     long long aggregateSlot(const ir::Value *value, uint64_t size, uint64_t align);
     bool      isAggregate(const ir::Value *value) const { return aggregates.count(value) != 0; }
 
+    //the 8-byte slot a phi's incoming value is copied into at the end of each predecessor
+    long long phiSlot(const ir::Value *phi);
+
     //where a callee-saved register is kept between prologue and epilogue
     long long saveSlot(Reg reg);
 
@@ -38,6 +41,7 @@ private:
     std::map<const ir::Value *, long long> allocas;
     std::map<const ir::Value *, long long> homes;
     std::map<const ir::Value *, long long> aggregates;
+    std::map<const ir::Value *, long long> phis;
     std::map<Reg, long long>               saves;
 };
 

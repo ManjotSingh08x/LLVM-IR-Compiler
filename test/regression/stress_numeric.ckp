@@ -1,0 +1,127 @@
+// stress: number crunching. a sieve of primes, gcd and lcm, modular powers, collatz chains,
+// integer square roots by newton's method, matrix products in int and double, series sums,
+// float and double mixed in one expression, and char arithmetic
+
+int gcd(int a, int b) {
+    while (b != 0) {
+        int t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+int lcm(int a, int b) { return a / gcd(a, b) * b; }
+
+int powMod(int base, int exp, int mod) {
+    int result = 1;
+    base = base % mod;
+    while (exp > 0) {
+        if (exp % 2 == 1) result = result * base % mod;
+        base = base * base % mod;
+        exp = exp / 2;
+    }
+    return result;
+}
+
+int collatz(int n) {
+    int steps = 0;
+    while (n != 1) {
+        if (n % 2 == 0) {
+            n = n / 2;
+        } else {
+            n = 3 * n + 1;
+        }
+        steps++;
+    }
+    return steps;
+}
+
+int isqrt(int n) {
+    if (n < 2) return n;
+    int x = n;
+    int y = (x + 1) / 2;
+    while (y < x) {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    return x;
+}
+
+double newtonSqrt(double v) {
+    double x = v;
+    for (int i = 0; i < 30; i++) x = 0.5 * (x + v / x);
+    return x;
+}
+
+int main() {
+    //sieve of eratosthenes
+    bool composite[5000];
+    for (int i = 0; i < 5000; i++) composite[i] = false;
+    int primes = 0;
+    int lastPrime = 0;
+    for (int i = 2; i < 5000; i++) {
+        if (composite[i]) continue;
+        primes++;
+        lastPrime = i;
+        for (int j = i * i; j < 5000; j += i) composite[j] = true;
+    }
+    printf("primes %d last %d\n", primes, lastPrime);
+
+    printf("gcd %d %d lcm %d %d\n", gcd(1071, 462), gcd(17, 5), lcm(21, 6), lcm(4, 9));
+    printf("pow %d %d %d\n", powMod(2, 30, 1000007), powMod(7, 222, 1009), powMod(3, 0, 13));
+
+    int longest = 0;
+    int start = 0;
+    for (int n = 1; n < 3000; n++) {
+        int c = collatz(n);
+        if (c > longest) {
+            longest = c;
+            start = n;
+        }
+    }
+    printf("collatz %d %d\n", start, longest);
+    printf("isqrt %d %d %d %d\n", isqrt(0), isqrt(15), isqrt(16), isqrt(1000000));
+
+    //3x3 integer and double matrix products
+    int m[3][3];
+    int p[3][3];
+    double d[3][3];
+    double q[3][3];
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) {
+            m[i][j] = i * 3 + j - 4;
+            d[i][j] = (i + 1) * 0.5 - j;
+        }
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) {
+            int s = 0;
+            double t = 0.0;
+            for (int k = 0; k < 3; k++) {
+                s += m[i][k] * m[k][j];
+                t = t + d[i][k] * d[k][j];
+            }
+            p[i][j] = s;
+            q[i][j] = t;
+        }
+    printf("matrix %d %d %d %.3f %.3f %.3f\n", p[0][0], p[1][1], p[2][2], q[0][0], q[1][2], q[2][1]);
+
+    //series and mixed precision
+    double harmonic = 0.0;
+    for (int i = 1; i <= 1000; i++) harmonic = harmonic + 1.0 / i;
+    float f = 0.1;
+    double mixed = f * 3 + harmonic / 2;
+    printf("series %.6f sqrt %.6f %.6f mixed %.5f\n", harmonic, newtonSqrt(2.0), newtonSqrt(1e6), mixed);
+
+    //char arithmetic
+    char letters[27];
+    for (int i = 0; i < 26; i++) letters[i] = 'a' + (i * 7) % 26;
+    letters[26] = 0;
+    int vowels = 0;
+    for (int i = 0; i < 26; i++) {
+        char ch = letters[i];
+        if (ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u') vowels++;
+    }
+    printf("letters %s vowels %d\n", letters, vowels);
+    return 0;
+}

@@ -36,6 +36,14 @@ long long Frame::aggregateSlot(const ir::Value *value, uint64_t size, uint64_t a
     return offset;
 }
 
+long long Frame::phiSlot(const ir::Value *phi) {
+    std::map<const ir::Value *, long long>::iterator it = phis.find(phi);
+    if (it != phis.end()) return it->second;
+    long long offset = allocate(8, 8);
+    phis[phi] = offset;
+    return offset;
+}
+
 long long Frame::saveSlot(Reg reg) {
     std::map<Reg, long long>::iterator it = saves.find(reg);
     if (it != saves.end()) return it->second;

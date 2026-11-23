@@ -14,21 +14,6 @@ using namespace ir;
 
 namespace {
 
-const Constant *asConstant(const Value *value) {
-    return value->getKind() == ValueKind::Constant ? static_cast<const Constant *>(value) : nullptr;
-}
-
-bool isIntConst(const Value *value, long long v) {
-    const Constant *c = asConstant(value);
-    return c && c->constKind == ConstantKind::Int && c->intValue == ir::normalizeInt(v, c->getType());
-}
-
-bool isFloatConst(const Value *value, double v, bool negativeZero) {
-    const Constant *c = asConstant(value);
-    if (!c || c->constKind != ConstantKind::Float || c->floatValue != v) return false;
-    return std::signbit(c->floatValue) == negativeZero;
-}
-
 bool isScalarType(const sema::Type *type) {
     return sema::isIntegral(type) || sema::isFloating(type) || type->is(sema::TypeKind::Pointer) || isInt64(type);
 }
@@ -87,139 +72,6 @@ std::string keyOf(const Instruction &inst) {
     }
     for (const std::string &op : ops) key += "|" + op;
     return key;
-}
-
-//algebraic identities (8.5.4, 8.7.4). returns the value inst equals, or null. may instead rewrite
-//inst in place into something cheaper (x * 2^k -> x << k) and set rewritten
-Value *simplify(Module &module, Instruction &inst, bool &rewritten) {
-    rewritten = false;
-    switch (inst.getOpcode()) {
-    case Opcode::Binary: {
-        BinaryInst &b = static_cast<BinaryInst &>(inst);
-        Value *x = b.lhs, *y = b.rhs;
-        const sema::Type *t = b.getType();
-        bool ints = integerBits(b.operandType) != 0;
-        switch (b.op) {
-        case BinaryOpKind::Add:
-            if (isIntConst(y, 0)) return x;
-            if (isIntConst(x, 0)) return y;
-            break;
-        case BinaryOpKind::Sub:
-            if (isIntConst(y, 0)) return x;
-            if (x == y) return module.getInt(t, 0);
-            break;
-        case BinaryOpKind::Mul: {
-            if (isIntConst(y, 1)) return x;
-            if (isIntConst(x, 1)) return y;
-            if (isIntConst(y, 0) || isIntConst(x, 0)) return module.getInt(t, 0);
-            //local reduction in strength: a multiply by 2^k is a shift
-            Value *other = x;
-            const Constant *c = asConstant(y);
-            if (!c || c->constKind != ConstantKind::Int) {
-                other = y;
-                c = asConstant(x);
-            }
-            if (c && c->constKind == ConstantKind::Int && integerBits(t) >= 8 && c->intValue > 1 &&
-                (c->intValue & (c->intValue - 1)) == 0) {
-                long long k = 0;
-                while ((1LL << k) < c->intValue) k++;
-                b.op = BinaryOpKind::Shl;
-                b.lhs = other;
-                b.rhs = module.getInt(t, k);
-                rewritten = true;
-            }
-            break;
-        }
-        case BinaryOpKind::SDiv:
-            if (isIntConst(y, 1)) return x;
-            break;
-        case BinaryOpKind::SRem:
-            if (isIntConst(y, 1)) return module.getInt(t, 0);
-            break;
-        case BinaryOpKind::Shl:
-        case BinaryOpKind::AShr:
-            if (isIntConst(y, 0)) return x;
-            break;
-        case BinaryOpKind::And:
-            if (isIntConst(y, 0) || isIntConst(x, 0)) return module.getInt(t, 0);
-            if (x == y || isIntConst(y, -1)) return x;
-            if (isIntConst(x, -1)) return y;
-            break;
-        case BinaryOpKind::Or:
-            if (isIntConst(y, 0) || x == y) return x;
-            if (isIntConst(x, 0)) return y;
-            break;
-        case BinaryOpKind::Xor:
-            if (isIntConst(y, 0)) return x;
-            if (isIntConst(x, 0)) return y;
-            if (x == y) return module.getInt(t, 0);
-            break;
-        case BinaryOpKind::ICmpEQ: case BinaryOpKind::ICmpSLE: case BinaryOpKind::ICmpSGE:
-        case BinaryOpKind::ICmpULE: case BinaryOpKind::ICmpUGE:
-            if (x == y) return module.getBool(true);
-            break;
-        case BinaryOpKind::ICmpNE: case BinaryOpKind::ICmpSLT: case BinaryOpKind::ICmpSGT:
-        case BinaryOpKind::ICmpULT: case BinaryOpKind::ICmpUGT:
-            if (x == y) return module.getBool(false);
-            break;
-        //floating: only the identities that hold for every input, -0.0 and NaN included
-        case BinaryOpKind::FAdd:
-            if (isFloatConst(y, 0.0, true)) return x;   //x + -0.0
-            if (isFloatConst(x, 0.0, true)) return y;
-            break;
-        case BinaryOpKind::FSub:
-            if (isFloatConst(y, 0.0, false)) return x;  //x - +0.0
-            break;
-        case BinaryOpKind::FMul:
-            if (isFloatConst(y, 1.0, false)) return x;
-            if (isFloatConst(x, 1.0, false)) return y;
-            break;
-        case BinaryOpKind::FDiv:
-            if (isFloatConst(y, 1.0, false)) return x;
-            break;
-        default:
-            break;
-        }
-        (void)ints;
-        return nullptr;
-    }
-    case Opcode::Unary: {
-        UnaryInst &u = static_cast<UnaryInst &>(inst);
-        if (u.operand->getKind() == ValueKind::Instruction &&
-            static_cast<Instruction *>(u.operand)->getOpcode() == Opcode::Unary) {
-            return static_cast<UnaryInst *>(u.operand)->operand;  //-(-x)
-        }
-        return nullptr;
-    }
-    case Opcode::Cast: {
-        CastInst &c = static_cast<CastInst &>(inst);
-        if (c.operand->getKind() != ValueKind::Instruction ||
-            static_cast<Instruction *>(c.operand)->getOpcode() != Opcode::Cast) {
-            return nullptr;
-        }
-        CastInst &inner = *static_cast<CastInst *>(c.operand);
-        //sext(sext x) and zext(zext x) are one extension
-        if ((c.op == CastOpKind::SExt || c.op == CastOpKind::ZExt) && inner.op == c.op) {
-            c.operand = inner.operand;
-            c.fromType = inner.fromType;
-            rewritten = true;
-            return nullptr;
-        }
-        //trunc(ext x) back to x's own type is x
-        if (c.op == CastOpKind::Trunc && (inner.op == CastOpKind::SExt || inner.op == CastOpKind::ZExt) &&
-            formatType(inner.fromType) == formatType(c.toType)) {
-            return inner.operand;
-        }
-        return nullptr;
-    }
-    case Opcode::Select: {
-        SelectInst &s = static_cast<SelectInst &>(inst);
-        if (s.ifTrue == s.ifFalse) return s.ifTrue;
-        return nullptr;
-    }
-    default:
-        return nullptr;
-    }
 }
 
 //a value read from or written to memory, available until something may change that memory
@@ -359,7 +211,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
                     }
                 }
                 bool rewritten = false;
-                if (Value *same = simplify(module, *inst, rewritten)) {
+                if (Value *same = simplifyInstruction(module, *inst, rewritten)) {
                     replaceWith(inst, same);
                     break;
                 }

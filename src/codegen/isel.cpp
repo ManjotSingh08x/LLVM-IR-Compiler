@@ -237,7 +237,7 @@ void FunctionEmitter::emitInstruction(ir::Instruction *inst, const InstNextUse &
     case ir::Opcode::Select:
         return emitSelect(static_cast<ir::SelectInst *>(inst), info);
     case ir::Opcode::Phi:
-        return fail("phi nodes must be removed before code generation");
+        return emitPhi(static_cast<ir::PhiInst *>(inst), info);
     default:
         return fail("unexpected terminator in the middle of a block");
     }
@@ -855,6 +855,84 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
     defineResult(inst, resultOnly, isFloatType(inst->getType()) ? Reg::XMM0 : Reg::RAX);
 }
 
+//  phis
+
+void FunctionEmitter::emitPhi(ir::PhiInst *phi, const InstNextUse &info) {
+    const sema::Type *type = phi->getType();
+    Mem slot = Mem::frame(frame.phiSlot(phi));
+    if (isFloatType(type)) {
+        line(std::string(isDoubleType(type) ? "movsd\t" : "movss\t") + slot.str() + ", %xmm0");
+        return defineResult(phi, info, Reg::XMM0);
+    }
+    if (!isIntegerLike(type)) return fail("a phi of an aggregate value is not supported");
+    switch (widthOf(type)) {
+    case Width::Byte: line("movzbl\t" + slot.str() + ", %eax"); break;
+    case Width::Long: line("movl\t" + slot.str() + ", %eax"); break;
+    case Width::Quad: line("movq\t" + slot.str() + ", %rax"); break;
+    }
+    defineResult(phi, info, Reg::RAX);
+}
+
+bool FunctionEmitter::hasPhiFrom(const ir::BasicBlock *block, const ir::BasicBlock *succ) const {
+    for (const std::unique_ptr<ir::Instruction> &inst : succ->instructions) {
+        if (inst->getOpcode() != ir::Opcode::Phi) return false;
+        if (static_cast<const ir::PhiInst *>(inst.get())->getIncomingValueFor(block)) return true;
+    }
+    return false;
+}
+
+ir::BasicBlock *FunctionEmitter::deferredEdge(ir::BasicBlock *block, ir::BranchInst *br) {
+    if (!br->isConditional() || br->target == br->falseTarget) return nullptr;
+    if (!hasPhiFrom(block, br->target) || !hasPhiFrom(block, br->falseTarget)) return nullptr;
+    const passes::Dominators &doms = am.getDominators(fn);
+    bool trueBack = doms.dominates(br->target, block);
+    bool falseBack = doms.dominates(br->falseTarget, block);
+    if (trueBack == falseBack) return nullptr;
+    return trueBack ? br->falseTarget : br->target;
+}
+
+void FunctionEmitter::branchWithCopies(const std::string &condCode, ir::BasicBlock *block, ir::BasicBlock *ifTrue,
+                                       ir::BasicBlock *ifFalse, ir::BasicBlock *deferred, const ir::BasicBlock *next) {
+    if (deferred == nullptr) return branchOn(condCode, ifTrue, ifFalse, next);
+    if (deferred == ifFalse) {
+        line("j" + condCode + "\t" + label(ifTrue));
+        storePhiCopies(block, ifFalse);
+        return jumpUnless(ifFalse, next);
+    }
+    line("j" + invert(condCode) + "\t" + label(ifFalse));
+    storePhiCopies(block, ifTrue);
+    jumpUnless(ifTrue, next);
+}
+
+void FunctionEmitter::storePhiCopies(ir::BasicBlock *block, const ir::BasicBlock *succ) {
+    for (const std::unique_ptr<ir::Instruction> &inst : succ->instructions) {
+        if (inst->getOpcode() != ir::Opcode::Phi) break;
+        ir::PhiInst *phi = static_cast<ir::PhiInst *>(inst.get());
+        const ir::Value *value = phi->getIncomingValueFor(block);
+        if (value == nullptr) continue;
+        const sema::Type *type = phi->getType();
+        Mem slot = Mem::frame(frame.phiSlot(phi));
+        if (isFloatType(type)) {
+            loadFloat(value, Reg::XMM0);
+            line(std::string(isDoubleType(type) ? "movsd\t" : "movss\t") + "%xmm0, " + slot.str());
+            continue;
+        }
+        Width w = widthOf(type);
+        const ir::Constant *c = asConstant(value);
+        Reg held;
+        if (ra.registerOf(value, held)) {
+            line(std::string("mov") + suffix(w) + "\t" + regName(held, w) + ", " + slot.str());
+        } else if (c && c->constKind == ir::ConstantKind::Int && fitsInt32(c->intValue)) {
+            line(std::string("mov") + suffix(w) + "\t" + imm(c->intValue) + ", " + slot.str());
+        } else if (c && c->constKind == ir::ConstantKind::Null) {
+            line("movq\t$0, " + slot.str());
+        } else {
+            loadInt(value, Reg::RAX, w);
+            line(std::string("mov") + suffix(w) + "\t" + regName(Reg::RAX, w) + ", " + slot.str());
+        }
+    }
+}
+
 //  terminators
 
 void FunctionEmitter::jumpUnless(const ir::BasicBlock *target, const ir::BasicBlock *next) {
@@ -874,6 +952,16 @@ void FunctionEmitter::branchOn(const std::string &condCode, ir::BasicBlock *ifTr
 void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &info, const passes::ValueSet &liveOut,
                                      ir::BasicBlock *next) {
     (void)info;
+    ir::BasicBlock *block = inst->getParent();
+    //the successors' phi copies come first, while the flags do not matter yet (a repeated edge
+    //carries the same values). only a loop exit may wait until after the jump, see deferredEdge
+    ir::BasicBlock *deferred = nullptr;
+    if (inst->getOpcode() == ir::Opcode::Br) deferred = deferredEdge(block, static_cast<ir::BranchInst *>(inst));
+    std::set<const ir::BasicBlock *> done;
+    if (deferred) done.insert(deferred);
+    for (ir::BasicBlock *succ : inst->getSuccessors()) {
+        if (done.insert(succ).second) storePhiCopies(block, succ);
+    }
     //end of block: values live on exit go back to memory. movs leave the flags alone
     ra.flush(liveOut);
 
@@ -903,12 +991,16 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
         if (condInst && fused.count(condInst)) {
             ir::BinaryInst *cmp = static_cast<ir::BinaryInst *>(br->condition);
             emitIntCompare(cmp);
-            return branchOn(conditionCode(cmp->op), br->target, br->falseTarget, next);
+            return branchWithCopies(conditionCode(cmp->op), block, br->target, br->falseTarget, deferred, next);
         }
         const ir::Constant *c = asConstant(br->condition);
-        if (c) return jumpUnless(c->intValue ? br->target : br->falseTarget, next);
+        if (c) {
+            ir::BasicBlock *taken = c->intValue ? br->target : br->falseTarget;
+            if (taken == deferred) storePhiCopies(block, taken);
+            return jumpUnless(taken, next);
+        }
         line("testb\t$1, " + intSource(br->condition, Width::Byte, Reg::RAX));
-        return branchOn("ne", br->target, br->falseTarget, next);
+        return branchWithCopies("ne", block, br->target, br->falseTarget, deferred, next);
     }
     case ir::Opcode::Switch: {
         ir::SwitchInst *sw = static_cast<ir::SwitchInst *>(inst);

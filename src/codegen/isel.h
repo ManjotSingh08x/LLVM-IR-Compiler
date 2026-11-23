@@ -62,6 +62,21 @@ private:
     void emitCast(ir::CastInst *inst, const InstNextUse &info);
     void emitSelect(ir::SelectInst *inst, const InstNextUse &info);
     void emitCall(ir::CallInst *inst, const InstNextUse &info);
+
+    //phis: each has a slot in the frame. every predecessor stores its incoming value there before
+    //it jumps, and the phi is defined at the top of its block by loading the slot. the copies read
+    //values, never another phi's slot, so no copy can clobber one still to be read (the swap and
+    //lost-copy problems of leaving ssa) and no edge needs splitting
+    void emitPhi(ir::PhiInst *phi, const InstNextUse &info);
+    void storePhiCopies(ir::BasicBlock *block, const ir::BasicBlock *succ);  //the copies for one edge
+    bool hasPhiFrom(const ir::BasicBlock *block, const ir::BasicBlock *succ) const;
+    //copies go before the compare, on both edges (a store on the edge not taken is cheaper than a
+    //jump). the exception: when both edges need copies and one is a loop's back edge, the other
+    //(the loop exit) does its copies after the jump instruction, so the loop does not pay for them.
+    //returns that exit edge's target, or null
+    ir::BasicBlock *deferredEdge(ir::BasicBlock *block, ir::BranchInst *br);
+    void branchWithCopies(const std::string &condCode, ir::BasicBlock *block, ir::BasicBlock *ifTrue,
+                          ir::BasicBlock *ifFalse, ir::BasicBlock *deferred, const ir::BasicBlock *next);
     void jumpUnless(const ir::BasicBlock *target, const ir::BasicBlock *next);
     void branchOn(const std::string &condCode, ir::BasicBlock *ifTrue, ir::BasicBlock *ifFalse,
                   const ir::BasicBlock *next);

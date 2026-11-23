@@ -28,7 +28,9 @@ NextUse::NextUse(const ir::BasicBlock &block, const passes::ValueSet &liveOut) {
             info.result = lookup(state, inst);
             state.erase(inst);
         }
-        //2. attach what is known about y and z, then they are used here
+        //2. attach what is known about y and z, then they are used here. a phi reads its operands
+        //at the end of the predecessors (they are live out there), not here
+        if (inst->getOpcode() == ir::Opcode::Phi) continue;
         std::vector<ir::Value *> operands = inst->getOperands();
         for (const ir::Value *operand : operands) {
             if (passes::Liveness::isTracked(operand)) info.operands[operand] = lookup(state, operand);

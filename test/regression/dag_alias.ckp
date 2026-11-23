@@ -1,0 +1,72 @@
+// regression: what local_dag may and may not assume about memory. stores through pointers into
+// arrays and struct fields, a global changed through a pointer, a local whose address escapes to
+// a call, repeated address computations, and loads that look the same but read changed memory
+
+struct Pair {
+    int a;
+    int b;
+};
+
+int g = 1;
+
+void addTo(int *p, int v) { *p = *p + v; }
+
+void touchGlobal(int *p) { *p = 99; }
+
+int sameSlot(int arr[], int i, int j) {
+    arr[i] = 10;
+    arr[j] = 20;
+    return arr[i];  //i == j makes this 20
+}
+
+int fields(Pair *p, int *q) {
+    p->a = 1;
+    p->b = 2;
+    *q = 3;          //q may point at p->a or p->b
+    return p->a * 10 + p->b;
+}
+
+int main() {
+    int arr[4];
+    printf("slot %d %d\n", sameSlot(arr, 1, 2), sameSlot(arr, 3, 3));
+
+    Pair pr;
+    printf("fields %d %d %d\n", fields(&pr, &pr.a), fields(&pr, &pr.b), fields(&pr, &arr[0]));
+
+    //a local whose address escapes: the call may change it
+    int local = 5;
+    int first = local;
+    addTo(&local, 7);
+    int second = local;
+    printf("escape %d %d\n", first, second);
+
+    //a global changed through a pointer, then read again
+    int before = g;
+    touchGlobal(&g);
+    printf("global %d %d\n", before, g);
+
+    //a local that never escapes keeps its value across calls
+    int kept = 11;
+    touchGlobal(&arr[1]);
+    printf("kept %d %d\n", kept, arr[1]);
+
+    //the same element read twice with a store to another element in between
+    int grid[3][3];
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) grid[i][j] = i + j;
+    int x = grid[1][2];
+    grid[2][1] = 40;
+    int y = grid[1][2];
+    grid[1][2] = x + y;
+    printf("grid %d %d %d\n", x, y, grid[1][2]);
+
+    //a pointer walk: every load reads a different element
+    int *p = &grid[0][0];
+    int walked = 0;
+    for (int i = 0; i < 9; i++) {
+        walked = walked * 3 + *p;
+        p = p + 1;
+    }
+    printf("walk %d\n", walked);
+    return 0;
+}

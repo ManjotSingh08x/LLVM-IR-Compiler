@@ -1,3 +1,4 @@
 build/
 outputs/
 reference/*
+!reference/optimizations.md

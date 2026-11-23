@@ -23,6 +23,14 @@ ir::Constant *foldCast(ir::Module &module, ir::CastOpKind op, const ir::Constant
 ir::Value *foldInstruction(ir::Module &module, const ir::Instruction &inst,
                            const std::vector<const ir::Constant *> &operands);
 
+//algebraic identities (dragon 8.5.4, 8.7.4): the value inst equals (x+0 -> x, x-x -> 0, ...), or
+//null. instead it may rewrite inst in place into something cheaper (x*2^k -> x<<k, sext(sext x)
+//-> sext x) and set rewritten. floating identities only where they hold for NaN and -0.0 too
+ir::Value *simplifyInstruction(ir::Module &module, ir::Instruction &inst, bool &rewritten);
+
+//value as a constant, or null
+const ir::Constant *asConstant(const ir::Value *value);
+
 //an int or float constant, the only kinds folding produces or reads
 bool isNumber(const ir::Value *value);
 

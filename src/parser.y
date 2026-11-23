@@ -12,6 +12,8 @@
 #include "declarator.h"
 #include "ir/cfg.h"
 #include "ir/ir_visitor.h"
+#include "codegen/codegen.h"
+#include "passes/pipeline.h"
 #include "semantic/diagnostics.h"
 #include "semantic/symbolbuilder.h"
 #include "semantic/symbols.h"
@@ -1220,6 +1222,18 @@ static bool analyze(const char *sourcePath) {
 
     std::ofstream irFile = openOutput(sourcePath, ".ll");
     if (irFile) module.dump(irFile);
+
+    //-O0 for now: no passes, codegen reads liveness and writes outputs/<stem>/<stem>.s
+    const int optLevel = 0;
+    passes::AnalysisManager analyses;
+    passes::PassManager pipeline = passes::buildPipeline(optLevel);
+    pipeline.run(module, analyses);
+    std::ofstream asmFile = openOutput(sourcePath, ".s");
+    std::string codegenError;
+    if (asmFile && !codegen::emitAssembly(module, analyses, optLevel, asmFile, codegenError)) {
+        cout << sourcePath << " codegen error: " << codegenError << endl;
+        return false;
+    }
     return true;
 }
 

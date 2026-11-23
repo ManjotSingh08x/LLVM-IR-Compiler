@@ -30,9 +30,9 @@ PARSER   := $(BUILD)/parser.tab.cpp
 PSTAMP   := $(BUILD)/parser.stamp
 SCANNER  := $(BUILD)/lex.yy.cpp
 AST_SRCS := $(wildcard $(SRC)/ast/*.cpp) $(wildcard $(SRC)/semantic/*.cpp) $(wildcard $(SRC)/ir/*.cpp) \
-            $(wildcard $(SRC)/passes/*.cpp)
+            $(wildcard $(SRC)/passes/*.cpp) $(wildcard $(SRC)/codegen/*.cpp)
 AST_HDRS := $(wildcard $(SRC)/ast/*.h) $(wildcard $(SRC)/semantic/*.h) $(wildcard $(SRC)/ir/*.h) \
-            $(wildcard $(SRC)/passes/*.h) $(SRC)/declarator.h
+            $(wildcard $(SRC)/passes/*.h) $(wildcard $(SRC)/codegen/*.h) $(SRC)/declarator.h
 
 .PHONY: all clean test
 

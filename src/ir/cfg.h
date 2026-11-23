@@ -156,6 +156,9 @@ public:
     //every function, declarations included, in the order they were made
     const std::vector<std::unique_ptr<Function>> &getFunctions() const { return functions; }
 
+    //every global variable and string literal, in the order they were made
+    const std::vector<std::unique_ptr<GlobalVariable>> &getGlobals() const { return globals; }
+
     sema::SymbolTable &symTab;
 
 private:

@@ -21,13 +21,23 @@ enum class InstCategory {
     Phi          //phi, made by the ssa passes, never by irgen
 };
 
+//the exact kind of an instruction, so code can switch on it without dynamic_cast
+enum class Opcode {
+    Ret, Br, Switch, Unreachable,
+    Alloca, Load, Store, GEP,
+    Call,
+    Binary, Unary, Cast, Select,
+    Phi
+};
+
 //one instruction in a basic block, a value-producing instruction is its own %name
 class Instruction : public Value {
 public:
     Instruction(InstCategory category, const sema::Type *type, const std::string &name)
         : Value(ValueKind::Instruction, type, name), category(category) {}
 
-    InstCategory getCategory() const { return category; }
+    InstCategory   getCategory() const { return category; }
+    virtual Opcode getOpcode() const = 0;
     BasicBlock  *getParent() const { return parent; }
     void         setParent(BasicBlock *block) { parent = block; }
 
@@ -68,6 +78,8 @@ protected:
 //ret void, or ret <type> <value>
 class ReturnInst : public Instruction {
 public:
+    Opcode getOpcode() const override { return Opcode::Ret; }
+
     ReturnInst(const sema::Type *returnType, Value *returnValue)
         : Instruction(InstCategory::Return, sema::voidType(), ""), returnType(returnType),
           returnValue(returnValue) {}
@@ -87,6 +99,8 @@ protected:
 //br label %target, or br i1 %cond, label %target, label %falseTarget
 class BranchInst : public Instruction {
 public:
+    Opcode getOpcode() const override { return Opcode::Br; }
+
     explicit BranchInst(BasicBlock *target)
         : Instruction(InstCategory::Branch, sema::voidType(), ""), target(target) {}
 
@@ -110,6 +124,8 @@ protected:
 //switch i32 %v, label %default [ i32 1, label %a  i32 2, label %b ]
 class SwitchInst : public Instruction {
 public:
+    Opcode getOpcode() const override { return Opcode::Switch; }
+
     SwitchInst(Value *condition, BasicBlock *defaultTarget)
         : Instruction(InstCategory::Branch, sema::voidType(), ""), condition(condition),
           defaultTarget(defaultTarget) {}
@@ -129,6 +145,8 @@ protected:
 //unreachable: the end of a block that can never run to its end
 class UnreachableInst : public Instruction {
 public:
+    Opcode getOpcode() const override { return Opcode::Unreachable; }
+
     UnreachableInst() : Instruction(InstCategory::Branch, sema::voidType(), "") {}
 
     bool isTerminator() const override { return true; }
@@ -151,6 +169,8 @@ protected:
 //%x.addr = alloca i32
 class AllocaInst : public MemoryInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Alloca; }
+
     AllocaInst(const sema::Type *allocatedType, const sema::Type *pointerType, const std::string &name)
         : MemoryInst(pointerType, allocatedType, name) {}
 
@@ -160,6 +180,8 @@ public:
 //%t0 = load i32, ptr %x.addr
 class LoadInst : public MemoryInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Load; }
+
     LoadInst(const sema::Type *loadedType, Value *address, const std::string &name)
         : MemoryInst(loadedType, loadedType, name), address(address) {}
 
@@ -174,6 +196,8 @@ protected:
 //store i32 %t0, ptr %x.addr
 class StoreInst : public MemoryInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Store; }
+
     StoreInst(const sema::Type *storedType, Value *value, Value *address)
         : MemoryInst(sema::voidType(), storedType, ""), value(value), address(address) {}
 
@@ -190,6 +214,8 @@ protected:
 //getelementptr, accessType is the type the first index steps over
 class GEPInst : public MemoryInst {
 public:
+    Opcode getOpcode() const override { return Opcode::GEP; }
+
     GEPInst(const sema::Type *sourceType, const sema::Type *pointerType, Value *base,
             const std::vector<Value *> &indices, bool inBounds, const std::string &name)
         : MemoryInst(pointerType, sourceType, name), base(base), indices(indices), inBounds(inBounds) {}
@@ -209,6 +235,8 @@ protected:
 //%t2 = call i32 @f(i32 1), variadic callees are written with their full type
 class CallInst : public Instruction {
 public:
+    Opcode getOpcode() const override { return Opcode::Call; }
+
     CallInst(Value *callee, const sema::FunctionType *calleeType, const std::vector<Value *> &args,
              const std::string &name)
         : Instruction(InstCategory::Call, calleeType->returnType, name), callee(callee),
@@ -246,6 +274,8 @@ bool isCompare(BinaryOpKind op);
 //binary op or compare, operandType is the type of both operands
 class BinaryInst : public ExprInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Binary; }
+
     BinaryInst(BinaryOpKind op, const sema::Type *operandType, Value *lhs, Value *rhs,
                const sema::Type *resultType, const std::string &name)
         : ExprInst(resultType, name), op(op), operandType(operandType), lhs(lhs), rhs(rhs) {}
@@ -267,6 +297,8 @@ enum class UnaryOpKind { FNeg };
 //%t1 = fneg double %t0
 class UnaryInst : public ExprInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Unary; }
+
     UnaryInst(UnaryOpKind op, Value *operand, const std::string &name)
         : ExprInst(operand->getType(), name), op(op), operand(operand) {}
 
@@ -289,6 +321,8 @@ enum class CastOpKind {
 //%t2 = sext i8 %t1 to i32
 class CastInst : public ExprInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Cast; }
+
     CastInst(CastOpKind op, Value *operand, const sema::Type *fromType, const sema::Type *toType,
              const std::string &name)
         : ExprInst(toType, name), op(op), operand(operand), fromType(fromType), toType(toType) {}
@@ -307,6 +341,8 @@ protected:
 //select, only to keep a null pointer null across a base class conversion
 class SelectInst : public ExprInst {
 public:
+    Opcode getOpcode() const override { return Opcode::Select; }
+
     SelectInst(Value *condition, Value *ifTrue, Value *ifFalse, const sema::Type *type, const std::string &name)
         : ExprInst(type, name), condition(condition), ifTrue(ifTrue), ifFalse(ifFalse) {}
 
@@ -325,6 +361,8 @@ protected:
 //%x = phi i32 [ %a, %then ], [ 0, %entry ], one entry per predecessor block
 class PhiInst : public Instruction {
 public:
+    Opcode getOpcode() const override { return Opcode::Phi; }
+
     PhiInst(const sema::Type *type, const std::string &name) : Instruction(InstCategory::Phi, type, name) {}
 
     void   addIncoming(Value *value, BasicBlock *block) { incoming.push_back(std::make_pair(value, block)); }

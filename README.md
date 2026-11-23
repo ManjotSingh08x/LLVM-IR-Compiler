@@ -1,4 +1,4 @@
-# CSC-305 Compiler: a C++ Subset to LLVM IR
+# CSC-305 Compiler Assignment 4: IR Code Generation
 
 ## Introduction
 

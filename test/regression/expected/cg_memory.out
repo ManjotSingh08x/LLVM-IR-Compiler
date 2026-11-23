@@ -1,0 +1,10 @@
+array 0 25 81 sum 285
+grid 0 12 23
+ptr 102 103 105
+point 13 13 26
+copy 0 13 original 13 13
+points 24
+shape 5 60 4 1.25 / 6
+heap 8 1 sum 36
+word jello o
+global 54 160

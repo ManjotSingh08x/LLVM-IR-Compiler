@@ -1,0 +1,96 @@
+// regression: objects. classes with constructors and destructors, inheritance, methods,
+// static members and static locals, heap objects, lambdas with every capture form,
+// function pointers through a typedef
+
+typedef int (*BinaryOp)(int, int);
+
+class Base {
+public:
+    int id;
+    static int alive;
+    Base() {
+        this->id = 0;
+        alive++;
+        printf("Base()\n");
+    }
+    Base(int id) {
+        this->id = id;
+        alive++;
+        printf("Base(%d)\n", id);
+    }
+    ~Base() {
+        alive--;
+        printf("~Base(%d)\n", this->id);
+    }
+    int twice() { return this->id * 2; }
+    int population() { return alive; }
+};
+int Base::alive = 0;
+
+class Derived : public Base {
+public:
+    double weight;
+    Derived(int id) {
+        this->id = id;
+        this->weight = id * 1.5;
+        printf("Derived(%d)\n", id);
+    }
+    ~Derived() { printf("~Derived(%d)\n", this->id); }
+    double heavier(double extra) { return this->weight + extra; }
+};
+
+class Box {
+public:
+    int width;
+    int area(int height) {
+        auto scaled = [this](int h) { return this->width * h; };
+        return scaled(height);
+    }
+};
+
+int nextTicket() {
+    static int ticket = 100;
+    ticket++;
+    return ticket;
+}
+
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
+
+int apply(BinaryOp op, int a, int b) { return op(a, b); }
+
+int main() {
+    {
+        Base b(7);
+        Derived d(4);
+        printf("methods %d %d %.2f alive %d\n", b.twice(), d.twice(), d.heavier(0.5), b.population());
+    }
+    Base *heap = new Base(9);
+    printf("heap %d alive %d\n", heap->twice(), heap->population());
+    delete heap;
+
+    printf("tickets %d %d %d\n", nextTicket(), nextTicket(), nextTicket());
+
+    Box box;
+    box.width = 6;
+    printf("box %d\n", box.area(7));
+
+    int base = 10;
+    auto byValue = [base](int v) { return base + v; };
+    auto byRef = [&base](int v) { base = base + v; };
+    auto square = [](int v) { return v * v; };
+    byRef(5);
+    int a = 1;
+    int b = 2;
+    auto allValue = [=]() { return a + b + base; };
+    auto allRef = [&]() { a = 100; b = 200; };
+    allRef();
+    printf("lambdas %d %d %d %d %d %d\n", byValue(1), base, square(9), allValue(), a, b);
+
+    BinaryOp op = add;
+    int first = apply(op, 3, 4);
+    op = mul;
+    int second = apply(op, 3, 4);
+    printf("fnptr %d %d %d\n", first, second, op(5, 6));
+    return 0;
+}

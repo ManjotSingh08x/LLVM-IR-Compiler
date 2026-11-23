@@ -1190,8 +1190,16 @@ static void writeAst(const char *sourcePath) {
     printer.print(g_program.get());
 }
 
+//what the command line asked for, besides the source file
+struct DriverOptions {
+    int  optLevel = 0;            //-O0 .. -O3
+    bool verifyEach = false;      //--verify-each: check the ir after every pass that changed it
+    bool tracePasses = false;     //--trace-passes: write <stem>.passes.ll
+    bool dumpCallGraph = false;   //--dump-callgraph: write <stem>.callgraph.txt
+};
+
 //builds the symbol table and type checks, the tree is printed first either way
-static bool analyze(const char *sourcePath) {
+static bool analyze(const char *sourcePath, const DriverOptions &options) {
     sema::SymbolTable table;
     sema::Diagnostics diags;
 
@@ -1223,14 +1231,32 @@ static bool analyze(const char *sourcePath) {
     std::ofstream irFile = openOutput(sourcePath, ".ll");
     if (irFile) module.dump(irFile);
 
-    //-O0 for now: no passes, codegen reads liveness and writes outputs/<stem>/<stem>.s
-    const int optLevel = 0;
+    //the passes of the chosen level, then the ir they leave in outputs/<stem>/<stem>.opt.ll
     passes::AnalysisManager analyses;
-    passes::PassManager pipeline = passes::buildPipeline(optLevel);
-    pipeline.run(module, analyses);
+    passes::GlobalPassManager pipeline = passes::buildPipeline(options.optLevel);
+    passes::PassOptions passOptions;
+    passOptions.verifyEach = options.verifyEach;
+    std::ofstream traceFile;
+    if (options.tracePasses) {
+        traceFile = openOutput(sourcePath, ".passes.ll");
+        if (traceFile) passOptions.trace = &traceFile;
+    }
+    pipeline.setOptions(passOptions);
+    if (!pipeline.run(module, analyses)) {
+        cout << sourcePath << " verifier error " << pipeline.error() << endl;
+        return false;
+    }
+    std::ofstream optFile = openOutput(sourcePath, ".opt.ll");
+    if (optFile) module.dump(optFile);
+    if (options.dumpCallGraph) {
+        std::ofstream graphFile = openOutput(sourcePath, ".callgraph.txt");
+        if (graphFile) analyses.getCallGraph(module).dump(graphFile);
+    }
+
+    //codegen reads liveness and writes outputs/<stem>/<stem>.s
     std::ofstream asmFile = openOutput(sourcePath, ".s");
     std::string codegenError;
-    if (asmFile && !codegen::emitAssembly(module, analyses, optLevel, asmFile, codegenError)) {
+    if (asmFile && !codegen::emitAssembly(module, analyses, options.optLevel, asmFile, codegenError)) {
         cout << sourcePath << " codegen error: " << codegenError << endl;
         return false;
     }
@@ -1239,29 +1265,54 @@ static bool analyze(const char *sourcePath) {
 
 //main
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        cerr << "usage: " << argv[0] << " <source-file>\n";
+    const std::string usage = std::string("usage: ") + argv[0] +
+                              " [-O0|-O1|-O2|-O3] [--verify-each] [--trace-passes] [--dump-callgraph]"
+                              " <source-file>\n";
+    DriverOptions options;
+    const char *sourcePath = nullptr;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg.size() == 3 && arg[0] == '-' && arg[1] == 'O' && arg[2] >= '0' && arg[2] <= '3') {
+            options.optLevel = arg[2] - '0';
+        } else if (arg == "--verify-each") {
+            options.verifyEach = true;
+        } else if (arg == "--trace-passes") {
+            options.tracePasses = true;
+        } else if (arg == "--dump-callgraph") {
+            options.dumpCallGraph = true;
+        } else if (!arg.empty() && arg[0] == '-') {
+            cerr << "error: unknown option " << arg << "\n" << usage;
+            return 1;
+        } else if (sourcePath == nullptr) {
+            sourcePath = argv[i];
+        } else {
+            cerr << "error: more than one source file\n" << usage;
+            return 1;
+        }
+    }
+    if (sourcePath == nullptr) {
+        cerr << usage;
         return 1;
     }
-    FILE *f = fopen(argv[1], "r");
+    FILE *f = fopen(sourcePath, "r");
     if (!f) {
-        cerr << "error: cannot open " << argv[1] << "\n";
+        cerr << "error: cannot open " << sourcePath << "\n";
         return 1;
     }
-    g_filename = argv[1];
+    g_filename = sourcePath;
     yyin = f;
     int parseResult = yyparse();
     while (yylex() != 0) { } // finish scanning after a parse error
     fclose(f);
     if (lexicalErrorCount() != 0) {
-        printErrors(argv[1]);
+        printErrors(sourcePath);
         return 1;
     }
     if (parseResult != 0 || !g_syntaxErrors.empty()) {
         printSyntaxErrors();
         return 1;
     }
-    if (g_program && !analyze(argv[1])) return 1;
+    if (g_program && !analyze(sourcePath, options)) return 1;
 
     std::cout << "Parsing successful." << std::endl;
     std::cout << "Semantic analysis successful." << std::endl;

@@ -1,0 +1,106 @@
+// regression: arithmetic. int, char, bool, float and double operators, signed division and
+// remainder with negative operands, shifts, bitwise ops, every compare, implicit conversions,
+// wraparound, short-circuit logic, increments, the conditional operator
+
+int sideEffects = 0;
+
+bool touch(bool value) {
+    sideEffects = sideEffects + 1;
+    return value;
+}
+
+void intOps(int a, int b) {
+    printf("int %d %d: %d %d %d %d %d\n", a, b, a + b, a - b, a * b, a / b, a % b);
+    printf("  bits %d %d %d %d %d %d\n", a & b, a | b, a ^ b, ~a, a << 3, a >> 2);
+    printf("  cmp %d %d %d %d %d %d\n", a < b, a <= b, a > b, a >= b, a == b, a != b);
+    printf("  unary %d %d %d\n", -a, !a, !b);
+}
+
+void doubleOps(double x, double y) {
+    printf("double %.3f %.3f: %.4f %.4f %.4f %.4f\n", x, y, x + y, x - y, x * y, x / y);
+    printf("  cmp %d %d %d %d %d %d\n", x < y, x <= y, x > y, x >= y, x == y, x != y);
+    printf("  neg %.3f\n", -x);
+}
+
+void floatOps(float x, float y) {
+    float s = x + y;
+    float p = x * y;
+    float q = x / y;
+    double ds = s;
+    double dp = p;
+    double dq = q;
+    printf("float: %.4f %.4f %.4f %d %d\n", ds, dp, dq, x < y, x == y);
+}
+
+int main() {
+    intOps(17, 5);
+    intOps(-17, 5);
+    intOps(17, -5);
+    intOps(-17, -5);
+    intOps(0, 7);
+    intOps(-1, 1);
+
+    doubleOps(7.5, 2.0);
+    doubleOps(-3.25, 0.5);
+    doubleOps(2.0, 2.0);
+    floatOps(1.5, 0.25);
+    floatOps(-2.5, 4.0);
+
+    //conversions
+    double d = -3.7;
+    int truncated = d;
+    double back = truncated;
+    float f = d;
+    double widened = f;
+    char c = 'A';
+    int fromChar = c;
+    char wrapped = 300;
+    bool flag = 42;
+    int fromBool = flag;
+    printf("conv %d %.2f %.2f %d %d %d\n", truncated, back, widened, fromChar, wrapped, fromBool);
+
+    //char arithmetic wraps at 8 bits
+    char big = 120;
+    big = big + 10;
+    printf("char wrap %d\n", big);
+
+    //int wraps at 32 bits
+    int max = 2147483647;
+    int over = max + 1;
+    printf("int wrap %d %d\n", over, -over);
+
+    //shifts of negative values are arithmetic
+    int neg = -64;
+    printf("shift %d %d\n", neg >> 3, neg << 2);
+
+    //short circuit: the right side runs only when needed
+    sideEffects = 0;
+    bool r1 = touch(false) && touch(true);
+    bool r2 = touch(true) || touch(false);
+    bool r3 = touch(true) && touch(true);
+    printf("logic %d %d %d calls %d\n", r1, r2, r3, sideEffects);
+
+    //increments and compound assignment
+    int i = 5;
+    int pre = ++i;
+    int post = i++;
+    int dec = --i;
+    i += 10;
+    i -= 3;
+    i *= 2;
+    printf("inc %d %d %d %d\n", pre, post, dec, i);
+
+    //conditional operator
+    int x = 9;
+    int y = 4;
+    int bigger = x > y ? x : y;
+    double pick = x < y ? 1.5 : 2.5;
+    printf("cond %d %.1f\n", bigger, pick);
+
+    //mixed int and double expressions
+    int n = 7;
+    double ratio = n / 2;
+    double exact = n / 2.0;
+    printf("mixed %.2f %.2f\n", ratio, exact);
+    return 0;
+}

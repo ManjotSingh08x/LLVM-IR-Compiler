@@ -46,6 +46,42 @@ void BasicBlock::erase(Instruction *inst) {
     }
 }
 
+std::unique_ptr<Instruction> BasicBlock::detach(Instruction *inst) {
+    for (size_t i = 0; i < instructions.size(); i++) {
+        if (instructions[i].get() != inst) continue;
+        if (i < allocaCount) allocaCount--;
+        std::unique_ptr<Instruction> owned = std::move(instructions[i]);
+        instructions.erase(instructions.begin() + i);
+        owned->setParent(nullptr);
+        return owned;
+    }
+    return nullptr;
+}
+
+BasicBlock *BasicBlock::splitAt(Instruction *inst, const std::string &label) {
+    size_t at = 0;
+    while (at < instructions.size() && instructions[at].get() != inst) at++;
+    BasicBlock *tail = parent->createBlock(label);
+    parent->placeBlockAfter(tail, this);
+    for (size_t i = at; i < instructions.size(); i++) {
+        instructions[i]->setParent(tail);
+        tail->instructions.push_back(std::move(instructions[i]));
+    }
+    instructions.erase(instructions.begin() + at, instructions.end());
+    if (allocaCount > instructions.size()) allocaCount = instructions.size();
+
+    //control now reaches the old successors from the tail
+    if (Instruction *term = tail->getTerminator()) {
+        for (BasicBlock *next : term->getSuccessors()) {
+            for (std::unique_ptr<Instruction> &phi : next->instructions) {
+                if (phi->getOpcode() != Opcode::Phi) break;
+                static_cast<PhiInst *>(phi.get())->replaceIncomingBlock(this, tail);
+            }
+        }
+    }
+    return tail;
+}
+
 Instruction *BasicBlock::getTerminator() const {
     if (!isTerminated()) return nullptr;
     return instructions.back().get();
@@ -122,6 +158,30 @@ void Function::removeBlock(BasicBlock *block) {
             return;
         }
     }
+}
+
+void Function::placeBlockBefore(BasicBlock *block, BasicBlock *pos) {
+    if (block->isPlaced) return;
+    for (size_t i = 0; i < layout.size(); i++) {
+        if (layout[i] == pos) {
+            layout.insert(layout.begin() + i, block);
+            block->isPlaced = true;
+            return;
+        }
+    }
+    placeBlock(block);
+}
+
+void Function::placeBlockAfter(BasicBlock *block, BasicBlock *pos) {
+    if (block->isPlaced) return;
+    for (size_t i = 0; i < layout.size(); i++) {
+        if (layout[i] == pos) {
+            layout.insert(layout.begin() + i + 1, block);
+            block->isPlaced = true;
+            return;
+        }
+    }
+    placeBlock(block);
 }
 
 void Function::recomputeCFG() {

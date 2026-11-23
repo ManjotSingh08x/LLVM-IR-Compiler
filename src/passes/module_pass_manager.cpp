@@ -1,6 +1,6 @@
 #include "passes/module_pass_manager.h"
 
-#include "ir/verifier.h"
+#include "passes/verify.h"
 
 namespace passes {
 
@@ -20,7 +20,7 @@ bool ModulePassManager::run(ir::Module &module, AnalysisManager &am, const PassO
                 *options.trace << "\n";
             }
             std::string problem;
-            if (options.verifyEach && !ir::verifyFunction(*fn, problem)) {
+            if (options.verifyEach && !verifyWithDominance(*fn, am, problem)) {
                 error = "after " + std::string(pass->name()) + ", @" + fn->getName() + " " + problem;
                 return false;
             }

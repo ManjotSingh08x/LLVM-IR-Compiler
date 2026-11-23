@@ -1,5 +1,8 @@
 #include "passes/pipeline.h"
 
+#include "passes/loop_rotate.h"
+#include "passes/simplify_cfg.h"
+
 namespace passes {
 
 GlobalPassManager buildPipeline(int optLevel) {
@@ -8,8 +11,11 @@ GlobalPassManager buildPipeline(int optLevel) {
 
     GlobalPassManager pipeline;
 
-    //stage 1, -O0 and up: simplify_cfg, loop_rotate. not written yet
-    pipeline.addModule(std::unique_ptr<ModulePassManager>(new ModulePassManager()));
+    //stage 1, -O0 and up: clean the cfg irgen made, then put the test of each loop at the bottom
+    std::unique_ptr<ModulePassManager> cleanup(new ModulePassManager());
+    cleanup->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
+    cleanup->add(std::unique_ptr<FunctionPass>(new LoopRotate()));
+    pipeline.addModule(std::move(cleanup));
     if (optLevel == 0) return pipeline;
 
     //stage 2, -O1 and up: inline (global). not written yet

@@ -1,6 +1,6 @@
 #include "passes/global_pass_manager.h"
 
-#include "ir/verifier.h"
+#include "passes/verify.h"
 
 namespace passes {
 
@@ -16,11 +16,11 @@ void GlobalPassManager::addModule(std::unique_ptr<ModulePassManager> module) {
     stages.push_back(std::move(stage));
 }
 
-bool GlobalPassManager::verifyAll(ir::Module &module, const std::string &when) {
+bool GlobalPassManager::verifyAll(ir::Module &module, AnalysisManager &am, const std::string &when) {
     for (const std::unique_ptr<ir::Function> &fn : module.getFunctions()) {
         if (!fn->isDefinition()) continue;
         std::string problem;
-        if (!ir::verifyFunction(*fn, problem)) {
+        if (!verifyWithDominance(*fn, am, problem)) {
             errorText = when + ", @" + fn->getName() + " " + problem;
             return false;
         }
@@ -30,7 +30,7 @@ bool GlobalPassManager::verifyAll(ir::Module &module, const std::string &when) {
 
 bool GlobalPassManager::run(ir::Module &module, AnalysisManager &am) {
     //the ir as irgen made it must already be well formed, so a later failure blames a pass
-    if (options.verifyEach && !verifyAll(module, "before any pass")) return false;
+    if (options.verifyEach && !verifyAll(module, am, "before any pass")) return false;
 
     for (Stage &stage : stages) {
         if (stage.module) {
@@ -50,7 +50,7 @@ bool GlobalPassManager::run(ir::Module &module, AnalysisManager &am) {
             module.dump(*options.trace);
             *options.trace << "\n";
         }
-        if (options.verifyEach && !verifyAll(module, "after " + std::string(stage.global->name()))) {
+        if (options.verifyEach && !verifyAll(module, am, "after " + std::string(stage.global->name()))) {
             return false;
         }
     }

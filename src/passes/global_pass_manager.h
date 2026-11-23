@@ -37,7 +37,7 @@ private:
         std::unique_ptr<ModulePassManager> module;
     };
 
-    bool verifyAll(ir::Module &module, const std::string &when);
+    bool verifyAll(ir::Module &module, AnalysisManager &am, const std::string &when);
 
     std::vector<Stage> stages;
     PassOptions        options;

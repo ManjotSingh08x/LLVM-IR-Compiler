@@ -1,0 +1,42 @@
+// regression: loops built from goto. a reducible goto loop is a natural loop and may be rotated;
+// an irreducible one (two ways into the cycle) has no back edge, is not a natural loop and must be
+// left alone by every loop pass. both must keep their output
+
+int gotoLoop(int n) {
+    int i = 0;
+    int acc = 0;
+top:
+    if (i >= n) goto done;
+    acc = acc + i * i;
+    i++;
+    goto top;
+done:
+    return acc;
+}
+
+int irreducible(int n, int jumpIn) {
+    int i = 0;
+    int acc = 0;
+    if (jumpIn > 0) goto inside;
+top:
+    acc = acc + 10;
+inside:
+    i = i + 1;
+    if (i < n) goto top;
+    return acc + i;
+}
+
+int retry(int limit) {
+    int tries = 0;
+again:
+    tries++;
+    if (tries < limit) goto again;
+    return tries;
+}
+
+int main() {
+    printf("goto %d %d\n", gotoLoop(0), gotoLoop(10));
+    printf("irreducible %d %d %d\n", irreducible(5, 0), irreducible(5, 1), irreducible(1, 1));
+    printf("retry %d %d\n", retry(1), retry(7));
+    return 0;
+}

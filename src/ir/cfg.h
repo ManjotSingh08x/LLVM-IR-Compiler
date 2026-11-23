@@ -39,6 +39,14 @@ public:
     //for passes: takes an instruction out, the function keeps it alive unwritten
     void erase(Instruction *inst);
 
+    //for passes: takes an instruction out and hands it back, to be inserted somewhere else
+    std::unique_ptr<Instruction> detach(Instruction *inst);
+
+    //for passes: moves inst and everything after it into a new block placed right after this
+    //one, labelled label. this block is left without a terminator, the caller ends it. phis in the
+    //moved terminator's successors that named this block now name the new one
+    BasicBlock *splitAt(Instruction *inst, const std::string &label);
+
     //the last instruction when it is a terminator, otherwise null
     Instruction *getTerminator() const;
 
@@ -77,6 +85,10 @@ public:
 
     //for passes: takes a block out of the layout, it stays owned by the function
     void removeBlock(BasicBlock *block);
+
+    //for passes: places a block made by createBlock just before or just after pos
+    void placeBlockBefore(BasicBlock *block, BasicBlock *pos);
+    void placeBlockAfter(BasicBlock *block, BasicBlock *pos);
 
     //rebuilds every predecessor and successor list from the terminators, without repeats
     void recomputeCFG();

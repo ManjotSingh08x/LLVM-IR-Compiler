@@ -170,8 +170,7 @@ void TypeChecker::checkFunction(ast::FunctionDecl *node) {
     current = node->scope;
 
     visit(node->body.get());
-    resolveGotos(node->scope);
-
+    resolveGotos(current);
     context = saved;
     current = savedScope;
 }

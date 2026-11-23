@@ -84,6 +84,101 @@ bool isCompare(BinaryOpKind op) {
     }
 }
 
+//  operands and successors 
+
+std::vector<Value *> Instruction::getOperands() const {
+    std::vector<Value *> result;
+    for (Value **slot : const_cast<Instruction *>(this)->operandSlots()) result.push_back(*slot);
+    return result;
+}
+
+void Instruction::replaceOperand(Value *from, Value *to) {
+    for (Value **slot : operandSlots()) {
+        if (*slot == from) *slot = to;
+    }
+}
+
+std::vector<BasicBlock *> Instruction::getSuccessors() const {
+    std::vector<BasicBlock *> result;
+    for (BasicBlock **slot : const_cast<Instruction *>(this)->successorSlots()) result.push_back(*slot);
+    return result;
+}
+
+void Instruction::replaceSuccessor(BasicBlock *from, BasicBlock *to) {
+    for (BasicBlock **slot : successorSlots()) {
+        if (*slot == from) *slot = to;
+    }
+}
+
+//ret void has no operand
+std::vector<Value **> ReturnInst::operandSlots() {
+    if (returnValue == nullptr) return {};
+    return { &returnValue };
+}
+
+std::vector<Value **> BranchInst::operandSlots() {
+    if (condition == nullptr) return {};
+    return { &condition };
+}
+
+std::vector<BasicBlock **> BranchInst::successorSlots() {
+    if (falseTarget == nullptr) return { &target };
+    return { &target, &falseTarget };
+}
+
+std::vector<BasicBlock **> SwitchInst::successorSlots() {
+    std::vector<BasicBlock **> slots;
+    slots.push_back(&defaultTarget);
+    for (std::pair<long long, BasicBlock *> &c : cases) slots.push_back(&c.second);
+    return slots;
+}
+
+std::vector<Value **> GEPInst::operandSlots() {
+    std::vector<Value **> slots;
+    slots.push_back(&base);
+    for (Value *&index : indices) slots.push_back(&index);
+    return slots;
+}
+
+//the callee comes first, it is a value too for calls through a pointer
+std::vector<Value **> CallInst::operandSlots() {
+    std::vector<Value **> slots;
+    slots.push_back(&callee);
+    for (Value *&arg : args) slots.push_back(&arg);
+    return slots;
+}
+
+std::vector<Value **> PhiInst::operandSlots() {
+    std::vector<Value **> slots;
+    for (std::pair<Value *, BasicBlock *> &entry : incoming) slots.push_back(&entry.first);
+    return slots;
+}
+
+Value *PhiInst::getIncomingValueFor(const BasicBlock *block) const {
+    for (const std::pair<Value *, BasicBlock *> &entry : incoming) {
+        if (entry.second == block) return entry.first;
+    }
+    return nullptr;
+}
+
+void PhiInst::removeIncomingBlock(const BasicBlock *block) {
+    for (size_t i = 0; i < incoming.size();) {
+        if (incoming[i].second == block) {
+            incoming.erase(incoming.begin() + i);
+        } else {
+            i++;
+        }
+    }
+}
+
+void PhiInst::replaceIncomingBlock(BasicBlock *from, BasicBlock *to) {
+    for (std::pair<Value *, BasicBlock *> &entry : incoming) {
+        if (entry.second == from) entry.second = to;
+    }
+}
+
+//  dump 
+
 void ReturnInst::dump(std::ostream &out) const {
     if (returnValue == nullptr) {
         out << "  ret void\n";
@@ -170,6 +265,15 @@ void CastInst::dump(std::ostream &out) const {
 void SelectInst::dump(std::ostream &out) const {
     out << "  %" << name << " = select i1 " << condition->getOperand() << ", " << formatType(type) << " "
         << ifTrue->getOperand() << ", " << formatType(type) << " " << ifFalse->getOperand() << "\n";
+}
+
+void PhiInst::dump(std::ostream &out) const {
+    out << "  %" << name << " = phi " << formatType(type);
+    for (size_t i = 0; i < incoming.size(); i++) {
+        out << (i > 0 ? ", [ " : " [ ") << incoming[i].first->getOperand() << ", "
+            << incoming[i].second->getOperand() << " ]";
+    }
+    out << "\n";
 }
 
 } // namespace ir

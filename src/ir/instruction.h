@@ -17,7 +17,8 @@ enum class InstCategory {
     Branch,      //br, switch, unreachable
     Memory,      //alloca, load, store, getelementptr
     Call,        //call
-    Expression   //arithmetic, compares, casts, select: pure register values
+    Expression,  //arithmetic, compares, casts, select: pure register values
+    Phi          //phi, made by the ssa passes, never by irgen
 };
 
 //one instruction in a basic block, a value-producing instruction is its own %name
@@ -33,12 +34,31 @@ public:
     //a terminator ends its block: ret, br, switch, unreachable
     virtual bool isTerminator() const { return false; }
 
+    //true when removing the instruction could change what the program does
+    virtual bool hasSideEffects() const { return isTerminator(); }
+
+    //the values the instruction reads, in order. blocks are not operands
+    std::vector<Value *> getOperands() const;
+
+    //makes every operand that is from read to instead
+    void replaceOperand(Value *from, Value *to);
+
+    //the blocks a terminator can jump to, in order, with repeats
+    std::vector<BasicBlock *> getSuccessors() const;
+
+    //makes every jump to from go to to instead
+    void replaceSuccessor(BasicBlock *from, BasicBlock *to);
+
     //writes the instruction as one line of llvm text
     virtual void dump(std::ostream &out) const = 0;
 
     std::string getOperand() const override { return "%" + name; }
 
 protected:
+    //the operand fields of the subclass, so the base can read and rewrite them
+    virtual std::vector<Value **> operandSlots() { return {}; }
+    virtual std::vector<BasicBlock **> successorSlots() { return {}; }
+
     InstCategory category;
     BasicBlock  *parent = nullptr;
 };
@@ -57,6 +77,9 @@ public:
 
     const sema::Type *returnType;
     Value            *returnValue;  //null for ret void
+
+protected:
+    std::vector<Value **> operandSlots() override;
 };
 
 //branches
@@ -78,6 +101,10 @@ public:
     BasicBlock *target;
     Value      *condition = nullptr;
     BasicBlock *falseTarget = nullptr;
+
+protected:
+    std::vector<Value **> operandSlots() override;
+    std::vector<BasicBlock **> successorSlots() override;
 };
 
 //switch i32 %v, label %default [ i32 1, label %a  i32 2, label %b ]
@@ -93,6 +120,10 @@ public:
     Value                                          *condition;
     BasicBlock                                     *defaultTarget;
     std::vector<std::pair<long long, BasicBlock *>> cases;
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &condition }; }
+    std::vector<BasicBlock **> successorSlots() override;
 };
 
 //unreachable: the end of a block that can never run to its end
@@ -135,6 +166,9 @@ public:
     void dump(std::ostream &out) const override;
 
     Value *address;
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &address }; }
 };
 
 //store i32 %t0, ptr %x.addr
@@ -143,10 +177,14 @@ public:
     StoreInst(const sema::Type *storedType, Value *value, Value *address)
         : MemoryInst(sema::voidType(), storedType, ""), value(value), address(address) {}
 
+    bool hasSideEffects() const override { return true; }
     void dump(std::ostream &out) const override;
 
     Value *value;
     Value *address;
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &value, &address }; }
 };
 
 //getelementptr, accessType is the type the first index steps over
@@ -161,6 +199,9 @@ public:
     Value               *base;
     std::vector<Value *> indices;
     bool                 inBounds;
+
+protected:
+    std::vector<Value **> operandSlots() override;
 };
 
 //  calls 
@@ -173,11 +214,15 @@ public:
         : Instruction(InstCategory::Call, calleeType->returnType, name), callee(callee),
           calleeType(calleeType), args(args) {}
 
+    bool hasSideEffects() const override { return true; }
     void dump(std::ostream &out) const override;
 
     Value                    *callee;
     const sema::FunctionType *calleeType;
     std::vector<Value *>      args;
+
+protected:
+    std::vector<Value **> operandSlots() override;
 };
 
 //  expressions 
@@ -212,6 +257,9 @@ public:
     Value            *lhs;
     Value            *rhs;
     bool              isExact = false;  //sdiv exact, for the distance between two pointers
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &lhs, &rhs }; }
 };
 
 enum class UnaryOpKind { FNeg };
@@ -226,6 +274,9 @@ public:
 
     UnaryOpKind op;
     Value      *operand;
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &operand }; }
 };
 
 enum class CastOpKind {
@@ -248,6 +299,9 @@ public:
     Value            *operand;
     const sema::Type *fromType;
     const sema::Type *toType;
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &operand }; }
 };
 
 //select, only to keep a null pointer null across a base class conversion
@@ -261,6 +315,30 @@ public:
     Value *condition;
     Value *ifTrue;
     Value *ifFalse;
+
+protected:
+    std::vector<Value **> operandSlots() override { return { &condition, &ifTrue, &ifFalse }; }
+};
+
+//  ssa 
+
+//%x = phi i32 [ %a, %then ], [ 0, %entry ], one entry per predecessor block
+class PhiInst : public Instruction {
+public:
+    PhiInst(const sema::Type *type, const std::string &name) : Instruction(InstCategory::Phi, type, name) {}
+
+    void   addIncoming(Value *value, BasicBlock *block) { incoming.push_back(std::make_pair(value, block)); }
+    //the value that arrives from block, or null when block is not listed
+    Value *getIncomingValueFor(const BasicBlock *block) const;
+    void   removeIncomingBlock(const BasicBlock *block);
+    void   replaceIncomingBlock(BasicBlock *from, BasicBlock *to);
+
+    void dump(std::ostream &out) const override;
+
+    std::vector<std::pair<Value *, BasicBlock *>> incoming;
+
+protected:
+    std::vector<Value **> operandSlots() override;
 };
 
 } // namespace ir

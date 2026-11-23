@@ -17,6 +17,40 @@ void BasicBlock::insertAlloca(std::unique_ptr<Instruction> inst) {
     allocaCount++;
 }
 
+void BasicBlock::insertBefore(Instruction *pos, std::unique_ptr<Instruction> inst) {
+    inst->setParent(this);
+    for (size_t i = 0; i < instructions.size(); i++) {
+        if (instructions[i].get() == pos) {
+            if (i < allocaCount) allocaCount++;
+            instructions.insert(instructions.begin() + i, std::move(inst));
+            return;
+        }
+    }
+    instructions.push_back(std::move(inst));
+}
+
+void BasicBlock::insertAtFront(std::unique_ptr<Instruction> inst) {
+    inst->setParent(this);
+    instructions.insert(instructions.begin(), std::move(inst));
+}
+
+void BasicBlock::erase(Instruction *inst) {
+    for (size_t i = 0; i < instructions.size(); i++) {
+        if (instructions[i].get() != inst) continue;
+        if (i < allocaCount) allocaCount--;
+        std::unique_ptr<Instruction> owned = std::move(instructions[i]);
+        instructions.erase(instructions.begin() + i);
+        owned->setParent(nullptr);
+        parent->discard(std::move(owned));
+        return;
+    }
+}
+
+Instruction *BasicBlock::getTerminator() const {
+    if (!isTerminated()) return nullptr;
+    return instructions.back().get();
+}
+
 void BasicBlock::addEdge(BasicBlock *from, BasicBlock *to) {
     from->successors.push_back(to);
     to->predecessors.push_back(from);
@@ -78,6 +112,35 @@ std::string Function::uniqueName(const std::string &base) {
 
 std::string Function::nextTempName() {
     return uniqueName("t" + std::to_string(tempCounter++));
+}
+
+void Function::removeBlock(BasicBlock *block) {
+    for (size_t i = 0; i < layout.size(); i++) {
+        if (layout[i] == block) {
+            layout.erase(layout.begin() + i);
+            block->isPlaced = false;
+            return;
+        }
+    }
+}
+
+void Function::recomputeCFG() {
+    for (BasicBlock *block : layout) {
+        block->predecessors.clear();
+        block->successors.clear();
+    }
+    //only edges between placed blocks count, a removed block is no longer in the graph
+    std::set<const BasicBlock *> placed(layout.begin(), layout.end());
+    for (BasicBlock *block : layout) {
+        Instruction *term = block->getTerminator();
+        if (term == nullptr) continue;
+        std::set<const BasicBlock *> seen;
+        for (BasicBlock *next : term->getSuccessors()) {
+            if (!placed.count(next) || seen.count(next)) continue;
+            seen.insert(next);
+            BasicBlock::addEdge(block, next);
+        }
+    }
 }
 
 void Function::discard(std::unique_ptr<Instruction> inst) {

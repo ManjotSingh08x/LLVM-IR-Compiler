@@ -32,6 +32,16 @@ public:
     //adds an alloca after the existing ones, entry block only
     void insertAlloca(std::unique_ptr<Instruction> inst);
 
+    //for passes: adds an instruction before pos, or at the very top of the block
+    void insertBefore(Instruction *pos, std::unique_ptr<Instruction> inst);
+    void insertAtFront(std::unique_ptr<Instruction> inst);
+
+    //for passes: takes an instruction out, the function keeps it alive unwritten
+    void erase(Instruction *inst);
+
+    //the last instruction when it is a terminator, otherwise null
+    Instruction *getTerminator() const;
+
     void dump(std::ostream &out) const;
 
     //records that control can flow from one block to another
@@ -61,6 +71,15 @@ public:
     void        placeBlock(BasicBlock *block);
     BasicBlock *getEntryBlock() const { return layout.empty() ? nullptr : layout.front(); }
     bool        isDefinition() const { return !layout.empty(); }
+
+    //the blocks in the order they are written, entry first
+    const std::vector<BasicBlock *> &getBlocks() const { return layout; }
+
+    //for passes: takes a block out of the layout, it stays owned by the function
+    void removeBlock(BasicBlock *block);
+
+    //rebuilds every predecessor and successor list from the terminators, without repeats
+    void recomputeCFG();
 
     //a unique local name within the function: name, name.1, name.2, ...
     std::string uniqueName(const std::string &base);
@@ -133,6 +152,9 @@ public:
     Function *globalInit = nullptr;
 
     void dump(std::ostream &out) const;
+
+    //every function, declarations included, in the order they were made
+    const std::vector<std::unique_ptr<Function>> &getFunctions() const { return functions; }
 
     sema::SymbolTable &symTab;
 

@@ -60,6 +60,7 @@ struct FunctionContext {
     Value                                          *thisPtr = nullptr;
     const sema::RecordSymbol                       *thisRecord = nullptr;
     Value                                          *retvalSlot = nullptr;   //see visitReturnStmt
+    Value                                          *resultAddress = nullptr;
     BasicBlock                                     *returnBlock = nullptr;  //destructors: where return goes
     std::map<const sema::Symbol *, VariableBinding> locals;
     std::map<const ast::LabelStmt *, BasicBlock *>  labelBlocks;
@@ -154,7 +155,7 @@ private:
     //  ir_expressions.cpp: expressions 
     Value *emitLValue(ast::Expr *expr);
     Value *emitRValue(ast::Expr *expr);
-    Value *emitCondition(ast::Expr *expr);
+    void   emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFalse);
     void   emitIgnored(ast::Expr *expr);
     Value *emitAddressOf(ast::Expr *expr);
     Value *materialize(Value *value, const sema::Type *type);
@@ -180,6 +181,7 @@ private:
     Value *emitCall(ast::CallExpr *node);
     Value *emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn);
     std::vector<Value *> emitArguments(const sema::FunctionType *signature, ast::NodeList<ast::Expr> &args);
+    const sema::FunctionType *lambdaSignature(const ast::LambdaExpr *lambda);
     Function *lambdaFunction(ast::LambdaExpr *lambda);
     void      emitLambdaBody(ast::LambdaExpr *lambda);
     void      emitLambdaInto(Value *address, ast::LambdaExpr *lambda);
@@ -222,6 +224,7 @@ private:
     std::vector<ast::VarDecl *>                      destroyedGlobals; //destroyed by @__global_fini
     std::vector<PendingStructor>                     pendingStructors;
     std::set<const ast::LambdaExpr *>                emittedLambdas;
+    std::vector<ast::RecordDecl *>                   localRecords;     //emitted after the bodies they are in
     unsigned                                         staticLocalCounter = 0;
 };
 

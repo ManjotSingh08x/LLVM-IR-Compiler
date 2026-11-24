@@ -12,7 +12,12 @@ namespace {
 const Type theVoid(TypeKind::Void);
 const Type theBool(TypeKind::Bool);
 const Type theChar(TypeKind::Char);
+const Type theSChar(TypeKind::SChar);
+const Type theUChar(TypeKind::UChar);
 const Type theInt(TypeKind::Int);
+const Type theUInt(TypeKind::UInt);
+const Type theLong(TypeKind::Long);
+const Type theULong(TypeKind::ULong);
 const Type theFloat(TypeKind::Float);
 const Type theDouble(TypeKind::Double);
 const Type theNull(TypeKind::Null);
@@ -24,7 +29,12 @@ const Type theError(TypeKind::Error);
 const Type *voidType() { return &theVoid; }
 const Type *boolType() { return &theBool; }
 const Type *charType() { return &theChar; }
+const Type *scharType() { return &theSChar; }
+const Type *ucharType() { return &theUChar; }
 const Type *intType() { return &theInt; }
+const Type *uintType() { return &theUInt; }
+const Type *longType() { return &theLong; }
+const Type *ulongType() { return &theULong; }
 const Type *floatType() { return &theFloat; }
 const Type *doubleType() { return &theDouble; }
 const Type *nullType() { return &theNull; }
@@ -59,8 +69,24 @@ RecordSymbol *asRecord(const Type *type) {
 
 //classification
 
-bool isIntegral(const Type *type) {
-    return type->is(TypeKind::Bool) || type->is(TypeKind::Char) || type->is(TypeKind::Int);
+bool isIntegral(const Type *type) { return integerSize(type) != 0; }
+
+bool isUnsigned(const Type *type) {
+    return type->is(TypeKind::UChar) || type->is(TypeKind::UInt) || type->is(TypeKind::ULong);
+}
+
+unsigned integerSize(const Type *type) {
+    switch (type->getKind()) {
+    case TypeKind::Bool:
+    case TypeKind::Char:
+    case TypeKind::SChar:
+    case TypeKind::UChar: return 1;
+    case TypeKind::Int:
+    case TypeKind::UInt:  return 4;
+    case TypeKind::Long:
+    case TypeKind::ULong: return 8;
+    default:              return 0;
+    }
 }
 
 bool isFloating(const Type *type) {
@@ -131,14 +157,21 @@ const Type *decay(const Type *type, SymbolTable &table) {
 }
 
 const Type *promote(const Type *type) {
-    if (type->is(TypeKind::Bool) || type->is(TypeKind::Char)) return intType();
+    if (isIntegral(type) && integerSize(type) < 4) return intType();
     return type;
 }
 
 const Type *commonArithmeticType(const Type *a, const Type *b) {
     if (a->is(TypeKind::Double) || b->is(TypeKind::Double)) return doubleType();
     if (a->is(TypeKind::Float) || b->is(TypeKind::Float)) return floatType();
-    return intType();
+    a = promote(a);
+    b = promote(b);
+    if (isSameType(a, b)) return a;
+    if (isUnsigned(a) == isUnsigned(b)) return integerSize(a) >= integerSize(b) ? a : b;
+    const Type *u = isUnsigned(a) ? a : b;
+    const Type *s = isUnsigned(a) ? b : a;
+    if (integerSize(u) >= integerSize(s)) return u;
+    return s;  //a wider signed type holds every value of the narrower unsigned one
 }
 
 //conversions
@@ -157,7 +190,7 @@ ast::CastKind arithmeticCast(const Type *from, const Type *to) {
 }
 
 bool isPromotion(const Type *from, const Type *to) {
-    if (to->is(TypeKind::Int)) return from->is(TypeKind::Bool) || from->is(TypeKind::Char);
+    if (to->is(TypeKind::Int)) return isIntegral(from) && integerSize(from) < 4;
     if (to->is(TypeKind::Double)) return from->is(TypeKind::Float);
     return false;
 }
@@ -266,7 +299,12 @@ std::string builtinName(const Type *type) {
     case TypeKind::Void:   return "void";
     case TypeKind::Bool:   return "bool";
     case TypeKind::Char:   return "char";
+    case TypeKind::SChar:  return "signed char";
+    case TypeKind::UChar:  return "unsigned char";
     case TypeKind::Int:    return "int";
+    case TypeKind::UInt:   return "unsigned int";
+    case TypeKind::Long:   return "long";
+    case TypeKind::ULong:  return "unsigned long";
     case TypeKind::Float:  return "float";
     case TypeKind::Double: return "double";
     case TypeKind::Null:   return "null";
@@ -341,7 +379,12 @@ std::string mangleType(const Type *type) {
     case TypeKind::Void:      return "v";
     case TypeKind::Bool:      return "b";
     case TypeKind::Char:      return "c";
+    case TypeKind::SChar:     return "a";
+    case TypeKind::UChar:     return "h";
     case TypeKind::Int:       return "i";
+    case TypeKind::UInt:      return "j";
+    case TypeKind::Long:      return "l";
+    case TypeKind::ULong:     return "m";
     case TypeKind::Float:     return "f";
     case TypeKind::Double:    return "d";
     case TypeKind::Pointer:   return "P" + mangleType(asPointer(type)->pointee);
@@ -397,8 +440,13 @@ std::string toLLVMType(const Type *type) {
     switch (type->getKind()) {
     case TypeKind::Void:   return "void";
     case TypeKind::Bool:   return "i1";
-    case TypeKind::Char:   return "i8";
-    case TypeKind::Int:    return "i32";
+    case TypeKind::Char:
+    case TypeKind::SChar:
+    case TypeKind::UChar:  return "i8";
+    case TypeKind::Int:
+    case TypeKind::UInt:   return "i32";
+    case TypeKind::Long:
+    case TypeKind::ULong:  return "i64";
     case TypeKind::Float:  return "float";
     case TypeKind::Double: return "double";
 

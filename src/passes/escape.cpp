@@ -10,7 +10,7 @@ using namespace ir;
 namespace {
 
 bool isScalarSlot(const sema::Type *type) {
-    return sema::isIntegral(type) || sema::isFloating(type) || type->is(sema::TypeKind::Pointer) || isInt64(type);
+    return sema::isIntegral(type) || sema::isFloating(type) || type->is(sema::TypeKind::Pointer);
 }
 
 } // namespace

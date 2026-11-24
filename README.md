@@ -199,7 +199,7 @@ must be rejected with errors.
 | Test | Rejected by | Errors | What it covers |
 | --- | --- | --- | --- |
 | `test11_lexical_errors` | scanner | 16 | illegal characters, malformed numbers, an integer that is too large, bad character literals, an unterminated string, a bad escape sequence, an unterminated comment |
-| `test12_unsupported_features` | parser | 9 | features we did not choose to support: `union`, `sizeof`, a variable argument list (`...`), and the assignments `<<=`, `>>=`, `&=`, `|=` and `^=` |
+| `test12_unsupported_features` | parser | 5 | features we did not choose to support: `union`, a variable argument list (`...`), and the comma operator |
 | `test13_syntax` | parser | 9 | one mistake in each function: a missing semicolon, a missing operand, a missing variable name, a missing closing parenthesis, tokens in the wrong order, a missing operator, a condition without parentheses, a parameter list ending in a comma, and an unclosed parameter list |
 | `test14_type_errors` | semantic analysis | 25 | undeclared names, use before declaration, redefinition, incompatible initialisation and assignment, assigning to something that is not a variable, bad dereference, indexing, address-of and member access, operators that need integers, array sizes, `void` and `auto` misuse, `delete` on a non-pointer, `this` outside a method |
 | `test15_access_errors` | semantic analysis | 6 | `private` and `protected` members used from outside, a private base member used in a derived class, and members reached through a privately inherited base |
@@ -212,6 +212,9 @@ must be rejected with errors.
 **Types**
 
 - `int`, `char`, `bool`, `float`, `double`, `void` and `auto`.
+- `signed char`, `unsigned char`, `unsigned int`, `long` and `unsigned long`,
+  with their specifiers in any order (`long unsigned int`). `long long` is the
+  same type as `long`. `char` is signed.
 - Pointers of any depth, such as `int ***p`, and `void *`.
 - References, as variables and as parameters.
 - Arrays of any number of dimensions. The first dimension may be left empty
@@ -220,12 +223,16 @@ must be rejected with errors.
   `int **(*p)[10]`.
 - Function pointers, as variables, as parameters, and pointers to them.
 - `typedef`, at file scope, inside a block and inside a class.
-- Structures and classes.
+- Structures and classes, also defined inside a function body, and forward
+  declarations such as `struct Node;`.
 
 **Literals**
 
 - Integers in decimal, hexadecimal (`0x1F`), octal (`0755`) and binary
-  (`0b1010`).
+  (`0b1010`), with the suffixes `u`, `l` and `ul`. A literal has C's type: the
+  first of `int` and `long` (decimal) or `int`, `unsigned int`, `long`,
+  `unsigned long` (the other bases) that holds its value, narrowed by the
+  suffix.
 - Floating-point numbers such as `3.14`, `.5`, `2.`, `1e10` and `1.5e-3`.
 - Characters with escape sequences, such as `'\n'` and `'\x41'`.
 - Strings with escape sequences.
@@ -235,7 +242,14 @@ must be rejected with errors.
 
 - Arithmetic, relational, logical, bitwise and shift operators.
 - The conditional operator `?:`.
-- Assignment, and the compound assignments `+=`, `-=`, `*=`, `/=` and `%=`.
+- Assignment, and the compound assignments `+=`, `-=`, `*=`, `/=`, `%=`, `<<=`,
+  `>>=`, `&=`, `|=` and `^=`.
+- Explicit casts `(T)x`, where the type starts with a keyword or `struct`:
+  `(long)x`, `(unsigned char *)p`, `(int (*)[3])q`, `(struct Node *)v`. Besides
+  the implicit conversions, they convert between unrelated pointer types and
+  between pointers and integers. `(void)x` discards a value.
+- `sizeof x` and `sizeof(T)`, an `unsigned long` constant. Its operand is not
+  evaluated, and an array is measured whole.
 - Prefix and postfix `++` and `--`.
 - Unary `+`, `-`, `!`, `~`, `*` (dereference) and `&` (address of).
 - Member access with `.` and `->`, indexing with `[]`, and function calls.
@@ -287,20 +301,17 @@ must be rejected with errors.
 
 ## Unsupported Features
 
-- The types `short`, `long`, `unsigned` and `signed`, and the qualifiers
-  `const` and `volatile`.
+- The type `short`, and the qualifiers `const` and `volatile`.
 - `enum`, `union`, namespaces, `using`, templates and exceptions.
-- Explicit casts, such as `(int)x` or `static_cast<int>(x)`.
-- `sizeof`. The scanner still reads it as a keyword, but the grammar does not
-  accept it.
+- Casts to a type written as a bare name (`(Dog *)p`, `(Size)n`), because
+  `(a) * b` would then be ambiguous, and the C++ forms such as
+  `static_cast<int>(x)`.
 - The comma operator, as in `a = 1, b = 2;` or `for (i = 0, j = 0; ...)`.
-- The compound assignments `<<=`, `>>=`, `&=`, `|=` and `^=`.
 - Declarations inside a condition, such as `if (int x = f())`.
 - Default arguments and variable argument lists (`...`) in our own functions.
 - Functions that return a reference, such as `int &f()`.
 - Arrays of function pointers and fully nested declarators such as
   `int (*(*f)(int))[3]`.
-- Structures and classes defined inside a function body.
 - Using `::` inside an expression, such as `A::f()` or `x = Counter::total;`.
   Qualified names are only allowed in declarations.
 - Virtual functions, virtual inheritance, operator overloading and constructor
@@ -308,7 +319,8 @@ must be rejected with errors.
 - In lambdas: a written return type (`-> int`), `mutable`, captures with an
   initialiser, and converting a lambda to a function pointer.
 - The literal forms `1.5f` (a float suffix), hexadecimal floats, joining two
-  string literals written next to each other, and integers too large for `int`.
+  string literals written next to each other, and integers too large for
+  `unsigned long`.
 - The C++ standard library, such as `iostream`, strings and containers. Only
   `printf` and `scanf` are available without a declaration.
 
@@ -349,8 +361,8 @@ These points describe where the rules differ from C++, or what is not checked.
 - Two pointers of unrelated types cannot be compared.
 - Conversions that lose information, such as `double` to `int`, are allowed
   silently, even inside braces (`int a{2.5};`). C++ rejects them inside braces.
-- An integer literal larger than the largest `int` is an error, because there
-  is no `long`.
+- An integer literal no type can hold is an error: above the largest `long` for
+  a decimal literal without `u`, above the largest `unsigned long` otherwise.
 - Overloaded functions must differ in their parameters. When two overloads fit
   a call equally well, the call is reported as ambiguous.
 - A class that declares no constructors can be default constructed and copied.
@@ -417,12 +429,25 @@ These points describe where the rules differ from C++, or what is not checked.
   `continue` or `goto`.
 - A `goto` that jumps into a block past the construction of an object is
   rejected in this phase. The message starts with `cannot generate code:`.
+- Structures, classes and lambdas cross a call through a hidden pointer. A
+  function that returns one gets the address of the caller's result slot as
+  its first argument (`define void @make(ptr %agg.result, ...)`) and writes the
+  value there. For a parameter, the caller copies the argument into a stack
+  temporary (`%agg.arg`) and passes its address, so the callee can change its
+  copy without affecting the caller. Only this compiler's own functions follow
+  this rule, which is the System V rule for large structures only: small ones
+  passed to or returned from C code compiled by another compiler would not match.
 - Copying a class object copies its memory directly. No copy constructor or
   assignment operator is called.
 - `new` calls `malloc`, and `delete` runs the destructor and then calls `free`.
   `delete[]` runs the destructor of every element.
 - `&&`, `||` and `?:` are lowered with branches, so the side that is not needed
   is never evaluated.
+- The condition of an `if`, a loop or a `?:` is lowered as jumping code
+  (Dragon Book §6.6): `&&`, `||` and `!` branch straight to the true and false
+  targets, so `if (a < b && c < d)` becomes two compares and two branches, and
+  no `bool` is stored and tested again. Only `&&` or `||` used as a value, as
+  in `bool x = a && b;`, computes the `bool`.
 - A function that reaches its end without a `return` returns zero (or nothing,
   for a `void` function). This is how `main` returns 0 without a `return`.
 - A global variable whose initial value is not a constant is initialised by a
@@ -431,5 +456,9 @@ These points describe where the rules differ from C++, or what is not checked.
 - A lambda becomes a structure that holds its captures and a separate function
   that receives a pointer to that structure. A capture by copy holds the value,
   and a capture by reference holds the address of the variable.
-- Integer division and right shift are signed, and `char` is a signed type.
-  Pointers are compared as unsigned addresses.
+- Division, remainder, right shift and comparisons are signed or unsigned as
+  the operand type says (`sdiv` or `udiv`, `ashr` or `lshr`, `slt` or `ult`).
+  Widening sign-extends a signed value and zero-extends an unsigned one. `char`
+  is a signed type. Pointers are compared as unsigned addresses.
+- A structure declared in a function body gets a numbered LLVM type,
+  `%struct.pt.1`, so it cannot clash with one of the same name elsewhere.

@@ -94,6 +94,7 @@ HEXDIGIT    [0-9a-fA-F]
 LETTER      [a-zA-Z_]
 IDCHAR      [a-zA-Z0-9_]
 EXPONENT    [eE][+-]?{DIGIT}+
+INTSUFFIX   ([uU]([lL]|ll|LL)?|([lL]|ll|LL)[uU]?)
 CHARBODY    ([^'\\\n]|\\.)
 
 
@@ -128,11 +129,12 @@ CHARBODY    ([^'\\\n]|\\.)
 "."{DIGIT}+{EXPONENT}?           { return addToken(TOK_FLOAT_LITERAL); }  // dot then digits, optional exponent
 {DIGIT}+{EXPONENT}               { return addToken(TOK_FLOAT_LITERAL); }  // digits with mandatory exponent
 
-0[xX]{HEXDIGIT}+        { return addToken(TOK_INT_LITERAL); }     // hexadecimal integer
-0[bB][01]+              { return addToken(TOK_INT_LITERAL); }     // binary integer
-0[0-7]+                 { return addToken(TOK_INT_LITERAL); }     // octal integer
-{DIGIT}+                { errno = 0;
-                          strtoll(yytext, NULL, 10);
+0[xX]{HEXDIGIT}+{INTSUFFIX}?   { return addToken(TOK_INT_LITERAL); }  // hexadecimal integer
+0[bB][01]+{INTSUFFIX}?         { return addToken(TOK_INT_LITERAL); }  // binary integer
+0[0-7]+{INTSUFFIX}?            { return addToken(TOK_INT_LITERAL); }  // octal integer
+{DIGIT}+{INTSUFFIX}?    { errno = 0;
+                          if (strpbrk(yytext, "uU")) strtoull(yytext, NULL, 10);
+                          else                       strtoll(yytext, NULL, 10);
                           if (errno == ERANGE)
                               addError(std::string("integer literal out of range: ")
                                        + yytext);
@@ -185,6 +187,11 @@ CHARBODY    ([^'\\\n]|\\.)
 "*="    { return addToken(TOK_STAR_ASSIGN); }      
 "/="    { return addToken(TOK_SLASH_ASSIGN); }     
 "%="    { return addToken(TOK_PERCENT_ASSIGN); }   
+"<<="   { return addToken(TOK_SHL_ASSIGN); }
+">>="   { return addToken(TOK_SHR_ASSIGN); }
+"&="    { return addToken(TOK_AND_ASSIGN); }
+"|="    { return addToken(TOK_OR_ASSIGN); }
+"^="    { return addToken(TOK_XOR_ASSIGN); }
 "=="    { return addToken(TOK_EQ); }               
 "!="    { return addToken(TOK_NEQ); }              
 "<="    { return addToken(TOK_LE); }               

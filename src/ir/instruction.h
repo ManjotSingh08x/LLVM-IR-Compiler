@@ -262,8 +262,8 @@ public:
 };
 
 enum class BinaryOpKind {
-    Add, FAdd, Sub, FSub, Mul, FMul, SDiv, FDiv, SRem,
-    Shl, AShr, And, Or, Xor,
+    Add, FAdd, Sub, FSub, Mul, FMul, SDiv, UDiv, FDiv, SRem, URem,
+    Shl, AShr, LShr, And, Or, Xor,
     ICmpEQ, ICmpNE, ICmpSLT, ICmpSGT, ICmpSLE, ICmpSGE,
     ICmpULT, ICmpUGT, ICmpULE, ICmpUGE,   //pointer ordering, as clang does
     FCmpOEQ, FCmpUNE, FCmpOLT, FCmpOGT, FCmpOLE, FCmpOGE
@@ -313,7 +313,7 @@ protected:
 
 enum class CastOpKind {
     SExt, ZExt, Trunc,
-    SIToFP, UIToFP, FPToSI,
+    SIToFP, UIToFP, FPToSI, FPToUI,
     FPExt, FPTrunc,
     PtrToInt, IntToPtr
 };

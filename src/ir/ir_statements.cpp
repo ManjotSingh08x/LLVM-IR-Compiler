@@ -206,6 +206,7 @@ Value *IRVisitor::visitCompoundStmt(ast::CompoundStmt *node) {
 Value *IRVisitor::visitDeclStmt(ast::DeclStmt *node) {
     for (const std::unique_ptr<ast::Decl> &decl : node->decls) {
         if (decl->getKind() == ast::ASTKind::VarDecl) emitLocalVariable(static_cast<ast::VarDecl *>(decl.get()));
+        if (decl->getKind() == ast::ASTKind::RecordDecl) localRecords.push_back(static_cast<ast::RecordDecl *>(decl.get()));
     }
     return nullptr;
 }
@@ -216,11 +217,10 @@ Value *IRVisitor::visitExprStmt(ast::ExprStmt *node) {
 }
 
 Value *IRVisitor::visitIfStmt(ast::IfStmt *node) {
-    Value *cond = emitCondition(node->cond.get());
     BasicBlock *thenBlock = builder.createBlock("if.then");
     BasicBlock *elseBlock = node->elseStmt ? builder.createBlock("if.else") : nullptr;
     BasicBlock *endBlock = builder.createBlock("if.end");
-    builder.createCondBr(cond, thenBlock, elseBlock ? elseBlock : endBlock);
+    emitBranch(node->cond.get(), thenBlock, elseBlock ? elseBlock : endBlock);
 
     builder.setInsertBlock(thenBlock);
     visit(node->thenStmt.get());
@@ -244,11 +244,10 @@ Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
     builder.createBr(condBlock);
 
     builder.setInsertBlock(condBlock);
-    Value *cond = emitCondition(node->cond.get());
     if (node->isUntil) {
-        builder.createCondBr(cond, endBlock, bodyBlock);
+        emitBranch(node->cond.get(), endBlock, bodyBlock);
     } else {
-        builder.createCondBr(cond, bodyBlock, endBlock);
+        emitBranch(node->cond.get(), bodyBlock, endBlock);
     }
 
     builder.setInsertBlock(bodyBlock);
@@ -283,11 +282,10 @@ Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     builder.createBr(condBlock);
 
     builder.setInsertBlock(condBlock);
-    Value *cond = emitCondition(node->cond.get());
     if (node->isUntil) {
-        builder.createCondBr(cond, endBlock, bodyBlock);
+        emitBranch(node->cond.get(), endBlock, bodyBlock);
     } else {
-        builder.createCondBr(cond, bodyBlock, endBlock);
+        emitBranch(node->cond.get(), bodyBlock, endBlock);
     }
 
     builder.setInsertBlock(endBlock);
@@ -307,7 +305,7 @@ Value *IRVisitor::visitForStmt(ast::ForStmt *node) {
 
     builder.setInsertBlock(condBlock);
     if (node->cond) {
-        builder.createCondBr(emitCondition(node->cond.get()), bodyBlock, endBlock);
+        emitBranch(node->cond.get(), bodyBlock, endBlock);
     } else {
         builder.createBr(bodyBlock);
     }
@@ -341,6 +339,10 @@ Value *IRVisitor::visitReturnStmt(ast::ReturnStmt *node) {
         } else {
             value = emitRValue(node->value.get());
         }
+    }
+    if (value && ctx().resultAddress) {
+        builder.createStore(returnType, value, ctx().resultAddress);
+        value = nullptr;
     }
 
     if (hasActiveCleanups()) {
@@ -441,8 +443,8 @@ Value *IRVisitor::visitCaseStmt(ast::CaseStmt *node) {
     builder.createBr(block);  //fall through from the case above
     builder.setInsertBlock(block);
     if (!ctx().switches.empty()) {
-        //the condition was promoted to int, so every case value is an i32
-        builder.addSwitchCase(ctx().switches.back().inst, normalizeInt(node->constant, sema::intType()), block);
+        SwitchInst *sw = ctx().switches.back().inst;
+        if (sw) builder.addSwitchCase(sw, normalizeInt(node->constant, sw->condition->getType()), block);
     }
     visit(node->sub.get());
     return nullptr;

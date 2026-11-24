@@ -9,10 +9,6 @@
 //turns sema types and constants into llvm text
 namespace ir {
 
-//the i64 type the ir needs for sizes, recognised by address
-const sema::Type *int64Type();
-bool isInt64(const sema::Type *type);
-
 //the llvm spelling of a type: i32, ptr, [3 x i32], %struct.Point, ...
 std::string formatType(const sema::Type *type);
 
@@ -37,6 +33,8 @@ std::string escapeLLVMString(const std::string &bytes);
 
 //integer width in bits: 1, 8, 32 or 64, 0 for non-integers
 unsigned integerBits(const sema::Type *type);
+
+bool isPassedByAddress(const sema::Type *type);
 
 //wraps a value to the width of an integer type: 300 as a char is 44
 long long normalizeInt(long long value, const sema::Type *type);

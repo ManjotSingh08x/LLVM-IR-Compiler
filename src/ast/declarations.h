@@ -167,6 +167,7 @@ public:
     std::string                name;
     std::vector<BaseSpecifier> bases;
     NodeList<Decl>             members;
+    bool                       hasBody = true;  //false for a forward declaration, struct Node;
 
     sema::RecordSymbol        *symbol = nullptr;
     sema::Scope               *scope = nullptr;  //holds the members

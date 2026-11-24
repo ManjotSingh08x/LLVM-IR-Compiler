@@ -35,7 +35,8 @@ inline const std::unordered_map<std::string, int>& keywordTable() {
     static const std::unordered_map<std::string, int> kw = {
         {"int", TOK_INT}, {"char", TOK_CHAR}, {"float", TOK_FLOAT},
         {"double", TOK_DOUBLE}, {"void", TOK_VOID}, {"bool", TOK_BOOL},
-        {"auto", TOK_AUTO},
+        {"auto", TOK_AUTO}, {"long", TOK_LONG}, {"unsigned", TOK_UNSIGNED},
+        {"signed", TOK_SIGNED},
         {"if", TOK_IF}, {"else", TOK_ELSE}, {"for", TOK_FOR},
         {"while", TOK_WHILE}, {"do", TOK_DO}, {"switch", TOK_SWITCH},
         {"case", TOK_CASE}, {"default", TOK_DEFAULT}, {"break", TOK_BREAK},

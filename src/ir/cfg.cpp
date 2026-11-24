@@ -371,11 +371,24 @@ GlobalVariable *Module::getStringLiteral(const std::string &bytesWithNull) {
     return global;
 }
 
-Function *Module::createFunction(const std::string &name, const sema::FunctionType *fnType, Linkage linkage) {
-    Function *fn = new Function(name, fnType, pointerType(), linkage);
+Function *Module::createFunction(const std::string &name, const sema::FunctionType *sourceType, Linkage linkage) {
+    Function *fn = new Function(name, abiSignature(sourceType), pointerType(), linkage);
     functions.push_back(std::unique_ptr<Function>(fn));
     functionMap[name] = fn;
     return fn;
+}
+
+const sema::FunctionType *Module::abiSignature(const sema::FunctionType *sourceType) {
+    std::vector<const sema::Type *> params;
+    const sema::Type *returnType = sourceType->returnType;
+    if (isPassedByAddress(returnType)) {
+        params.push_back(pointerType());
+        returnType = sema::voidType();
+    }
+    for (const sema::Type *param : sourceType->params) {
+        params.push_back(isPassedByAddress(param) ? pointerType() : param);
+    }
+    return symTab.functionType(returnType, params, sourceType->isVariadic);
 }
 
 Function *Module::findFunction(const std::string &name) const {
@@ -387,7 +400,7 @@ Function *Module::getRuntimeMalloc() {
     Function *fn = findFunction("malloc");
     if (fn) return fn;
     std::vector<const sema::Type *> params;
-    params.push_back(int64Type());
+    params.push_back(sema::longType());
     return createFunction("malloc", symTab.functionType(pointerType(), params, false), Linkage::External);
 }
 

@@ -63,6 +63,8 @@ public:
     void visitDeleteExpr(DeleteExpr *node);
     void visitInitListExpr(InitListExpr *node);
     void visitLambdaExpr(LambdaExpr *node);
+    void visitCastExpr(CastExpr *node);
+    void visitSizeofExpr(SizeofExpr *node);
     void visitImplicitCastExpr(ImplicitCastExpr *node);
 
 private:

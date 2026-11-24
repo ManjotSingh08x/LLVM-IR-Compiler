@@ -42,12 +42,21 @@ Constant *foldInt(Module &module, BinaryOpKind op, const sema::Type *type, const
     case BinaryOpKind::SRem:
         if (y == 0 || (x == minimumOf(bits) && y == -1)) return nullptr;  //traps on the machine
         return module.getInt(type, op == BinaryOpKind::SDiv ? x / y : x % y);
+    case BinaryOpKind::UDiv:
+    case BinaryOpKind::URem: {
+        unsigned long long n = unsignedValue(a), d = unsignedValue(b);
+        if (d == 0) return nullptr;
+        return module.getInt(type, (long long)(op == BinaryOpKind::UDiv ? n / d : n % d));
+    }
     case BinaryOpKind::Shl:
         if (y < 0 || y >= (long long)bits) return nullptr;  //poison in llvm
         return module.getInt(type, (long long)(ux << y));
     case BinaryOpKind::AShr:
         if (y < 0 || y >= (long long)bits) return nullptr;
         return module.getInt(type, x >> y);
+    case BinaryOpKind::LShr:
+        if (y < 0 || y >= (long long)bits) return nullptr;
+        return module.getInt(type, (long long)(unsignedValue(a) >> y));
     case BinaryOpKind::And: return module.getInt(type, x & y);
     case BinaryOpKind::Or:  return module.getInt(type, x | y);
     case BinaryOpKind::Xor: return module.getInt(type, x ^ y);
@@ -121,8 +130,7 @@ bool isNumber(const Value *value) {
 }
 
 bool sameNumber(const Constant *a, const Constant *b) {
-    if (a->constKind != b->constKind || !sema::isSameType(a->getType(), b->getType()) ||
-        isInt64(a->getType()) != isInt64(b->getType())) {
+    if (a->constKind != b->constKind || !sema::isSameType(a->getType(), b->getType())) {
         return false;
     }
     if (a->constKind == ConstantKind::Int) return a->intValue == b->intValue;
@@ -198,6 +206,14 @@ Constant *foldCast(Module &module, CastOpKind op, const Constant *operand, const
         if (t < lo || t > hi) return nullptr;
         return module.getInt(toType, (long long)t);
     }
+    case CastOpKind::FPToUI: {
+        double v = operand->floatValue;
+        unsigned bits = integerBits(toType);
+        if (std::isnan(v) || bits == 0) return nullptr;
+        double t = std::trunc(v);
+        if (t < 0.0 || t > std::ldexp(1.0, bits) - 1.0) return nullptr;
+        return module.getInt(toType, (long long)(unsigned long long)t);
+    }
     case CastOpKind::FPExt:
     case CastOpKind::FPTrunc:
         return module.getFloat(toType, operand->floatValue);
@@ -272,13 +288,16 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
             break;
         }
         case BinaryOpKind::SDiv:
+        case BinaryOpKind::UDiv:
             if (isIntConst(y, 1)) return x;
             break;
         case BinaryOpKind::SRem:
+        case BinaryOpKind::URem:
             if (isIntConst(y, 1)) return module.getInt(t, 0);
             break;
         case BinaryOpKind::Shl:
         case BinaryOpKind::AShr:
+        case BinaryOpKind::LShr:
             if (isIntConst(y, 0)) return x;
             break;
         case BinaryOpKind::And:

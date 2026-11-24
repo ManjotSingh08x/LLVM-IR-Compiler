@@ -15,7 +15,7 @@ using namespace ir;
 namespace {
 
 bool isScalarType(const sema::Type *type) {
-    return sema::isIntegral(type) || sema::isFloating(type) || type->is(sema::TypeKind::Pointer) || isInt64(type);
+    return sema::isIntegral(type) || sema::isFloating(type) || type->is(sema::TypeKind::Pointer);
 }
 
 bool isPure(const Instruction &inst) {
@@ -110,8 +110,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
                 if (!isScalarType(load->getType())) break;
                 Value *same = nullptr;
                 for (size_t i = known.size(); i-- > 0;) {
-                    if (known[i].address == load->address && sema::isSameType(known[i].type, load->getType()) &&
-                        isInt64(known[i].type) == isInt64(load->getType())) {
+                    if (known[i].address == load->address && sema::isSameType(known[i].type, load->getType())) {
                         same = known[i].value;
                         break;
                     }

@@ -29,8 +29,9 @@ Value *IRVisitor::emitRValue(ast::Expr *expr) {
     switch (expr->getKind()) {
     case ast::ASTKind::IntLiteral: {
         long long value = 0;
-        sema::intLiteralValue(static_cast<ast::IntLiteral *>(expr)->spelling, value);
-        return module.getInt32(value);
+        const sema::Type *type = nullptr;
+        sema::intLiteral(static_cast<ast::IntLiteral *>(expr)->spelling, value, type);
+        return module.getInt(expr->type, value);
     }
     case ast::ASTKind::FloatLiteral:
         return module.getFloat(sema::doubleType(),
@@ -59,6 +60,22 @@ Value *IRVisitor::emitRValue(ast::Expr *expr) {
         return emitDelete(static_cast<ast::DeleteExpr *>(expr));
     case ast::ASTKind::ImplicitCastExpr:
         return emitCast(static_cast<ast::ImplicitCastExpr *>(expr));
+    case ast::ASTKind::CastExpr: {
+        //the conversion is in the implicit casts under it; a cast to void only discards
+        ast::CastExpr *cast = static_cast<ast::CastExpr *>(expr);
+        if (cast->type->is(sema::TypeKind::Void)) {
+            emitIgnored(cast->sub.get());
+            return nullptr;
+        }
+        return emitRValue(cast->sub.get());
+    }
+    case ast::ASTKind::SizeofExpr:
+        return module.getInt(expr->type, (long long)static_cast<ast::SizeofExpr *>(expr)->size);
+    case ast::ASTKind::MemberExpr: {
+        Value *address = emitMemberAddress(static_cast<ast::MemberExpr *>(expr));
+        if (sema::asArray(expr->type)) return address;
+        return builder.createLoad(expr->type, address);
+    }
     case ast::ASTKind::LambdaExpr: {
         //a closure object made in a temporary slot and read as a whole
         AllocaInst *temp = builder.createEntryAlloca(expr->type, "closure.tmp");
@@ -117,8 +134,35 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
     return materialize(emitRValue(expr), expr->type);
 }
 
-//a bool for a branch, conditions already carry a ToBool cast
-Value *IRVisitor::emitCondition(ast::Expr *expr) { return emitRValue(expr); }
+//jumping code (dragon book 6.6): && and || in a condition branch straight to the targets, the bool
+//they would compute is never made. conditions already carry a ToBool cast
+void IRVisitor::emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFalse) {
+    switch (expr->getKind()) {
+    case ast::ASTKind::ParenExpr:
+        return emitBranch(static_cast<ast::ParenExpr *>(expr)->sub.get(), ifTrue, ifFalse);
+    case ast::ASTKind::UnaryExpr: {
+        ast::UnaryExpr *unary = static_cast<ast::UnaryExpr *>(expr);
+        if (unary->op == ast::UnaryOp::LogicalNot) return emitBranch(unary->operand.get(), ifFalse, ifTrue);
+        break;
+    }
+    case ast::ASTKind::BinaryExpr: {
+        ast::BinaryExpr *binary = static_cast<ast::BinaryExpr *>(expr);
+        bool isAnd = binary->op == ast::BinaryOp::LogicalAnd;
+        if (!isAnd && binary->op != ast::BinaryOp::LogicalOr) break;
+        BasicBlock *rhsBlock = builder.createBlock(isAnd ? "land.rhs" : "lor.rhs");
+        if (isAnd) {
+            emitBranch(binary->lhs.get(), rhsBlock, ifFalse);
+        } else {
+            emitBranch(binary->lhs.get(), ifTrue, rhsBlock);
+        }
+        builder.setInsertBlock(rhsBlock);
+        return emitBranch(binary->rhs.get(), ifTrue, ifFalse);
+    }
+    default:
+        break;
+    }
+    builder.createCondBr(emitRValue(expr), ifTrue, ifFalse);
+}
 
 //an expression statement: computed for its side effects. an lvalue is not read
 void IRVisitor::emitIgnored(ast::Expr *expr) {
@@ -298,10 +342,12 @@ Value *IRVisitor::emitArithmetic(ast::BinaryOp op, const sema::Type *type, Value
     case ast::BinaryOp::Add:    kind = floating ? BinaryOpKind::FAdd : BinaryOpKind::Add; break;
     case ast::BinaryOp::Sub:    kind = floating ? BinaryOpKind::FSub : BinaryOpKind::Sub; break;
     case ast::BinaryOp::Mul:    kind = floating ? BinaryOpKind::FMul : BinaryOpKind::Mul; break;
-    case ast::BinaryOp::Div:    kind = floating ? BinaryOpKind::FDiv : BinaryOpKind::SDiv; break;
-    case ast::BinaryOp::Rem:    kind = BinaryOpKind::SRem; break;
+    case ast::BinaryOp::Div:
+        kind = floating ? BinaryOpKind::FDiv : sema::isUnsigned(type) ? BinaryOpKind::UDiv : BinaryOpKind::SDiv;
+        break;
+    case ast::BinaryOp::Rem:    kind = sema::isUnsigned(type) ? BinaryOpKind::URem : BinaryOpKind::SRem; break;
     case ast::BinaryOp::Shl:    kind = BinaryOpKind::Shl; break;
-    case ast::BinaryOp::Shr:    kind = BinaryOpKind::AShr; break;   //int is signed: arithmetic shift
+    case ast::BinaryOp::Shr:    kind = sema::isUnsigned(type) ? BinaryOpKind::LShr : BinaryOpKind::AShr; break;
     case ast::BinaryOp::BitAnd: kind = BinaryOpKind::And; break;
     case ast::BinaryOp::BitOr:  kind = BinaryOpKind::Or; break;
     case ast::BinaryOp::BitXor: kind = BinaryOpKind::Xor; break;
@@ -335,13 +381,14 @@ Value *IRVisitor::emitCompare(ast::BinaryOp op, const sema::Type *operandType, V
         }
         return builder.createBinary(kind, operandType, lhs, rhs);
     }
+    bool isUnsignedOp = sema::isUnsigned(operandType);
     switch (op) {
     case ast::BinaryOp::Eq: kind = BinaryOpKind::ICmpEQ; break;
     case ast::BinaryOp::Ne: kind = BinaryOpKind::ICmpNE; break;
-    case ast::BinaryOp::Lt: kind = BinaryOpKind::ICmpSLT; break;
-    case ast::BinaryOp::Gt: kind = BinaryOpKind::ICmpSGT; break;
-    case ast::BinaryOp::Le: kind = BinaryOpKind::ICmpSLE; break;
-    default:                kind = BinaryOpKind::ICmpSGE; break;
+    case ast::BinaryOp::Lt: kind = isUnsignedOp ? BinaryOpKind::ICmpULT : BinaryOpKind::ICmpSLT; break;
+    case ast::BinaryOp::Gt: kind = isUnsignedOp ? BinaryOpKind::ICmpUGT : BinaryOpKind::ICmpSGT; break;
+    case ast::BinaryOp::Le: kind = isUnsignedOp ? BinaryOpKind::ICmpULE : BinaryOpKind::ICmpSLE; break;
+    default:                kind = isUnsignedOp ? BinaryOpKind::ICmpUGE : BinaryOpKind::ICmpSGE; break;
     }
     return builder.createBinary(kind, operandType, lhs, rhs);
 }
@@ -352,7 +399,8 @@ Value *IRVisitor::emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value
     Value *pointer = pointerOnLeft ? lhs : rhs;
     Value *count = pointerOnLeft ? rhs : lhs;
     if (node->op == ast::BinaryOp::Sub) {
-        count = builder.createBinary(BinaryOpKind::Sub, sema::intType(), module.getInt32(0), count);
+        const sema::Type *countType = (pointerOnLeft ? node->rhs : node->lhs)->type;
+        count = builder.createBinary(BinaryOpKind::Sub, countType, module.getInt(countType, 0), count);
     }
     return builder.createElementGEP(sema::asPointer(node->type)->pointee, pointer, count);
 }
@@ -360,11 +408,11 @@ Value *IRVisitor::emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value
 //q - p: byte distance divided exactly by the element size
 Value *IRVisitor::emitPointerDifference(ast::BinaryExpr *node, Value *lhs, Value *rhs) {
     const sema::Type *element = sema::asPointer(node->lhs->type)->pointee;
-    Value *left = builder.createCast(CastOpKind::PtrToInt, lhs, module.pointerType(), int64Type());
-    Value *right = builder.createCast(CastOpKind::PtrToInt, rhs, module.pointerType(), int64Type());
-    Value *bytes = builder.createBinary(BinaryOpKind::Sub, int64Type(), left, right);
-    Value *count = builder.createExactSDiv(int64Type(), bytes, sizeOf(element, module.getInt64(1)));
-    return builder.createCast(CastOpKind::Trunc, count, int64Type(), sema::intType());
+    Value *left = builder.createCast(CastOpKind::PtrToInt, lhs, module.pointerType(), sema::longType());
+    Value *right = builder.createCast(CastOpKind::PtrToInt, rhs, module.pointerType(), sema::longType());
+    Value *bytes = builder.createBinary(BinaryOpKind::Sub, sema::longType(), left, right);
+    Value *count = builder.createExactSDiv(sema::longType(), bytes, sizeOf(element, module.getInt64(1)));
+    return builder.createCast(CastOpKind::Trunc, count, sema::longType(), sema::intType());
 }
 
 //short-circuit logic through a stack slot instead of a phi
@@ -415,7 +463,7 @@ Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
         //p += n, p -= n
         Value *count = value;
         if (node->op == ast::AssignOp::SubAssign) {
-            count = builder.createBinary(BinaryOpKind::Sub, sema::intType(), module.getInt32(0), value);
+            count = builder.createBinary(BinaryOpKind::Sub, node->value->type, module.getInt(node->value->type, 0), value);
         }
         result = builder.createElementGEP(pointer->pointee, oldValue, count);
     } else {
@@ -427,6 +475,11 @@ Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
         case ast::AssignOp::MulAssign: op = ast::BinaryOp::Mul; break;
         case ast::AssignOp::DivAssign: op = ast::BinaryOp::Div; break;
         case ast::AssignOp::RemAssign: op = ast::BinaryOp::Rem; break;
+        case ast::AssignOp::ShlAssign: op = ast::BinaryOp::Shl; break;
+        case ast::AssignOp::ShrAssign: op = ast::BinaryOp::Shr; break;
+        case ast::AssignOp::AndAssign: op = ast::BinaryOp::BitAnd; break;
+        case ast::AssignOp::OrAssign:  op = ast::BinaryOp::BitOr; break;
+        case ast::AssignOp::XorAssign: op = ast::BinaryOp::BitXor; break;
         case ast::AssignOp::Assign:    break;
         }
         Value *widened = emitArithmeticConversion(oldValue, targetType, common);
@@ -446,7 +499,7 @@ Value *IRVisitor::emitConditional(ast::ConditionalExpr *node, bool wantAddress) 
     BasicBlock *trueBlock = builder.createBlock("cond.true");
     BasicBlock *falseBlock = builder.createBlock("cond.false");
     BasicBlock *endBlock = builder.createBlock("cond.end");
-    builder.createCondBr(emitCondition(node->cond.get()), trueBlock, falseBlock);
+    emitBranch(node->cond.get(), trueBlock, falseBlock);
 
     ast::Expr *arms[2] = { node->trueExpr.get(), node->falseExpr.get() };
     BasicBlock *blocks[2] = { trueBlock, falseBlock };
@@ -503,7 +556,12 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
 
     //every pointer is ptr in llvm, so only the sema type changes
     case ast::CastKind::PointerToVoid:
+    case ast::CastKind::PointerCast:
         return emitRValue(sub);
+    case ast::CastKind::PointerToIntegral:
+        return builder.createCast(CastOpKind::PtrToInt, emitRValue(sub), module.pointerType(), node->type);
+    case ast::CastKind::IntegralToPointer:
+        return builder.createCast(CastOpKind::IntToPtr, emitRValue(sub), sub->type, module.pointerType());
 
     case ast::CastKind::DerivedToBase: {
         if (const sema::PointerType *target = sema::asPointer(node->type)) {
@@ -536,18 +594,20 @@ Value *IRVisitor::emitArithmeticConversion(Value *value, const sema::Type *from,
             CastOpKind op = to->is(sema::TypeKind::Double) ? CastOpKind::FPExt : CastOpKind::FPTrunc;
             return builder.createCast(op, value, from, to);
         }
-        //bool is 0 or 1, unsigned. char and int are signed
-        CastOpKind op = from->is(sema::TypeKind::Bool) ? CastOpKind::UIToFP : CastOpKind::SIToFP;
-        return builder.createCast(op, value, from, to);
+        bool fromUnsigned = from->is(sema::TypeKind::Bool) || sema::isUnsigned(from);
+        return builder.createCast(fromUnsigned ? CastOpKind::UIToFP : CastOpKind::SIToFP, value, from, to);
     }
 
-    if (sema::isFloating(from)) return builder.createCast(CastOpKind::FPToSI, value, from, to);
+    if (sema::isFloating(from)) {
+        return builder.createCast(sema::isUnsigned(to) ? CastOpKind::FPToUI : CastOpKind::FPToSI, value, from, to);
+    }
 
     unsigned fromBits = integerBits(from);
     unsigned toBits = integerBits(to);
+    if (toBits == fromBits) return value;  //int and unsigned int: the same bits, read differently
     if (toBits < fromBits) return builder.createCast(CastOpKind::Trunc, value, from, to);
-    CastOpKind op = from->is(sema::TypeKind::Bool) ? CastOpKind::ZExt : CastOpKind::SExt;
-    return builder.createCast(op, value, from, to);
+    bool fromUnsigned = from->is(sema::TypeKind::Bool) || sema::isUnsigned(from);
+    return builder.createCast(fromUnsigned ? CastOpKind::ZExt : CastOpKind::SExt, value, from, to);
 }
 
 //count * sizeof(type) in bytes, via getelementptr from null and ptrtoint
@@ -555,7 +615,7 @@ Value *IRVisitor::sizeOf(const sema::Type *type, Value *count) {
     std::vector<Value *> indices;
     indices.push_back(count);
     Value *end = builder.createGEP(type, module.getNull(module.pointerType()), indices, false);
-    return builder.createCast(CastOpKind::PtrToInt, end, module.pointerType(), int64Type());
+    return builder.createCast(CastOpKind::PtrToInt, end, module.pointerType(), sema::longType());
 }
 
 } // namespace ir

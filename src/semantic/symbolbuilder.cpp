@@ -9,8 +9,10 @@ namespace {
 std::string lengthPrefixed(const std::string &name) { return std::to_string(name.size()) + name; }
 
 //Outer::Inner written for a mangled name: 5Outer5Inner
+//a record declared in a function body is named by its unique mangled name, s.3
 std::string recordPath(const RecordSymbol *record) {
-    return (record->outer ? recordPath(record->outer) : "") + lengthPrefixed(record->name);
+    if (record->outer) return recordPath(record->outer) + lengthPrefixed(record->name);
+    return lengthPrefixed(record->mangledName);
 }
 
 bool isVoidParamList(const ast::NodeList<ast::ParamDecl> &params) {
@@ -71,17 +73,37 @@ void SymbolBuilder::declareBuiltins() {
 }
 
 void SymbolBuilder::declareRecord(ast::RecordDecl *node, Scope *scope, RecordSymbol *outer) {
-    if (!isFree(scope, node->name, node->line, node->col)) return;
+    //struct s; declares s once per scope, and the definition in that scope completes the same record
+    RecordSymbol *record = nullptr;
+    if (const std::vector<Symbol *> *found = scope->find(node->name)) {
+        if ((*found)[0]->kind == SymbolKind::Record) {
+            RecordSymbol *earlier = static_cast<RecordSymbol *>((*found)[0]);
+            if (!node->hasBody) {
+                node->symbol = earlier;
+                return;
+            }
+            if (earlier->members == nullptr) record = earlier;
+        }
+    }
+    if (record == nullptr) {
+        if (!isFree(scope, node->name, node->line, node->col)) return;
+        record = new RecordSymbol(node->name, node->isClass, node->line, node->col);
+        record->decl = node;
+        record->outer = outer;
+        record->type = table.recordType(record);
+        //a record in a function body gets a name no other function's record can have
+        bool isLocal = scope->kind == ScopeKind::Block || scope->kind == ScopeKind::Function;
+        record->mangledName = outer   ? outer->mangledName + "." + node->name
+                            : isLocal ? node->name + "." + std::to_string(++localRecordCount)
+                                      : node->name;
+        scope->add(std::unique_ptr<Symbol>(record));
+    }
+    node->symbol = record;
+    if (!node->hasBody) return;
 
-    RecordSymbol *record = new RecordSymbol(node->name, node->isClass, node->line, node->col);
     record->decl = node;
-    record->outer = outer;
-    record->type = table.recordType(record);
-    record->mangledName = outer ? outer->mangledName + "." + node->name : node->name;
-    scope->add(std::unique_ptr<Symbol>(record));
     record->members = scope->addChild(ScopeKind::Record, node->line, node->col);
     record->members->record = record;
-    node->symbol = record;
     node->scope = record->members;
 
     //a class inherits privately and a struct publicly when no access is written
@@ -522,6 +544,11 @@ void SymbolBuilder::visitDeclStmt(ast::DeclStmt *node) {
             declareTypedef(static_cast<ast::TypedefDecl *>(decl.get()), current);
             continue;
         }
+        if (decl->getKind() == ast::ASTKind::RecordDecl) {
+            declareRecord(static_cast<ast::RecordDecl *>(decl.get()), current, nullptr);
+            buildBodies(decl.get());
+            continue;
+        }
         if (decl->getKind() != ast::ASTKind::VarDecl) continue;
         ast::VarDecl *var = static_cast<ast::VarDecl *>(decl.get());
         //the name is in scope from its declarator on
@@ -626,6 +653,16 @@ void SymbolBuilder::visitNewExpr(ast::NewExpr *node) {
     visit(node->init.get());
 }
 
+void SymbolBuilder::visitCastExpr(ast::CastExpr *node) {
+    resolveType(node->target.get(), current, false);
+    visit(node->sub.get());
+}
+
+void SymbolBuilder::visitSizeofExpr(ast::SizeofExpr *node) {
+    if (node->typeOperand) resolveType(node->typeOperand.get(), current, false);
+    visit(node->exprOperand.get());
+}
+
 void SymbolBuilder::visitDeleteExpr(ast::DeleteExpr *node) { visit(node->operand.get()); }
 
 void SymbolBuilder::visitInitListExpr(ast::InitListExpr *node) {
@@ -672,6 +709,11 @@ const Type *SymbolBuilder::resolveType(ast::TypeSpec *spec, Scope *scope, bool a
     case ast::TypeSpecKind::Builtin:
         if (spec->name == "int") result = intType();
         else if (spec->name == "char") result = charType();
+        else if (spec->name == "signed char") result = scharType();
+        else if (spec->name == "unsigned char") result = ucharType();
+        else if (spec->name == "unsigned int") result = uintType();
+        else if (spec->name == "long") result = longType();
+        else if (spec->name == "unsigned long") result = ulongType();
         else if (spec->name == "float") result = floatType();
         else if (spec->name == "double") result = doubleType();
         else if (spec->name == "bool") result = boolType();

@@ -1,0 +1,105 @@
+// structs and classes passed and returned by value, through a hidden pointer
+struct P { int x; int y; };
+struct Big { double a; double b; int c; char tag; };
+
+class Tracker {
+public:
+    int id;
+    Tracker() { id = 0; }
+    Tracker(int i) { id = i; }
+    ~Tracker() { printf("~Tracker %d\n", id); }
+};
+
+P make(int a) { P p; p.x = a; p.y = a + 1; return p; }
+int sum(P p) { return p.x + p.y; }
+P swapP(P p) { P q; q.x = p.y; q.y = p.x; return q; }
+
+void clobber(P p) { p.x = 100; p.y = 200; }
+
+Big makeBig(double a, int c) { Big b; b.a = a; b.b = a * 2.0; b.c = c; b.tag = 'z'; return b; }
+double bigSum(Big b, int extra) { return b.a + b.b + b.c + extra; }
+
+P mixed(int a, P p, double d, Big b, int e) {
+    P r;
+    r.x = a + p.x + e + b.c;
+    r.y = p.y + b.tag;
+    if (d > 1.0) r.y = r.y + 1;
+    return r;
+}
+
+P withCleanup(int a) {
+    Tracker t(a);
+    P p = make(a);
+    if (a > 5) return swapP(p);
+    return p;
+}
+
+P fib(int n) {
+    P r;
+    if (n == 0) { r.x = 0; r.y = 1; return r; }
+    P prev = fib(n - 1);
+    r.x = prev.y;
+    r.y = prev.x + prev.y;
+    return r;
+}
+
+class Box {
+public:
+    P inner;
+    Box(P p) { inner = p; }
+    P get() { return inner; }
+    void put(P p) { inner = p; }
+    static P twice(P p) { P r; r.x = p.x * 2; r.y = p.y * 2; return r; }
+};
+
+int main() {
+    P a = make(3);
+    printf("make %d %d\n", a.x, a.y);
+    printf("sum %d\n", sum(a));
+    printf("nested %d\n", sum(swapP(make(10))));
+
+    clobber(a);
+    printf("after clobber %d %d\n", a.x, a.y);
+
+    Big b = makeBig(1.5, 7);
+    printf("big %f %f %d %c\n", b.a, b.b, b.c, b.tag);
+    printf("bigSum %f\n", bigSum(b, 4));
+    printf("bigSum direct %f\n", bigSum(makeBig(2.0, 1), 0));
+
+    P m = mixed(1, a, 2.5, b, 5);
+    printf("mixed %d %d\n", m.x, m.y);
+
+    P c = withCleanup(2);
+    printf("cleanup small %d %d\n", c.x, c.y);
+    P d = withCleanup(8);
+    printf("cleanup big %d %d\n", d.x, d.y);
+
+    P f = fib(10);
+    printf("fib %d %d\n", f.x, f.y);
+
+    Box box(a);
+    P g = box.get();
+    printf("box %d %d\n", g.x, g.y);
+    box.put(make(40));
+    printf("put %d %d\n", box.get().x, box.get().y);
+    P h = box.twice(a);
+    printf("twice %d %d\n", h.x, h.y);
+
+    struct P (*fp)(P) = swapP;
+    P k = fp(a);
+    printf("fp %d %d\n", k.x, k.y);
+
+    auto lam = [](P p) { return swapP(p); };
+    P l = lam(a);
+    printf("lambda %d %d\n", l.x, l.y);
+    int base = 1000;
+    auto cap = [base](P p) { return p.x + p.y + base; };
+    printf("capture %d\n", cap(a));
+
+    P arr[3];
+    for (int i = 0; i < 3; i++) arr[i] = make(i * 10);
+    int total = 0;
+    for (int i = 0; i < 3; i++) total = total + sum(arr[i]);
+    printf("array %d\n", total);
+    return 0;
+}

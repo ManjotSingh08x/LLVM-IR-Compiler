@@ -15,10 +15,13 @@ const char *binaryOpName(BinaryOpKind op) {
     case BinaryOpKind::Mul:     return "mul";
     case BinaryOpKind::FMul:    return "fmul";
     case BinaryOpKind::SDiv:    return "sdiv";
+    case BinaryOpKind::UDiv:    return "udiv";
     case BinaryOpKind::FDiv:    return "fdiv";
     case BinaryOpKind::SRem:    return "srem";
+    case BinaryOpKind::URem:    return "urem";
     case BinaryOpKind::Shl:     return "shl";
     case BinaryOpKind::AShr:    return "ashr";
+    case BinaryOpKind::LShr:    return "lshr";
     case BinaryOpKind::And:     return "and";
     case BinaryOpKind::Or:      return "or";
     case BinaryOpKind::Xor:     return "xor";
@@ -50,6 +53,7 @@ const char *castOpName(CastOpKind op) {
     case CastOpKind::SIToFP:   return "sitofp";
     case CastOpKind::UIToFP:   return "uitofp";
     case CastOpKind::FPToSI:   return "fptosi";
+    case CastOpKind::FPToUI:   return "fptoui";
     case CastOpKind::FPExt:    return "fpext";
     case CastOpKind::FPTrunc:  return "fptrunc";
     case CastOpKind::PtrToInt: return "ptrtoint";

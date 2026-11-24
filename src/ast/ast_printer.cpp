@@ -51,6 +51,8 @@ const char *kindName(ASTKind kind) {
     case ASTKind::DeleteExpr:         return "DeleteExpr";
     case ASTKind::InitListExpr:       return "InitListExpr";
     case ASTKind::LambdaExpr:         return "LambdaExpr";
+    case ASTKind::CastExpr:           return "CastExpr";
+    case ASTKind::SizeofExpr:         return "SizeofExpr";
     case ASTKind::ImplicitCastExpr:   return "ImplicitCastExpr";
     }
     return "Unknown";
@@ -104,6 +106,11 @@ const char *opSpelling(AssignOp op) {
     case AssignOp::MulAssign: return "*=";
     case AssignOp::DivAssign: return "/=";
     case AssignOp::RemAssign: return "%=";
+    case AssignOp::ShlAssign: return "<<=";
+    case AssignOp::ShrAssign: return ">>=";
+    case AssignOp::AndAssign: return "&=";
+    case AssignOp::OrAssign:  return "|=";
+    case AssignOp::XorAssign: return "^=";
     }
     return "?";
 }
@@ -202,6 +209,9 @@ const char *castKindName(CastKind kind) {
     case CastKind::NullToPointer:      return "null-to-pointer";
     case CastKind::DerivedToBase:      return "derived-to-base";
     case CastKind::PointerToVoid:      return "pointer-to-void";
+    case CastKind::PointerCast:        return "pointer";
+    case CastKind::PointerToIntegral:  return "pointer-to-integral";
+    case CastKind::IntegralToPointer:  return "integral-to-pointer";
     }
     return "";
 }
@@ -499,6 +509,20 @@ void ASTPrinter::visitLambdaExpr(LambdaExpr *node) {
     line(*node, "[" + captures + "]");
     children("param", node->params);
     child("body", node->body.get());
+}
+
+void ASTPrinter::visitCastExpr(CastExpr *node) {
+    line(*node, quoted(typeString(node->target.get())));
+    child(nullptr, node->sub.get());
+}
+
+void ASTPrinter::visitSizeofExpr(SizeofExpr *node) {
+    if (node->typeOperand) {
+        line(*node, quoted(typeString(node->typeOperand.get())) + " " + std::to_string(node->size));
+    } else {
+        line(*node, std::to_string(node->size));
+        child(nullptr, node->exprOperand.get());
+    }
 }
 
 void ASTPrinter::visitImplicitCastExpr(ImplicitCastExpr *node) {

@@ -1,6 +1,8 @@
 #include "semantic/constants.h"
 
 #include <climits>
+#include <cstring>
+#include <vector>
 
 namespace sema {
 
@@ -41,14 +43,24 @@ long long readChar(const std::string &text, size_t &i) {
 
 } // namespace
 
-bool intLiteralValue(const std::string &spelling, long long &value) {
+bool intLiteral(const std::string &spelling, long long &value, const Type *&type) {
+    size_t end = spelling.size();
+    bool isUnsignedSuffix = false;
+    int longs = 0;
+    while (end > 0 && strchr("uUlL", spelling[end - 1])) {
+        end--;
+        if (spelling[end] == 'u' || spelling[end] == 'U') isUnsignedSuffix = true;
+        else longs++;
+    }
+    std::string digits = spelling.substr(0, end);
+
     int base = 10;
     size_t i = 0;
-    if (spelling.size() > 1 && spelling[0] == '0') {
-        if (spelling[1] == 'x' || spelling[1] == 'X') {
+    if (digits.size() > 1 && digits[0] == '0') {
+        if (digits[1] == 'x' || digits[1] == 'X') {
             base = 16;
             i = 2;
-        } else if (spelling[1] == 'b' || spelling[1] == 'B') {
+        } else if (digits[1] == 'b' || digits[1] == 'B') {
             base = 2;
             i = 2;
         } else {
@@ -57,12 +69,45 @@ bool intLiteralValue(const std::string &spelling, long long &value) {
         }
     }
 
-    value = 0;
-    for (; i < spelling.size(); i++) {
-        value = value * base + digitValue(spelling[i]);
-        if (value > INT_MAX) return false;
+    unsigned long long raw = 0;
+    for (; i < digits.size(); i++) {
+        unsigned long long digit = (unsigned long long)digitValue(digits[i]);
+        if (raw > (ULLONG_MAX - digit) / (unsigned long long)base) return false;
+        raw = raw * base + digit;
     }
-    return true;
+    value = (long long)raw;
+
+    std::vector<const Type *> candidates;
+    if (isUnsignedSuffix && longs) candidates = { ulongType() };
+    else if (isUnsignedSuffix) candidates = { uintType(), ulongType() };
+    else if (longs) candidates = base == 10 ? std::vector<const Type *>{ longType() }
+                                            : std::vector<const Type *>{ longType(), ulongType() };
+    else candidates = base == 10 ? std::vector<const Type *>{ intType(), longType() }
+                                 : std::vector<const Type *>{ intType(), uintType(), longType(), ulongType() };
+    for (const Type *candidate : candidates) {
+        unsigned long long max = candidate == intType()    ? (unsigned long long)INT_MAX
+                               : candidate == uintType()   ? (unsigned long long)UINT_MAX
+                               : candidate == longType()   ? (unsigned long long)LLONG_MAX
+                                                           : ULLONG_MAX;
+        if (raw <= max) {
+            type = candidate;
+            return true;
+        }
+    }
+    type = candidates.back();
+    return false;
+}
+
+long long wrapToType(long long value, const Type *type) {
+    if (type == nullptr || !isIntegral(type)) return value;
+    if (type->is(TypeKind::Bool)) return value != 0;
+    unsigned bits = integerSize(type) * 8;
+    if (bits == 64) return value;
+    unsigned long long mask = (1ULL << bits) - 1;
+    unsigned long long low = (unsigned long long)value & mask;
+    if (isUnsigned(type)) return (long long)low;
+    unsigned long long sign = 1ULL << (bits - 1);
+    return (long long)((low ^ sign) - sign);
 }
 
 long long charLiteralValue(const std::string &spelling) {
@@ -89,12 +134,31 @@ std::string decodeStringLiteral(const std::string &spelling) {
     return bytes;
 }
 
+namespace {
+
+bool evaluate(const ast::Expr *expr, long long &value);
+
+//an operand's type decides signed or unsigned arithmetic, the types are null before type checking
+bool unsignedOperands(const ast::Expr *operand) { return operand->type && isUnsigned(operand->type); }
+
+} // namespace
+
 bool evaluateConstant(const ast::Expr *expr, long long &value) {
+    if (!evaluate(expr, value)) return false;
+    value = wrapToType(value, expr->type);
+    return true;
+}
+
+namespace {
+
+bool evaluate(const ast::Expr *expr, long long &value) {
     if (expr == nullptr) return false;
 
     switch (expr->getKind()) {
-    case ast::ASTKind::IntLiteral:
-        return intLiteralValue(static_cast<const ast::IntLiteral *>(expr)->spelling, value);
+    case ast::ASTKind::IntLiteral: {
+        const Type *type = nullptr;
+        return intLiteral(static_cast<const ast::IntLiteral *>(expr)->spelling, value, type);
+    }
     case ast::ASTKind::CharLiteral:
         value = charLiteralValue(static_cast<const ast::CharLiteral *>(expr)->spelling);
         return true;
@@ -105,6 +169,12 @@ bool evaluateConstant(const ast::Expr *expr, long long &value) {
         return evaluateConstant(static_cast<const ast::ParenExpr *>(expr)->sub.get(), value);
     case ast::ASTKind::ImplicitCastExpr:
         return evaluateConstant(static_cast<const ast::ImplicitCastExpr *>(expr)->sub.get(), value);
+    case ast::ASTKind::CastExpr:
+        return expr->type && isIntegral(expr->type) &&
+               evaluateConstant(static_cast<const ast::CastExpr *>(expr)->sub.get(), value);
+    case ast::ASTKind::SizeofExpr:
+        value = (long long)static_cast<const ast::SizeofExpr *>(expr)->size;
+        return true;
 
     case ast::ASTKind::UnaryExpr: {
         const ast::UnaryExpr *unary = static_cast<const ast::UnaryExpr *>(expr);
@@ -123,14 +193,22 @@ bool evaluateConstant(const ast::Expr *expr, long long &value) {
         const ast::BinaryExpr *binary = static_cast<const ast::BinaryExpr *>(expr);
         long long a, b;
         if (!evaluateConstant(binary->lhs.get(), a) || !evaluateConstant(binary->rhs.get(), b)) return false;
+        unsigned long long ua = (unsigned long long)a, ub = (unsigned long long)b;
+        bool isUnsignedOp = unsignedOperands(binary->lhs.get());
         switch (binary->op) {
-        case ast::BinaryOp::Add:        value = a + b; return true;
-        case ast::BinaryOp::Sub:        value = a - b; return true;
-        case ast::BinaryOp::Mul:        value = a * b; return true;
-        case ast::BinaryOp::Div:        if (b == 0) return false; value = a / b; return true;
-        case ast::BinaryOp::Rem:        if (b == 0) return false; value = a % b; return true;
-        case ast::BinaryOp::Shl:        value = a << b; return true;
-        case ast::BinaryOp::Shr:        value = a >> b; return true;
+        case ast::BinaryOp::Add:        value = (long long)(ua + ub); return true;
+        case ast::BinaryOp::Sub:        value = (long long)(ua - ub); return true;
+        case ast::BinaryOp::Mul:        value = (long long)(ua * ub); return true;
+        case ast::BinaryOp::Div:
+            if (b == 0 || (!isUnsignedOp && a == LLONG_MIN && b == -1)) return false;
+            value = isUnsignedOp ? (long long)(ua / ub) : a / b;
+            return true;
+        case ast::BinaryOp::Rem:
+            if (b == 0 || (!isUnsignedOp && a == LLONG_MIN && b == -1)) return false;
+            value = isUnsignedOp ? (long long)(ua % ub) : a % b;
+            return true;
+        case ast::BinaryOp::Shl:        value = (long long)(ua << (ub & 63)); return true;
+        case ast::BinaryOp::Shr:        value = isUnsignedOp ? (long long)(ua >> (ub & 63)) : a >> (ub & 63); return true;
         case ast::BinaryOp::BitAnd:     value = a & b; return true;
         case ast::BinaryOp::BitOr:      value = a | b; return true;
         case ast::BinaryOp::BitXor:     value = a ^ b; return true;
@@ -138,10 +216,10 @@ bool evaluateConstant(const ast::Expr *expr, long long &value) {
         case ast::BinaryOp::LogicalOr:  value = a || b; return true;
         case ast::BinaryOp::Eq:         value = a == b; return true;
         case ast::BinaryOp::Ne:         value = a != b; return true;
-        case ast::BinaryOp::Lt:         value = a < b; return true;
-        case ast::BinaryOp::Gt:         value = a > b; return true;
-        case ast::BinaryOp::Le:         value = a <= b; return true;
-        case ast::BinaryOp::Ge:         value = a >= b; return true;
+        case ast::BinaryOp::Lt:         value = isUnsignedOp ? ua < ub : a < b; return true;
+        case ast::BinaryOp::Gt:         value = isUnsignedOp ? ua > ub : a > b; return true;
+        case ast::BinaryOp::Le:         value = isUnsignedOp ? ua <= ub : a <= b; return true;
+        case ast::BinaryOp::Ge:         value = isUnsignedOp ? ua >= ub : a >= b; return true;
         }
         return false;
     }
@@ -157,5 +235,7 @@ bool evaluateConstant(const ast::Expr *expr, long long &value) {
         return false;
     }
 }
+
+} // namespace
 
 } // namespace sema

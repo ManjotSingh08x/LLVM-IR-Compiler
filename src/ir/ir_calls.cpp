@@ -28,7 +28,7 @@ Value *IRVisitor::emitCall(ast::CallExpr *node) {
         args.push_back(emitAddressOf(callee));
         std::vector<Value *> rest = emitArguments(closure->signature, node->args);
         args.insert(args.end(), rest.begin(), rest.end());
-        return builder.createCall(fn, fn->fnType, args);
+        return builder.createCall(fn, lambdaSignature(closure->lambda), args);
     }
 
     const sema::FunctionType *signature = sema::asFunction(calleeType);
@@ -72,8 +72,7 @@ Value *IRVisitor::emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn) 
 
     std::vector<Value *> rest = emitArguments(fn->signature(), node->args);
     args.insert(args.end(), rest.begin(), rest.end());
-    Function *function = functionFor(fn);
-    return builder.createCall(function, function->fnType, args);
+    return builder.createCall(functionFor(fn), fn->loweredType, args);
 }
 
 //a reference argument passes the address of the object
@@ -88,16 +87,19 @@ std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signatur
 
 //  lambdas: a closure struct of captures plus a function taking it 
 
-Function *IRVisitor::lambdaFunction(ast::LambdaExpr *lambda) {
-    std::string name = lambdaFunctionName(lambda);
-    Function *fn = module.findFunction(name);
-    if (fn) return fn;
-
+const sema::FunctionType *IRVisitor::lambdaSignature(const ast::LambdaExpr *lambda) {
     const sema::FunctionType *signature = sema::asClosure(lambda->type)->signature;
     std::vector<const sema::Type *> params;
     params.push_back(module.pointerType());
     params.insert(params.end(), signature->params.begin(), signature->params.end());
-    return module.createFunction(name, symTab.functionType(signature->returnType, params, false), Linkage::Internal);
+    return symTab.functionType(signature->returnType, params, false);
+}
+
+Function *IRVisitor::lambdaFunction(ast::LambdaExpr *lambda) {
+    std::string name = lambdaFunctionName(lambda);
+    Function *fn = module.findFunction(name);
+    if (fn) return fn;
+    return module.createFunction(name, lambdaSignature(lambda), Linkage::Internal);
 }
 
 //the lambda body is lowered as its own function, saving and restoring the current context

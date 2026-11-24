@@ -12,7 +12,6 @@
 #include "passes/loop_simplify.h"
 #include "passes/loop_unswitch.h"
 #include "passes/mem2reg.h"
-#include "passes/sccp.h"
 #include "passes/simplify_cfg.h"
 #include "passes/sink.h"
 
@@ -48,7 +47,6 @@ GlobalPassManager buildPipeline(int optLevel) {
     //data-flow cleanups. sink runs last so it cannot undo licm
     std::unique_ptr<ModulePassManager> ssa(new ModulePassManager());
     ssa->add(std::unique_ptr<FunctionPass>(new Mem2Reg()));
-    ssa->add(std::unique_ptr<FunctionPass>(new SCCP()));
     ssa->add(std::unique_ptr<FunctionPass>(new InstSimplify()));
     ssa->add(std::unique_ptr<FunctionPass>(new LoopSimplify()));
     ssa->add(std::unique_ptr<FunctionPass>(new LICM()));

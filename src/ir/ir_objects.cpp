@@ -199,8 +199,7 @@ void IRVisitor::emitConstructorCall(const sema::FunctionSymbol *ctor, Value *add
     values.push_back(address);
     std::vector<Value *> rest = emitArguments(ctor->signature(), args);
     values.insert(values.end(), rest.begin(), rest.end());
-    Function *fn = functionFor(ctor);
-    builder.createCall(fn, fn->fnType, values);
+    builder.createCall(functionFor(ctor), ctor->loweredType, values);
 }
 
 //the start of every constructor: bases in order, then the fields in order
@@ -268,8 +267,8 @@ Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isC
 void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Value *begin, Value *end,
                                 ElementAction action, const sema::FunctionSymbol *ctor) {
     bool backwards = action == ElementAction::Destroy;
-    AllocaInst *counter = builder.createEntryAlloca(int64Type(), "arr.i");
-    builder.createStore(int64Type(), backwards ? end : begin, counter);
+    AllocaInst *counter = builder.createEntryAlloca(sema::longType(), "arr.i");
+    builder.createStore(sema::longType(), backwards ? end : begin, counter);
 
     BasicBlock *condBlock = builder.createBlock("arr.cond");
     BasicBlock *bodyBlock = builder.createBlock("arr.body");
@@ -277,22 +276,22 @@ void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Val
     builder.createBr(condBlock);
 
     builder.setInsertBlock(condBlock);
-    Value *index = builder.createLoad(int64Type(), counter);
-    Value *done = backwards ? builder.createBinary(BinaryOpKind::ICmpULE, int64Type(), index, begin)
-                            : builder.createBinary(BinaryOpKind::ICmpUGE, int64Type(), index, end);
+    Value *index = builder.createLoad(sema::longType(), counter);
+    Value *done = backwards ? builder.createBinary(BinaryOpKind::ICmpULE, sema::longType(), index, begin)
+                            : builder.createBinary(BinaryOpKind::ICmpUGE, sema::longType(), index, end);
     builder.createCondBr(done, endBlock, bodyBlock);
 
     builder.setInsertBlock(bodyBlock);
     Value *current = index;
     if (backwards) {
-        current = builder.createBinary(BinaryOpKind::Sub, int64Type(), index, module.getInt64(1));
-        builder.createStore(int64Type(), current, counter);
+        current = builder.createBinary(BinaryOpKind::Sub, sema::longType(), index, module.getInt64(1));
+        builder.createStore(sema::longType(), current, counter);
     }
     Value *element = builder.createElementGEP(elementType, first, current);
     emitElementAction(element, elementType, action, ctor);
     if (!backwards) {
-        Value *next = builder.createBinary(BinaryOpKind::Add, int64Type(), current, module.getInt64(1));
-        builder.createStore(int64Type(), next, counter);
+        Value *next = builder.createBinary(BinaryOpKind::Add, sema::longType(), current, module.getInt64(1));
+        builder.createStore(sema::longType(), next, counter);
     }
     builder.createBr(condBlock);
 
@@ -391,13 +390,13 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
     }
 
     //new T[n] and new T[n]{...}
-    Value *count = builder.createCast(CastOpKind::SExt, emitRValue(node->dims[0].get()), sema::intType(), int64Type());
+    Value *count = builder.createCast(CastOpKind::SExt, emitRValue(node->dims[0].get()), sema::intType(), sema::longType());
     Value *bytes = sizeOf(element, count);
     Value *elements = nullptr;
     if (layout.needsDestruction(element)) {
-        Value *withCookie = builder.createBinary(BinaryOpKind::Add, int64Type(), bytes, module.getInt64(8));
+        Value *withCookie = builder.createBinary(BinaryOpKind::Add, sema::longType(), bytes, module.getInt64(8));
         Value *raw = callMalloc(withCookie);
-        builder.createStore(int64Type(), count, raw);
+        builder.createStore(sema::longType(), count, raw);
         elements = builder.createElementGEP(sema::charType(), raw, module.getInt64(8));
     } else {
         elements = callMalloc(bytes);
@@ -439,7 +438,7 @@ Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     builder.setInsertBlock(destroyBlock);
     if (node->isArray) {
         Value *raw = builder.createElementGEP(sema::charType(), pointer, module.getInt64(-8));
-        Value *count = builder.createLoad(int64Type(), raw);
+        Value *count = builder.createLoad(sema::longType(), raw);
         emitElementLoop(pointer, element, module.getInt64(0), count, ElementAction::Destroy, nullptr);
         callFree(raw);
     } else {

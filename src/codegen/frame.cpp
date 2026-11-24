@@ -1,12 +1,12 @@
 #include "codegen/frame.h"
 
-#include "codegen/target_layout.h"
+#include "semantic/type_layout.h"
 
 namespace codegen {
 
 long long Frame::allocate(uint64_t size, uint64_t align) {
     if (align > 16) align = 16;
-    used = alignTo(used + size, align == 0 ? 1 : align);
+    used = sema::alignTo(used + size, align == 0 ? 1 : align);
     return -(long long)used;
 }
 
@@ -52,6 +52,6 @@ long long Frame::saveSlot(Reg reg) {
     return offset;
 }
 
-uint64_t Frame::size() const { return alignTo(used, 16); }
+uint64_t Frame::size() const { return sema::alignTo(used, 16); }
 
 } // namespace codegen

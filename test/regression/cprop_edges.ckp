@@ -66,7 +66,8 @@ int main() {
 
 // -O1 and up: the switch on a constant is gone, "same" and the conversions are constants.
 // picked (25) and the zero-trip v (4) need branches decided while propagating: -O1's dense
-// propagation runs before simplify_cfg removes the dead paths, sccp at -O2 sees them as dead
+// propagation runs before simplify_cfg removes the dead paths; at -O2 those paths are gone, so
+// mem2reg (v) and instsimplify (picked) see a phi with one incoming value
 // IR-LABEL: define i32 @main
 // IR-GE1-NOT: switch i32 2
 // IR-GE2: call i32 (ptr, ...) @printf(ptr %{{[A-Za-z0-9_.]+}}, i32 25)

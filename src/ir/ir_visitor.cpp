@@ -19,6 +19,8 @@ void IRVisitor::generate(ast::Program *program) {
     emitGlobalInitializers();
 
     for (const std::unique_ptr<ast::Decl> &decl : program->decls) emitDefinitions(decl.get());
+    //methods of records declared in function bodies, found while those bodies were emitted
+    for (size_t i = 0; i < localRecords.size(); i++) emitDefinitions(localRecords[i]);
     emitSynthesizedStructors();
 }
 
@@ -209,6 +211,7 @@ void IRVisitor::startFunction(Function *fn, const sema::Type *returnType) {
     //name entry first so no parameter can claim it
     BasicBlock *entry = fn->createBlock("entry");
     builder.setInsertPoint(fn, entry);
+    if (isPassedByAddress(returnType)) ctx().resultAddress = fn->addArgument(module.pointerType(), "agg.result");
 }
 
 void IRVisitor::finishFunction() {
@@ -260,14 +263,19 @@ void IRVisitor::bindParameters(const sema::FunctionType *signature, ast::NodeLis
         ast::ParamDecl *decl = named ? (*params)[i].get() : nullptr;
         std::string name = (decl && !decl->name.empty()) ? decl->name : "arg" + std::to_string(i);
 
-        Argument *arg = fn->addArgument(type, name);
+        bool byAddress = isPassedByAddress(type);
+        Argument *arg = fn->addArgument(byAddress ? module.pointerType() : type, name);
         if (decl == nullptr || decl->symbol == nullptr) continue;
 
-        AllocaInst *slot = builder.createEntryAlloca(type, name + ".addr");
-        builder.createStore(type, arg, slot);
         VariableBinding binding;
-        binding.slot = slot;
-        binding.slotHoldsAddress = sema::asReference(type) != nullptr;
+        if (byAddress) {
+            binding.slot = arg;
+        } else {
+            AllocaInst *slot = builder.createEntryAlloca(type, name + ".addr");
+            builder.createStore(type, arg, slot);
+            binding.slot = slot;
+            binding.slotHoldsAddress = sema::asReference(type) != nullptr;
+        }
         ctx().locals[decl->symbol] = binding;
     }
 }

@@ -1,5 +1,7 @@
 #include "ir/constant_folder.h"
 
+#include <climits>
+
 #include <cstdlib>
 
 #include "semantic/constants.h"
@@ -31,6 +33,19 @@ FoldedNumber makeInt(long long value, const sema::Type *type) {
     number.intValue = normalizeInt(value, type);
     number.type = type;
     return number;
+}
+
+//an integer constant's bits read as unsigned at the width of its type
+unsigned long long zeroExtended(long long value, const sema::Type *type) {
+    unsigned bits = integerBits(type);
+    if (bits == 0 || bits >= 64) return (unsigned long long)value;
+    return (unsigned long long)value & ((1ULL << bits) - 1);
+}
+
+//an integer value as C sees it: unsigned types zero-extended, the rest sign-extended
+long long asWritten(const FoldedNumber &number) {
+    return number.type && sema::isUnsigned(number.type) ? (long long)zeroExtended(number.intValue, number.type)
+                                                        : number.intValue;
 }
 
 FoldedNumber makeFloat(double value, const sema::Type *type) {
@@ -159,6 +174,9 @@ Constant *ConstantFolder::foldPointer(ast::Expr *expr) {
         return nullptr;
     }
 
+    case ast::ASTKind::CastExpr:
+        return foldPointer(static_cast<ast::CastExpr *>(expr)->sub.get());
+
     case ast::ASTKind::ImplicitCastExpr: {
         ast::ImplicitCastExpr *cast = static_cast<ast::ImplicitCastExpr *>(expr);
         switch (cast->castKind) {
@@ -168,7 +186,13 @@ Constant *ConstantFolder::foldPointer(ast::Expr *expr) {
         case ast::CastKind::FunctionToPointer:
             return foldAddress(cast->sub.get());
         case ast::CastKind::PointerToVoid:      //the same address, only the type changes
+        case ast::CastKind::PointerCast:
             return foldPointer(cast->sub.get());
+        case ast::CastKind::IntegralToPointer: {  //(T *)0 is the null pointer
+            FoldedNumber number;
+            if (!foldNumber(cast->sub.get(), number) || number.isFloat || number.intValue != 0) return nullptr;
+            return module.getNull(module.pointerType());
+        }
         default:
             return nullptr;  //a base class conversion may move the address
         }
@@ -212,8 +236,9 @@ bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
     switch (expr->getKind()) {
     case ast::ASTKind::IntLiteral: {
         long long value = 0;
-        if (!sema::intLiteralValue(static_cast<ast::IntLiteral *>(expr)->spelling, value)) return false;
-        out = makeInt(value, sema::intType());
+        const sema::Type *type = nullptr;
+        if (!sema::intLiteral(static_cast<ast::IntLiteral *>(expr)->spelling, value, type)) return false;
+        out = makeInt(value, type);
         return true;
     }
     case ast::ASTKind::CharLiteral:
@@ -237,6 +262,18 @@ bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
         out = convertNumber(inner, cast->type);
         return true;
     }
+
+    case ast::ASTKind::CastExpr: {
+        ast::CastExpr *cast = static_cast<ast::CastExpr *>(expr);
+        if (!sema::isArithmetic(cast->type)) return false;
+        FoldedNumber inner;
+        if (!foldNumber(cast->sub.get(), inner)) return false;
+        out = convertNumber(inner, cast->type);
+        return true;
+    }
+    case ast::ASTKind::SizeofExpr:
+        out = makeInt((long long)static_cast<ast::SizeofExpr *>(expr)->size, sema::ulongType());
+        return true;
 
     case ast::ASTKind::UnaryExpr:
         return foldUnary(static_cast<ast::UnaryExpr *>(expr), out);
@@ -305,20 +342,29 @@ bool ConstantFolder::foldBinary(ast::BinaryExpr *expr, FoldedNumber &out) {
 
     long long x = a.intValue;
     long long y = b.intValue;
+    bool isUnsignedOp = a.type && sema::isUnsigned(a.type);
+    unsigned long long ux = zeroExtended(x, a.type), uy = zeroExtended(y, b.type);
+    unsigned bits = integerBits(a.type);
     switch (expr->op) {
-    case ast::BinaryOp::Add: out = makeInt(x + y, type); return true;
-    case ast::BinaryOp::Sub: out = makeInt(x - y, type); return true;
-    case ast::BinaryOp::Mul: out = makeInt(x * y, type); return true;
+    case ast::BinaryOp::Add: out = makeInt((long long)((unsigned long long)x + (unsigned long long)y), type); return true;
+    case ast::BinaryOp::Sub: out = makeInt((long long)((unsigned long long)x - (unsigned long long)y), type); return true;
+    case ast::BinaryOp::Mul: out = makeInt((long long)((unsigned long long)x * (unsigned long long)y), type); return true;
     case ast::BinaryOp::Div:
     case ast::BinaryOp::Rem:
-        //division by zero and INT_MIN / -1 are undefined: leave them to run
-        if (y == 0 || (x == -2147483648LL && y == -1)) return false;
+        //division by zero and the smallest value / -1 are undefined: leave them to run
+        if (y == 0) return false;
+        if (isUnsignedOp) {
+            out = makeInt((long long)(expr->op == ast::BinaryOp::Div ? ux / uy : ux % uy), type);
+            return true;
+        }
+        if (bits < 64 ? x == -(1LL << (bits - 1)) && y == -1 : x == LLONG_MIN && y == -1) return false;
         out = makeInt(expr->op == ast::BinaryOp::Div ? x / y : x % y, type);
         return true;
     case ast::BinaryOp::Shl:
     case ast::BinaryOp::Shr:
-        if (y < 0 || y >= 32) return false;
-        out = makeInt(expr->op == ast::BinaryOp::Shl ? (long long)((unsigned long long)x << y) : x >> y, type);
+        if (y < 0 || y >= (long long)bits) return false;
+        if (expr->op == ast::BinaryOp::Shl) out = makeInt((long long)((unsigned long long)x << y), type);
+        else out = makeInt(isUnsignedOp ? (long long)(ux >> y) : x >> y, type);
         return true;
     case ast::BinaryOp::BitAnd:     out = makeInt(x & y, type); return true;
     case ast::BinaryOp::BitOr:      out = makeInt(x | y, type); return true;
@@ -327,10 +373,10 @@ bool ConstantFolder::foldBinary(ast::BinaryExpr *expr, FoldedNumber &out) {
     case ast::BinaryOp::LogicalOr:  out = makeInt(x != 0 || y != 0, type); return true;
     case ast::BinaryOp::Eq:         out = makeInt(x == y, type); return true;
     case ast::BinaryOp::Ne:         out = makeInt(x != y, type); return true;
-    case ast::BinaryOp::Lt:         out = makeInt(x < y, type); return true;
-    case ast::BinaryOp::Gt:         out = makeInt(x > y, type); return true;
-    case ast::BinaryOp::Le:         out = makeInt(x <= y, type); return true;
-    case ast::BinaryOp::Ge:         out = makeInt(x >= y, type); return true;
+    case ast::BinaryOp::Lt:         out = makeInt(isUnsignedOp ? ux < uy : x < y, type); return true;
+    case ast::BinaryOp::Gt:         out = makeInt(isUnsignedOp ? ux > uy : x > y, type); return true;
+    case ast::BinaryOp::Le:         out = makeInt(isUnsignedOp ? ux <= uy : x <= y, type); return true;
+    case ast::BinaryOp::Ge:         out = makeInt(isUnsignedOp ? ux >= uy : x >= y, type); return true;
     }
     return false;
 }
@@ -342,10 +388,15 @@ FoldedNumber ConstantFolder::convertNumber(const FoldedNumber &number, const sem
         return makeInt(truth ? 1 : 0, to);
     }
     if (sema::isFloating(to)) {
-        return makeFloat(number.isFloat ? number.floatValue : (double)number.intValue, to);
+        if (number.isFloat) return makeFloat(number.floatValue, to);
+        bool fromUnsigned = sema::isUnsigned(number.type);
+        return makeFloat(fromUnsigned ? (double)zeroExtended(number.intValue, number.type) : (double)number.intValue, to);
     }
-    if (number.isFloat) return makeInt((long long)number.floatValue, to);  //truncates toward zero
-    return makeInt(number.intValue, to);
+    if (number.isFloat) {  //truncates toward zero
+        if (sema::isUnsigned(to)) return makeInt((long long)(unsigned long long)number.floatValue, to);
+        return makeInt((long long)number.floatValue, to);
+    }
+    return makeInt(asWritten(number), to);
 }
 
 Constant *ConstantFolder::numberConstant(const FoldedNumber &number) {

@@ -10,7 +10,7 @@
 #include "codegen/mir.h"
 #include "codegen/next_use.h"
 #include "codegen/reg_alloc.h"
-#include "codegen/target_layout.h"
+#include "semantic/type_layout.h"
 #include "codegen/x86.h"
 #include "passes/analysis_manager.h"
 
@@ -25,7 +25,7 @@ namespace codegen {
 //system v calling convention, %rbp frame
 class FunctionEmitter {
 public:
-    FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, TargetLayout &layout, ConstantPool &pool,
+    FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, sema::TypeLayout &layout, ConstantPool &pool,
                     int id, int optLevel);
 
     //writes the whole function: directives, prologue, blocks, epilogue. false on ir it cannot lower
@@ -69,6 +69,7 @@ private:
     void copyBytes(const Mem &from, const Mem &to, uint64_t size);
     void emitGEP(ir::GEPInst *inst, const InstNextUse &info);
     void emitBinary(ir::BinaryInst *inst, const InstNextUse &info);
+    Reg  divideByPowerOfTwo(bool remainder, Width width, unsigned shift);
     void emitIntCompare(ir::BinaryInst *inst);  //sets the flags only
     void emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &info);
     void emitUnary(ir::UnaryInst *inst, const InstNextUse &info);
@@ -112,7 +113,7 @@ private:
 
     ir::Function            &fn;
     passes::AnalysisManager &am;
-    TargetLayout            &layout;
+    sema::TypeLayout            &layout;
     ConstantPool            &pool;
     int                      id;
     bool                     global;  //-O3: virtual registers and graph colouring

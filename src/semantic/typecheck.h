@@ -7,6 +7,7 @@
 
 #include "semantic/diagnostics.h"
 #include "semantic/symbols.h"
+#include "semantic/type_layout.h"
 #include "semantic/visitor.h"
 
 namespace sema {
@@ -14,7 +15,7 @@ namespace sema {
 //second semantic pass: types every expression, resolves names and inserts implicit casts
 class TypeChecker : public ast::ASTVisitor<TypeChecker, const Type *> {
 public:
-    TypeChecker(SymbolTable &table, Diagnostics &diags) : table(table), diags(diags) {}
+    TypeChecker(SymbolTable &table, Diagnostics &diags) : table(table), diags(diags), layout(table) {}
 
     void check(ast::Program *program);
 
@@ -56,12 +57,15 @@ public:
     const Type *visitDeleteExpr(ast::DeleteExpr *node);
     const Type *visitInitListExpr(ast::InitListExpr *node);
     const Type *visitLambdaExpr(ast::LambdaExpr *node);
+    const Type *visitCastExpr(ast::CastExpr *node);
+    const Type *visitSizeofExpr(ast::SizeofExpr *node);
     const Type *visitImplicitCastExpr(ast::ImplicitCastExpr *node);
 
 private:
     struct SwitchInfo {
         std::set<long long> values;
         bool                hasDefault = false;
+        const Type         *condType = nullptr;  //the promoted condition, every case value converts to it
     };
 
     //what the statements of the function or lambda being checked may do
@@ -125,6 +129,7 @@ private:
 
     SymbolTable    &table;
     Diagnostics    &diags;
+    TypeLayout      layout;
     Scope          *current = nullptr;
     FunctionContext context;
 };

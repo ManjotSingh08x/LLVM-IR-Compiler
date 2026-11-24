@@ -89,11 +89,15 @@ int main() {
 // IR-LABEL: define {{.*}}countDown
 // IR: br i1 {{%[A-Za-z0-9_.]+}}, label %while.body{{[.0-9a-z]*}}, label %while.end
 // IR: br i1 {{%[A-Za-z0-9_.]+}}, label %while.body{{[.0-9]*}}, label %while.end
-// not rotated: the header with the call or the && stays first
+// not rotated: the header with the call stays first
 // IR-LABEL: define {{.*}}conditionWithCall
 // IR: br label %while.cond
 // IR-EMPTY:
 // IR-NEXT: while.cond{{[.0-9]*}}:
+// rotated: the && is jumping code (two compares and branches, no stores), so the guard is copied
+// to entry and the loop tests i < n again at its bottom
 // IR-LABEL: define {{.*}}conditionWithAnd
-// IR: br label %while.cond
+// IR: entry:
+// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %land.rhs{{[.0-9a-z]*}}, label %while.end
+// IR: br i1 {{%[A-Za-z0-9_.]+}}, label %land.rhs{{[.0-9]*}}, label %while.end
 // IR-LABEL: define {{.*}}main

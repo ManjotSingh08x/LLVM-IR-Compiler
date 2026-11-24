@@ -13,7 +13,10 @@ enum class BinaryOp {
     Shl, Shr, Add, Sub, Mul, Div, Rem
 };
 
-enum class AssignOp { Assign, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign };
+enum class AssignOp {
+    Assign, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign,
+    ShlAssign, ShrAssign, AndAssign, OrAssign, XorAssign
+};
 
 //literals keep their source spelling, the value is computed during semantic analysis
 class IntLiteral : public Expr {
@@ -195,6 +198,30 @@ public:
     sema::FunctionSymbol     *constructor = nullptr;  //the constructor that runs, if any
 };
 
+//(T) e, an explicit cast. the type checker converts sub to T with implicit casts under it
+class CastExpr : public Expr {
+public:
+    CastExpr(std::unique_ptr<TypeSpec> target, std::unique_ptr<Expr> sub, int line, int col)
+        : Expr(ASTKind::CastExpr, line, col), target(std::move(target)), sub(std::move(sub)) {}
+
+
+    std::unique_ptr<TypeSpec> target;
+    std::unique_ptr<Expr>     sub;
+};
+
+//sizeof e or sizeof(T), an unsigned long constant. e is type checked but never evaluated
+class SizeofExpr : public Expr {
+public:
+    SizeofExpr(std::unique_ptr<TypeSpec> typeOperand, std::unique_ptr<Expr> exprOperand, int line, int col)
+        : Expr(ASTKind::SizeofExpr, line, col), typeOperand(std::move(typeOperand)),
+          exprOperand(std::move(exprOperand)) {}
+
+
+    std::unique_ptr<TypeSpec> typeOperand;  //null for sizeof e
+    std::unique_ptr<Expr>     exprOperand;  //null for sizeof(T)
+    uint64_t                  size = 0;     //bytes, set by the type checker
+};
+
 class DeleteExpr : public Expr {
 public:
     DeleteExpr(bool isArray, std::unique_ptr<Expr> operand, int line, int col)
@@ -255,7 +282,10 @@ enum class CastKind {
     FunctionToPointer,
     NullToPointer,
     DerivedToBase,      //a derived class pointer or object used as its base
-    PointerToVoid       //any object pointer to void *
+    PointerToVoid,      //any object pointer to void *
+    PointerCast,        //an explicit cast between unrelated pointer types: the address is unchanged
+    PointerToIntegral,  //an explicit cast of an address to an integer
+    IntegralToPointer   //an explicit cast of a long to an address
 };
 
 class ImplicitCastExpr : public Expr {

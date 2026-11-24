@@ -130,7 +130,7 @@ public:
     //constants. integers are wrapped to the width of their type
     Constant *getInt(const sema::Type *type, long long value);
     Constant *getInt32(long long value) { return getInt(sema::intType(), value); }
-    Constant *getInt64(long long value) { return getInt(int64Type(), value); }
+    Constant *getInt64(long long value) { return getInt(sema::longType(), value); }
     Constant *getBool(bool value) { return getInt(sema::boolType(), value ? 1 : 0); }
     Constant *getFloat(const sema::Type *type, double value);
     Constant *getNull(const sema::Type *type);
@@ -148,7 +148,8 @@ public:
     GlobalVariable *getStringLiteral(const std::string &bytesWithNull);
 
     //functions
-    Function *createFunction(const std::string &name, const sema::FunctionType *fnType, Linkage linkage);
+    Function *createFunction(const std::string &name, const sema::FunctionType *sourceType, Linkage linkage);
+    const sema::FunctionType *abiSignature(const sema::FunctionType *sourceType);
     Function *findFunction(const std::string &name) const;
 
     //the c library functions new and delete lower to

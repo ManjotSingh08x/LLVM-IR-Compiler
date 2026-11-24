@@ -6,21 +6,17 @@
 
 namespace ir {
 
-const sema::Type *int64Type() {
-    static const sema::Type int64(sema::TypeKind::Int);
-    return &int64;
-}
-
-bool isInt64(const sema::Type *type) { return type == int64Type(); }
-
 std::string formatType(const sema::Type *type) {
-    if (isInt64(type)) return "i64";
-
     switch (type->getKind()) {
     case sema::TypeKind::Void:   return "void";
     case sema::TypeKind::Bool:   return "i1";
-    case sema::TypeKind::Char:   return "i8";
-    case sema::TypeKind::Int:    return "i32";
+    case sema::TypeKind::Char:
+    case sema::TypeKind::SChar:
+    case sema::TypeKind::UChar:  return "i8";
+    case sema::TypeKind::Int:
+    case sema::TypeKind::UInt:   return "i32";
+    case sema::TypeKind::Long:
+    case sema::TypeKind::ULong:  return "i64";
     case sema::TypeKind::Float:  return "float";
     case sema::TypeKind::Double: return "double";
 
@@ -128,13 +124,12 @@ std::string escapeLLVMString(const std::string &bytes) {
 }
 
 unsigned integerBits(const sema::Type *type) {
-    if (isInt64(type)) return 64;
-    switch (type->getKind()) {
-    case sema::TypeKind::Bool: return 1;
-    case sema::TypeKind::Char: return 8;
-    case sema::TypeKind::Int:  return 32;
-    default:                   return 0;
-    }
+    if (type->is(sema::TypeKind::Bool)) return 1;
+    return sema::integerSize(type) * 8;
+}
+
+bool isPassedByAddress(const sema::Type *type) {
+    return sema::asRecord(type) != nullptr || sema::asClosure(type) != nullptr;
 }
 
 long long normalizeInt(long long value, const sema::Type *type) {

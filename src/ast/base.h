@@ -74,6 +74,8 @@ enum class ASTKind {
     DeleteExpr,
     InitListExpr,
     LambdaExpr,
+    CastExpr,
+    SizeofExpr,
     ImplicitCastExpr,
     LastExpr = ImplicitCastExpr
 };

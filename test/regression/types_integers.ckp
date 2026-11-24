@@ -1,0 +1,63 @@
+// signed char, unsigned char, unsigned int, long and unsigned long: literal types, the usual
+// arithmetic conversions, unsigned division, shifts and compares, conversions to and from double
+// above 2^63, 64-bit switch cases, explicit casts and sizeof. inputs come from stdin
+// (test/regression/inputs) so no level can fold them: 7 -7 3000000000 200
+
+unsigned long half(unsigned long x) { return x / 2; }
+unsigned remainder16(unsigned x) { return x % 16; }
+long shiftRight(long x) { return x >> 3; }
+unsigned long shiftRightU(unsigned long x) { return x >> 3; }
+int lessU(unsigned a, unsigned b) { return a < b; }
+int lessS(int a, int b) { return a < b; }
+
+int classify(unsigned long v) {
+    switch (v) {
+    case 18446744073709551615UL: return 1;
+    case 4294967296UL: return 2;
+    case 7: return 3;
+    default: return 0;
+    }
+}
+
+int main() {
+    int seven;
+    int minusSeven;
+    long big;
+    int twoHundred;
+    scanf("%d %d %ld %d", &seven, &minusSeven, &big, &twoHundred);
+
+    unsigned u = (unsigned)minusSeven;
+    unsigned long ul = (unsigned long)minusSeven;
+    printf("conv %u %lu %ld %d\n", u, ul, (long)u, (int)(unsigned char)twoHundred);
+
+    printf("div %u %u %d %d\n", u / 2, u % 16, minusSeven / 2, minusSeven % 16);
+    printf("div64 %lu %u %lu\n", half(ul), remainder16(u), ul / (unsigned long)seven);
+    printf("shift %ld %lu %d %u\n", shiftRight(-big), shiftRightU(ul), minusSeven >> 1, u >> 1);
+    printf("cmp %d %d %d\n", lessU(u, 1), lessS(minusSeven, 1), ul > (unsigned long)big);
+
+    signed char sc = (signed char)twoHundred;
+    unsigned char uc = (unsigned char)twoHundred;
+    printf("chars %d %d %d\n", sc, uc, sc + uc);
+
+    double huge = (double)ul;
+    unsigned long back = (unsigned long)(huge / 2.0) * 2;
+    double fromBig = (double)(big * 3);
+    printf("double %.0f %lu %.0f %u\n", huge, back, fromBig, (unsigned)(fromBig / 4.0));
+
+    long product = big * big;
+    unsigned wrap = (unsigned)big * 3u;
+    printf("wide %ld %u %ld\n", product, wrap, big + 2147483647L);
+
+    printf("switch %d %d %d %d\n", classify(ul | 18446744073709551608UL), classify((unsigned long)big + 1294967296UL),
+           classify((unsigned long)seven), classify(5));
+
+    int arr[3];
+    printf("sizeof %lu %lu %lu %lu %lu\n", sizeof(long), sizeof(unsigned char), sizeof arr, sizeof(int *[4]),
+           sizeof(big + seven));
+    return 0;
+}
+
+// IR: udiv i64
+// IR: urem i32
+// IR: lshr i64
+// IR: icmp ult i32

@@ -4,7 +4,7 @@
 #include <ostream>
 #include <string>
 
-#include "codegen/target_layout.h"
+#include "semantic/type_layout.h"
 #include "codegen/x86.h"
 #include "passes/analysis_manager.h"
 
@@ -30,7 +30,7 @@ private:
 
     ir::Module              &module;
     passes::AnalysisManager &am;
-    TargetLayout             layout;
+    sema::TypeLayout             layout;
     ConstantPool             pool;
     int                      optLevel;
     std::string              errorText;

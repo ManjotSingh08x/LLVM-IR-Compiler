@@ -11,7 +11,7 @@ namespace passes {
 //at run time, bit for bit. integers wrap to their width, floats are computed in their own
 //precision, and anything that would trap or is undefined (division by zero, INT_MIN / -1,
 //a shift by the width or more, a float too big for its integer) is left for run time.
-//every pass that folds (local_dag, const_prop_dense, sccp, instsimplify) uses these.
+//every pass that folds (local_dag, const_prop_dense, instsimplify) uses these.
 //each returns null when the operation cannot be folded
 
 ir::Constant *foldBinary(ir::Module &module, ir::BinaryOpKind op, const sema::Type *operandType,

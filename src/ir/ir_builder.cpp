@@ -100,12 +100,32 @@ Value *IRBuilder::createSelect(Value *condition, Value *ifTrue, Value *ifFalse, 
     return insert(new SelectInst(condition, ifTrue, ifFalse, type, tempName()));
 }
 
-Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *calleeType, const std::vector<Value *> &args) {
+Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *sourceType, const std::vector<Value *> &args) {
     if (callee->getKind() == ValueKind::Function && isReachable()) {
         static_cast<Function *>(callee)->isUsed = true;
     }
-    std::string name = calleeType->returnType->is(sema::TypeKind::Void) ? "" : tempName();
-    return insert(new CallInst(callee, calleeType, args, name));
+    const sema::Type *resultType = sourceType->returnType;
+    std::vector<Value *> abiArgs;
+    AllocaInst *result = nullptr;
+    if (isPassedByAddress(resultType)) {
+        result = createEntryAlloca(resultType, "agg.result");
+        abiArgs.push_back(result);
+    }
+    for (size_t i = 0; i < args.size(); i++) {
+        const sema::Type *param = i < sourceType->params.size() ? sourceType->params[i] : nullptr;
+        if (param && isPassedByAddress(param)) {
+            AllocaInst *copy = createEntryAlloca(param, "agg.arg");
+            createStore(param, args[i], copy);
+            abiArgs.push_back(copy);
+        } else {
+            abiArgs.push_back(args[i]);
+        }
+    }
+    const sema::FunctionType *abiType = module.abiSignature(sourceType);
+    std::string name = abiType->returnType->is(sema::TypeKind::Void) ? "" : tempName();
+    Value *call = insert(new CallInst(callee, abiType, abiArgs, name));
+    if (result) return createLoad(resultType, result);
+    return call;
 }
 
 //  terminators, edges are recorded only for branches really written 

@@ -22,7 +22,8 @@ bool isCandidate(const Instruction &inst) {
 bool mayTrap(const Instruction &inst) {
     if (inst.getOpcode() != Opcode::Binary) return false;
     BinaryOpKind op = static_cast<const BinaryInst &>(inst).op;
-    return op == BinaryOpKind::SDiv || op == BinaryOpKind::SRem;
+    return op == BinaryOpKind::SDiv || op == BinaryOpKind::SRem || op == BinaryOpKind::UDiv ||
+           op == BinaryOpKind::URem;
 }
 
 } // namespace

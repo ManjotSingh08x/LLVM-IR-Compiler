@@ -20,7 +20,7 @@ All section numbers refer to *Compilers: Principles, Techniques, and Tools*, 2nd
 -O0   simplify_cfg → loop_rotate → codegen
 -O1   O0 → inline → local_dag → const_prop_dense → local_dag → simplify_cfg
       → codegen + peephole                     (linear register allocation)
--O2   O1 → mem2reg → sccp → instsimplify
+-O2   O1 → mem2reg → instsimplify
       → loop_simplify → licm → loop_unswitch
       → simplify_cfg → instsimplify → cse → dce → sink
       → codegen (φ elimination inside codegen) + peephole   (linear register allocation)
@@ -214,32 +214,15 @@ This run folds the branches that became constant after propagation, removes bloc
 - **Renames** by walking the dominator tree, keeping a stack of current values per variable.
 - **Analyses needed:** dominators (§9.6.1) and dominance frontiers (by the Cooper–Harvey–Kennedy "runner" walk; not in the book).
 
-### 3.2 sccp: sparse conditional constant propagation (not in the book)
-The book's §9.4 is dense, and assumes every edge can execute. SCCP (Wegman & Zadeck) is **sparse**: it keeps one lattice cell (⊤ / c / ⊥) per SSA value, updated along def-use edges. It is also **conditional**: CFG edges start out *not executable*, and a branch on a constant marks only the edge it will take.
+### 3.2 sccp (removed)
+Sparse conditional constant propagation (Wegman & Zadeck, not in the book) ran here until it was removed. What it alone could do is prove that a CFG edge never executes and leave it out of the φ meet, so it folded:
 ```
-mark entry executable
-until both worklists are empty:
-  CFG edge p→b newly executable → evaluate b's φ nodes (meet only over executable incoming edges);
-                                  if b is visited for the first time, evaluate all of b
-  SSA value v lowered           → re-evaluate every user of v in an executable block
-  branch: condition is c        → mark one edge;   ⊥ → mark both;   ⊤ → mark none yet
+x = 1;  while (…) { if (x != 1) x = 2; … }     // x stays 1: the assignment never runs
+sumTo(1) after inlining                          // a loop that provably runs once
 ```
-**Afterwards:**
-- replace every value whose cell holds a constant;
-- turn each branch on a constant into a `br`;
-- delete the blocks that never became executable.
+Dense propagation (§2.3) assumes every edge can execute and gives ⊥ in both cases.
 
-This includes simplify_cfg's constant-branch rule, so later passes already see a clean CFG.
-
-**Why it does better than dense propagation:**
-```
-x = 1;  while (…) { if (x != 1) x = 2; … }
-```
-- **Dense propagation:** x meets 1 and 2 at the loop header, giving ⊥.
-- **SCCP:** `x != 1` evaluates to false, so `x = 2` is never executable. The φ at the header then meets only 1, so `x = 1` everywhere.
-
-- **Safety:** the lattice has height 3, so each cell is lowered at most twice and the algorithm terminates.
-- **Analyses needed:** SSA and def-use chains.
+**Why it was removed:** measured over the regression programs, -O2 without it is 1.2% larger in static instructions (+268 of 22483) and -O3 1.1% (+171 of 16138), all in 9 programs whose loops run once or never after inlining; the other 43 compile to identical code. Common constant branches are already folded by const_prop_dense and simplify_cfg at -O1, and at -O2 mem2reg and instsimplify collapse a φ whose other entries came from paths simplify_cfg deleted. That gain did not justify the hardest analysis in the -O2 group, so the -O2 pipeline goes from mem2reg straight to instsimplify.
 
 ### 3.3 instsimplify: algebraic simplification on SSA (§8.5.4, §8.7.4)
 This applies the identities from §2.2, now one instruction at a time on SSA, using def-use chains to look at an operand's defining instruction:
@@ -261,7 +244,7 @@ Effects:
 Integers only: float arithmetic is not associative.
 
 It runs **twice**:
-- after SCCP, to tidy up before loop analysis;
+- after mem2reg, to tidy up before loop analysis;
 - after the loop passes, to fold what they exposed.
 
 ### 3.4 Loop passes
@@ -465,7 +448,7 @@ Two fixes were needed before it paid off:
    - CSE → DCE.
 
    This is why local_dag, simplify_cfg and instsimplify each run more than once.
-4. **Simplify before loop analysis.** SCCP and instsimplify run before the loop passes, so the invariance and induction-variable tests see the simplest code.
+4. **Simplify before loop analysis.** instsimplify runs before the loop passes, so the invariance and induction-variable tests see the simplest code.
 5. **Within the loop group:**
    - loop_simplify comes first, because the others need its shape;
    - LICM before unswitching, because unswitching needs the condition proven invariant;
@@ -489,7 +472,6 @@ Two fixes were needed before it paid off:
 | const_prop_dense | O1+ | §9.4 | global (dense) | §9.3 framework, escape scan |
 | peephole | O1+ | §8.7 | machine | none |
 | mem2reg | O2+ | §6.2.4 (SSA) | global | dominators, dominance frontiers |
-| sccp | O2+ | not in book (§9.4 is the base) | global (sparse) | SSA, def-use |
 | instsimplify (+ reassociation) | O2+ | §8.5.4, §8.7.4 | per instruction | def-use, reverse postorder |
 | loop_simplify + LCSSA | O2+ | §9.6.6 | loop | dominators, loops |
 | licm | O2+ | §9.1.7 (1st ed. §10.7) | loop | loops, dominators |
@@ -530,27 +512,22 @@ Two fixes were needed before it paid off:
 
    I recommend (b) for -O2, keeping (a) at -O1.
 
-4. **Dense constant propagation also runs at -O2, where SCCP repeats its work.**
-   - Because the levels are cumulative, -O2 runs const_prop_dense and then SCCP.
-   - That is correct, but SCCP finds everything the dense pass finds and more.
-   - Either accept the extra compile time (simplest), or skip const_prop_dense from -O2 upward.
+4. **There is no constant propagation on SSA.** const_prop_dense works on allocas, so after mem2reg only instsimplify folds constants, one instruction at a time. If a later pass (unrolling, see 7) creates constants that must flow across blocks, a sparse propagation over def-use chains without the conditional part is the simple way to add it back.
 
 5. **Share code between passes.**
    - The escape test ("this alloca's address never leaves load/store") is needed by local_dag, const_prop_dense and mem2reg. Write it once.
-   - The constant folder is needed by local_dag, const_prop_dense, SCCP and instsimplify, and must give exactly the same results in all of them. One `fold(op, type, a, b)` helper.
+   - The constant folder is needed by local_dag, const_prop_dense and instsimplify, and must give exactly the same results in all of them. One `fold(op, type, a, b)` helper.
    - Loop cloning (blocks plus a map from old values to new ones) is needed by inlining and unswitching. One utility.
 
 6. **The `LoopPass` contract has to change.** The plan says `runOnLoop` must not change the CFG. Rotation and unswitching do change it. Options:
    - have `runOnLoop` return "CFG changed", after which the driver recomputes the loops and starts over;
    - or make these two `FunctionPass`es that use the loop analysis directly.
 
-7. **Unrolling is no longer in the pipeline. It would be cheap to add later.** Unswitching already needs loop cloning and LCSSA, and strength reduction already finds the induction variables. With both in place, **full unrolling of loops with a small constant trip count** (§10.4 p. 735, Fig. 10.16) needs little new code. After unrolling, SCCP folds every copy's induction variable. It would fit at -O3 after unswitching, followed by `sccp / simplify_cfg / instsimplify`.
+7. **Unrolling is no longer in the pipeline. It would be cheap to add later.** Unswitching already needs loop cloning and LCSSA, and strength reduction already finds the induction variables. With both in place, **full unrolling of loops with a small constant trip count** (§10.4 p. 735, Fig. 10.16) needs little new code. After unrolling, every copy's induction variable is a constant expression that instsimplify folds. It would fit at -O3 after unswitching, followed by `simplify_cfg / instsimplify`.
 
-8. **SCCP should do its own branch folding.** In the -O2 order, simplify_cfg first runs again *after* the loop passes. If SCCP itself turns constant branches into `br` and deletes blocks that never became executable, the loop analysis never sees dead loops.
+8. **Rotation, then LICM, gives a measurable demonstration.** The `sdiv` example from the plan's step-5 test can be extended: show the same loop at -O2 with rotation (division hoisted into the guarded preheader) and without it (division stays in the loop). It is a clear case for the report.
 
-9. **Rotation, then LICM, gives a measurable demonstration.** The `sdiv` example from the plan's step-5 test can be extended: show the same loop at -O2 with rotation (division hoisted into the guarded preheader) and without it (division stays in the loop). It is a clear case for the report.
-
-10. **Graph colouring is the biggest single piece of work.** -O3 requires all of these:
+9. **Graph colouring is the biggest single piece of work.** -O3 requires all of these:
     - a machine IR with virtual registers;
     - isel rewritten to emit it, because today every result goes through `rax` and is allocated immediately;
     - liveness on the machine IR;
@@ -560,14 +537,13 @@ Two fixes were needed before it paid off:
 
     Build it as a separate backend path, selected only at -O3, and keep the §8.6 path unchanged for -O0 to -O2. That way a bug in the colouring allocator cannot break the lower levels, and both paths can be checked against each other.
 
-11. **Testing for each level.** For every level in `run.sh`:
+10. **Testing for each level.** For every level in `run.sh`:
     - check `<stem>.opt.ll` with clang's verifier (for -O1 and above);
     - link and run `.s`, and compare with `test/expected`.
 
     Also add per-pass trace tests (`PassManager::setTrace`) on small programs that target each pass:
     - an inlined constant argument;
     - a store followed by a load in one block;
-    - a dead `x != 1` branch for SCCP;
     - an invariant `mul` in a loop;
     - `a[i]` in a loop for strength reduction;
     - an invariant `if` for unswitching;

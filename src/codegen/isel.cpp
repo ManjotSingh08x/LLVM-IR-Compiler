@@ -88,9 +88,19 @@ const ir::Constant *asConstant(const ir::Value *value) {
 
 std::string movFor(const sema::Type *type) { return isDoubleType(type) ? "movsd" : "movss"; }
 
+unsigned powerOfTwoShift(const ir::Value *value) {
+    const ir::Constant *c = asConstant(value);
+    if (!c || c->constKind != ir::ConstantKind::Int || c->intValue < 2) return 0;
+    unsigned long long v = (unsigned long long)c->intValue;
+    if ((v & (v - 1)) != 0) return 0;
+    unsigned shift = 0;
+    while ((1ULL << shift) != v) shift++;
+    return shift;
+}
+
 } // namespace
 
-FunctionEmitter::FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, TargetLayout &layout,
+FunctionEmitter::FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, sema::TypeLayout &layout,
                                  ConstantPool &pool, int id, int optLevel)
     : fn(fn), am(am), layout(layout), pool(pool), id(id), global(optLevel >= 3), ra(frame, body) {}
 
@@ -683,32 +693,92 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         break;
     }
     case ir::BinaryOpKind::SDiv:
-    case ir::BinaryOpKind::SRem:
+    case ir::BinaryOpKind::SRem: {
+        bool remainder = inst->op == ir::BinaryOpKind::SRem;
         loadInt(inst->lhs, Reg::RAX, aw);
-        loadInt(inst->rhs, Reg::RCX, aw);
-        if (w == Width::Byte) {
-            op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
-            op("movsbl", { use(Reg::RCX, Width::Byte), def(Reg::RCX, Width::Long) });
+        if (w == Width::Byte) op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        unsigned shift = powerOfTwoShift(inst->rhs);
+        if (shift != 0) {
+            result = divideByPowerOfTwo(remainder, aw, shift);
+            break;
         }
+        loadInt(inst->rhs, Reg::RCX, aw);
+        if (w == Width::Byte) op("movsbl", { use(Reg::RCX, Width::Byte), def(Reg::RCX, Width::Long) });
         //cltd/cqto sign-extends rax into rdx; idiv divides rdx:rax, quotient to rax, remainder to rdx
         op(aw == Width::Quad ? "cqto" : "cltd", {}, { Reg::RAX }, { Reg::RDX });
         op(std::string("idiv") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
-        if (inst->op == ir::BinaryOpKind::SRem) result = Reg::RDX;
+        if (remainder) result = Reg::RDX;
         break;
+    }
+    case ir::BinaryOpKind::UDiv:
+    case ir::BinaryOpKind::URem: {
+        bool remainder = inst->op == ir::BinaryOpKind::URem;
+        loadInt(inst->lhs, Reg::RAX, aw);
+        if (w == Width::Byte) op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        unsigned shift = powerOfTwoShift(inst->rhs);
+        if (shift != 0) {
+            const std::string s(1, suffix(aw));
+            const long long bits = aw == Width::Quad ? 64 : 32;
+            if (!remainder) {
+                op("shr" + s, { immOp(shift), useDef(Reg::RAX, aw) });
+            } else if (fitsInt32((1LL << shift) - 1)) {
+                op("and" + s, { immOp((1LL << shift) - 1), useDef(Reg::RAX, aw) });
+            } else {
+                op("shl" + s, { immOp(bits - shift), useDef(Reg::RAX, aw) });
+                op("shr" + s, { immOp(bits - shift), useDef(Reg::RAX, aw) });
+            }
+            break;
+        }
+        loadInt(inst->rhs, Reg::RCX, aw);
+        if (w == Width::Byte) op("movzbl", { use(Reg::RCX, Width::Byte), def(Reg::RCX, Width::Long) });
+        //div divides rdx:rax, so rdx is cleared first; quotient to rax, remainder to rdx
+        op("xorl", { def(Reg::RDX, Width::Long), def(Reg::RDX, Width::Long) });
+        op(std::string("div") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
+        if (remainder) result = Reg::RDX;
+        break;
+    }
     case ir::BinaryOpKind::Shl:
     case ir::BinaryOpKind::AShr:
+    case ir::BinaryOpKind::LShr: {
+        const char *mnemonic = inst->op == ir::BinaryOpKind::Shl ? "shl" : inst->op == ir::BinaryOpKind::AShr ? "sar" : "shr";
+        std::string name = std::string(mnemonic) + suffix(aw);
         loadInt(inst->lhs, Reg::RAX, aw);
-        loadInt(inst->rhs, Reg::RCX, aw);
         if (w == Width::Byte && inst->op == ir::BinaryOpKind::AShr) {
             op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
         }
-        op(std::string(inst->op == ir::BinaryOpKind::Shl ? "shl" : "sar") + suffix(aw),
-           { use(Reg::RCX, Width::Byte), useDef(Reg::RAX, aw) });
+        if (w == Width::Byte && inst->op == ir::BinaryOpKind::LShr) {
+            op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        }
+        const ir::Constant *count = asConstant(inst->rhs);
+        if (count && count->constKind == ir::ConstantKind::Int) {
+            long long masked = count->intValue & (aw == Width::Quad ? 63 : 31);  //as the cpu masks %cl
+            if (masked != 0) op(name, { immOp(masked), useDef(Reg::RAX, aw) });
+            break;
+        }
+        loadInt(inst->rhs, Reg::RCX, aw);
+        op(name, { use(Reg::RCX, Width::Byte), useDef(Reg::RAX, aw) });
         break;
+    }
     default:
         return fail("unexpected integer operation");
     }
     defineResult(inst, info, result);
+}
+
+//the dividend in rax. division rounds toward zero, so a negative dividend gets a bias of 2^shift - 1
+//before the arithmetic shift: its sign bits, shifted down to the low shift bits
+Reg FunctionEmitter::divideByPowerOfTwo(bool remainder, Width w, unsigned shift) {
+    const std::string s(1, suffix(w));
+    const long long bits = w == Width::Quad ? 64 : 32;
+    op("mov" + s, { use(Reg::RAX, w), def(Reg::RCX, w) });
+    op("sar" + s, { immOp(bits - 1), useDef(Reg::RCX, w) });
+    op("shr" + s, { immOp(bits - shift), useDef(Reg::RCX, w) });
+    op("add" + s, { use(Reg::RAX, w), useDef(Reg::RCX, w) });
+    op("sar" + s, { immOp(shift), useDef(Reg::RCX, w) });
+    if (!remainder) return Reg::RCX;
+    op("shl" + s, { immOp(shift), useDef(Reg::RCX, w) });
+    op("sub" + s, { use(Reg::RCX, w), useDef(Reg::RAX, w) });
+    return Reg::RAX;
 }
 
 void FunctionEmitter::emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &info) {
@@ -824,16 +894,57 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
             op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
             convert = Width::Quad;
         } else if (wf == Width::Quad) {
-            convert = Width::Quad;  //unsigned 64-bit values above 2^63 are not handled
+            convert = Width::Quad;
         }
-        op(std::string(isDoubleType(to) ? "cvtsi2sd" : "cvtsi2ss") + suffix(convert),
-           { use(Reg::RAX, convert), def(Reg::XMM0) });
+        const std::string cvt = std::string(isDoubleType(to) ? "cvtsi2sd" : "cvtsi2ss") + suffix(convert);
+        if (wf == Width::Quad && !isSigned) {
+            //above 2^63 the signed conversion would go negative: halve, keeping the low bit so the
+            //rounding is the same, convert, then double
+            std::string big = localLabel(), done = localLabel();
+            op("testq", { use(Reg::RAX), use(Reg::RAX) });
+            op("js", { textOp(big) });
+            op(cvt, { use(Reg::RAX), def(Reg::XMM0) });
+            op("jmp", { textOp(done) });
+            placeLabel(big);
+            op("movq", { use(Reg::RAX), def(Reg::RCX) });
+            op("shrq", { immOp(1), useDef(Reg::RCX) });
+            op("andl", { immOp(1), useDef(Reg::RAX, Width::Long) });
+            op("orq", { use(Reg::RAX), useDef(Reg::RCX) });
+            op(cvt, { use(Reg::RCX), def(Reg::XMM0) });
+            op(isDoubleType(to) ? "addsd" : "addss", { use(Reg::XMM0), useDef(Reg::XMM0) });
+            placeLabel(done);
+        } else {
+            op(cvt, { use(Reg::RAX, convert), def(Reg::XMM0) });
+        }
         return defineResult(inst, info, Reg::XMM0);
     }
     case ir::CastOpKind::FPToSI: {
         loadFloat(inst->operand, Reg::XMM0);
         Width wt = widthOf(to) == Width::Quad ? Width::Quad : Width::Long;
         op(std::string(isDoubleType(from) ? "cvttsd2si" : "cvttss2si") + suffix(wt), { use(Reg::XMM0), def(Reg::RAX, wt) });
+        break;
+    }
+    case ir::CastOpKind::FPToUI: {
+        bool dbl = isDoubleType(from);
+        const std::string cvt = dbl ? "cvttsd2siq" : "cvttss2siq";
+        loadFloat(inst->operand, Reg::XMM0);
+        if (widthOf(to) != Width::Quad) {
+            //every unsigned 32-bit value fits the signed 64-bit conversion
+            op(cvt, { use(Reg::XMM0), def(Reg::RAX) });
+            break;
+        }
+        //from 2^63 up: subtract 2^63, convert, and put the top bit back
+        std::string big = localLabel(), done = localLabel();
+        op(dbl ? "movsd" : "movss", { memOp(Mem::global(pool.label(9223372036854775808.0, dbl))), def(Reg::XMM1) });
+        op(dbl ? "ucomisd" : "ucomiss", { use(Reg::XMM1), use(Reg::XMM0) });
+        op("jae", { textOp(big) });
+        op(cvt, { use(Reg::XMM0), def(Reg::RAX) });
+        op("jmp", { textOp(done) });
+        placeLabel(big);
+        op(dbl ? "subsd" : "subss", { use(Reg::XMM1), useDef(Reg::XMM0) });
+        op(cvt, { use(Reg::XMM0), def(Reg::RAX) });
+        op("btcq", { immOp(63), useDef(Reg::RAX) });
+        placeLabel(done);
         break;
     }
     case ir::CastOpKind::FPExt:
@@ -890,6 +1001,7 @@ void FunctionEmitter::emitSelect(ir::SelectInst *inst, const InstNextUse &info) 
 void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
     const sema::FunctionType *type = inst->calleeType;
     std::vector<std::pair<const ir::Value *, Reg>> inRegs;
+    std::vector<const sema::Type *>                 inRegTypes;  //the parameter type, which says how a byte widens
     std::vector<const ir::Value *>                 onStack;
     size_t intUsed = 0;
     size_t floatUsed = 0;
@@ -899,12 +1011,14 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         if (isFloatType(argType)) {
             if (floatUsed < kFloatArgCount) {
                 inRegs.push_back(std::make_pair(arg, floatArgReg(floatUsed++)));
+                inRegTypes.push_back(argType);
             } else {
                 onStack.push_back(arg);
             }
         } else if (isIntegerLike(argType)) {
             if (intUsed < kIntArgCount) {
                 inRegs.push_back(std::make_pair(arg, kIntArgRegs[intUsed++]));
+                inRegTypes.push_back(argType);
             } else {
                 onStack.push_back(arg);
             }
@@ -914,7 +1028,7 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
     }
 
     //stack arguments first: rax and xmm0 are free to use only before the argument registers are filled
-    long long stackBytes = (long long)alignTo(onStack.size() * 8, 16);
+    long long stackBytes = (long long)sema::alignTo(onStack.size() * 8, 16);
     if (stackBytes != 0) op("subq", { immOp(stackBytes), useDef(Reg::RSP) });
     for (size_t i = 0; i < onStack.size(); i++) {
         Mem slot = Mem::at(Reg::RSP).plus((long long)i * 8);
@@ -927,7 +1041,8 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         }
     }
     std::vector<Reg> argumentRegs;
-    for (const std::pair<const ir::Value *, Reg> &entry : inRegs) {
+    for (size_t r = 0; r < inRegs.size(); r++) {
+        const std::pair<const ir::Value *, Reg> &entry = inRegs[r];
         argumentRegs.push_back(entry.second);
         if (isXmm(entry.second)) {
             loadFloat(entry.first, entry.second);
@@ -935,10 +1050,11 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         }
         Width w = widthOf(entry.first->getType());
         loadInt(entry.first, entry.second, w);
-        //chars are passed sign-extended and bools zero-extended to 32 bits, as clang does
+        //signed chars are passed sign-extended, bools and unsigned chars zero-extended to 32 bits, as clang does
         if (w == Width::Byte) {
-            op(ir::integerBits(entry.first->getType()) == 1 ? "movzbl" : "movsbl",
-               { use(entry.second, Width::Byte), def(entry.second, Width::Long) });
+            const sema::Type *paramType = inRegTypes[r];
+            bool zeroExtend = ir::integerBits(paramType) == 1 || sema::isUnsigned(paramType);
+            op(zeroExtend ? "movzbl" : "movsbl", { use(entry.second, Width::Byte), def(entry.second, Width::Long) });
         }
     }
 
@@ -1213,7 +1329,12 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
                 }
                 target = edge;
             }
-            op(std::string("cmp") + suffix(w), { immOp(c.first), use(Reg::RAX, w) });
+            if (fitsInt32(c.first)) {
+                op(std::string("cmp") + suffix(w), { immOp(c.first), use(Reg::RAX, w) });
+            } else {
+                op("movabsq", { immOp(c.first), def(Reg::RCX) });
+                op("cmpq", { use(Reg::RCX), use(Reg::RAX) });
+            }
             op("je", { textOp(target) });
         }
         if (!global) return jumpUnless(sw->defaultTarget, next);

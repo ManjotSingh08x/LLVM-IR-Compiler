@@ -61,6 +61,8 @@ public:
         case ASTKind::DeleteExpr:         return derived().visitDeleteExpr(static_cast<DeleteExpr *>(node));
         case ASTKind::InitListExpr:       return derived().visitInitListExpr(static_cast<InitListExpr *>(node));
         case ASTKind::LambdaExpr:         return derived().visitLambdaExpr(static_cast<LambdaExpr *>(node));
+        case ASTKind::CastExpr:           return derived().visitCastExpr(static_cast<CastExpr *>(node));
+        case ASTKind::SizeofExpr:         return derived().visitSizeofExpr(static_cast<SizeofExpr *>(node));
         case ASTKind::ImplicitCastExpr:   return derived().visitImplicitCastExpr(static_cast<ImplicitCastExpr *>(node));
         }
         return RetTy();
@@ -119,6 +121,8 @@ public:
     RetTy visitDeleteExpr(DeleteExpr *node) { return derived().visitExpr(node); }
     RetTy visitInitListExpr(InitListExpr *node) { return derived().visitExpr(node); }
     RetTy visitLambdaExpr(LambdaExpr *node) { return derived().visitExpr(node); }
+    RetTy visitCastExpr(CastExpr *node) { return derived().visitExpr(node); }
+    RetTy visitSizeofExpr(SizeofExpr *node) { return derived().visitExpr(node); }
     RetTy visitImplicitCastExpr(ImplicitCastExpr *node) { return derived().visitExpr(node); }
 
 private:

@@ -42,6 +42,8 @@ public:
     void visitArraySubscriptExpr(ast::ArraySubscriptExpr *node);
     void visitMemberExpr(ast::MemberExpr *node);
     void visitNewExpr(ast::NewExpr *node);
+    void visitCastExpr(ast::CastExpr *node);
+    void visitSizeofExpr(ast::SizeofExpr *node);
     void visitDeleteExpr(ast::DeleteExpr *node);
     void visitInitListExpr(ast::InitListExpr *node);
     void visitLambdaExpr(ast::LambdaExpr *node);
@@ -84,6 +86,7 @@ private:
     Scope       *current = nullptr;
 
     std::map<std::string, Symbol *> mangledNames;    //to catch two symbols given one name
+    unsigned                        localRecordCount = 0;  //numbers records declared in function bodies
     std::set<Symbol *>              definedStatics;  //static members defined outside their class
 };
 

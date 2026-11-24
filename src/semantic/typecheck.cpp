@@ -35,6 +35,12 @@ const char *accessWord(ast::AccessKind access) {
 }
 
 //a local variable or parameter, which a lambda must capture to use
+//the type a pointer offset is computed in: int, or long when the index is unsigned or 64 bits wide,
+//so its value is zero- or sign-extended correctly before it scales the address
+const Type *indexType(const Type *index) {
+    return isUnsigned(promote(index)) || integerSize(index) == 8 ? longType() : intType();
+}
+
 bool isLocal(const Symbol *symbol) {
     if (symbol->kind == SymbolKind::Parameter) return true;
     if (symbol->kind != SymbolKind::Variable || symbol->isStatic) return false;
@@ -825,6 +831,7 @@ const Type *TypeChecker::visitCompoundStmt(ast::CompoundStmt *node) {
 const Type *TypeChecker::visitDeclStmt(ast::DeclStmt *node) {
     for (const std::unique_ptr<ast::Decl> &decl : node->decls) {
         if (decl->getKind() == ast::ASTKind::VarDecl) checkVarDecl(static_cast<ast::VarDecl *>(decl.get()));
+        if (decl->getKind() == ast::ASTKind::RecordDecl) checkRecord(static_cast<ast::RecordDecl *>(decl.get()));
     }
     return nullptr;
 }
@@ -843,17 +850,18 @@ const Type *TypeChecker::visitIfStmt(ast::IfStmt *node) {
 
 const Type *TypeChecker::visitSwitchStmt(ast::SwitchStmt *node) {
     const Type *type = check(node->cond);
+    SwitchInfo info;
     if (!isError(type)) {
         const Type *value = decayValue(node->cond);
         if (isIntegral(value)) {
-            convert(node->cond, promote(value), "a switch condition");
+            info.condType = promote(value);
+            convert(node->cond, info.condType, "a switch condition");
         } else {
             diags.error(node->cond->line, node->cond->col, "a switch condition must be an integer, not '"
                                                                + typeToString(value) + "'");
         }
     }
 
-    SwitchInfo info;
     context.switches.push_back(&info);
     context.breakables++;
     visit(node->body.get());
@@ -965,8 +973,9 @@ const Type *TypeChecker::visitCaseStmt(ast::CaseStmt *node) {
     } else if (!isError(type) && (!isIntegral(type) || !evaluateConstant(node->value.get(), value))) {
         diags.error(node->value->line, node->value->col, "a case value must be an integer constant");
     } else if (!isError(type)) {
-        node->constant = value;
         SwitchInfo *info = context.switches.back();
+        value = wrapToType(value, info->condType);
+        node->constant = value;
         if (info->values.count(value)) {
             diags.error(node->line, node->col, "duplicate case value " + std::to_string(value));
         }
@@ -992,10 +1001,11 @@ const Type *TypeChecker::visitDefaultStmt(ast::DefaultStmt *node) {
 
 const Type *TypeChecker::visitIntLiteral(ast::IntLiteral *node) {
     long long value;
-    if (!intLiteralValue(node->spelling, value)) {
-        diags.error(node->line, node->col, "integer literal " + node->spelling + " is too large for int");
+    const Type *type = nullptr;
+    if (!intLiteral(node->spelling, value, type)) {
+        diags.error(node->line, node->col, "integer literal " + node->spelling + " is too large for its type");
     }
-    return setType(node, intType(), false);
+    return setType(node, type, false);
 }
 
 const Type *TypeChecker::visitFloatLiteral(ast::FloatLiteral *node) { return setType(node, doubleType(), false); }
@@ -1113,9 +1123,10 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     std::string invalid = "invalid operands to '" + std::string(opSpelling(node->op)) + "' ('"
                         + typeToString(left) + "' and '" + typeToString(right) + "')";
 
-    //both numbers: convert to the common type
+    //both numbers: convert to the common type. a shift has the type of its promoted left side
     if (isArithmetic(left) && isArithmetic(right)) {
         const Type *common = commonArithmeticType(promote(left), promote(right));
+        if (node->op == ast::BinaryOp::Shl || node->op == ast::BinaryOp::Shr) common = promote(left);
         switch (node->op) {
         case ast::BinaryOp::Rem:
         case ast::BinaryOp::BitAnd:
@@ -1150,17 +1161,17 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     //pointer arithmetic: pointer +/- int and pointer - pointer
     case ast::BinaryOp::Add:
         if (isObjectPointer(left) && isIntegral(right)) {
-            convert(node->rhs, intType(), "an operand");
+            convert(node->rhs, indexType(right), "an operand");
             return setType(node, left, false);
         }
         if (isIntegral(left) && isObjectPointer(right)) {
-            convert(node->lhs, intType(), "an operand");
+            convert(node->lhs, indexType(left), "an operand");
             return setType(node, right, false);
         }
         break;
     case ast::BinaryOp::Sub:
         if (isObjectPointer(left) && isIntegral(right)) {
-            convert(node->rhs, intType(), "an operand");
+            convert(node->rhs, indexType(right), "an operand");
             return setType(node, left, false);
         }
         if (isObjectPointer(left) && isObjectPointer(right) && isSameType(left, right)) {
@@ -1211,23 +1222,32 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
     case ast::AssignOp::SubAssign:
         value = decayValue(node->value);
         if (isObjectPointer(target) && isIntegral(value)) {
-            convert(node->value, intType(), "an assignment");
+            convert(node->value, indexType(value), "an assignment");
             break;
         }
         //fall through, numbers on both sides
     case ast::AssignOp::MulAssign:
     case ast::AssignOp::DivAssign:
-    case ast::AssignOp::RemAssign: {
+    case ast::AssignOp::RemAssign:
+    case ast::AssignOp::ShlAssign:
+    case ast::AssignOp::ShrAssign:
+    case ast::AssignOp::AndAssign:
+    case ast::AssignOp::OrAssign:
+    case ast::AssignOp::XorAssign: {
         value = decayValue(node->value);
-        bool integers = node->op == ast::AssignOp::RemAssign;
+        bool integers = node->op != ast::AssignOp::AddAssign && node->op != ast::AssignOp::SubAssign
+                     && node->op != ast::AssignOp::MulAssign && node->op != ast::AssignOp::DivAssign;
         bool fits = integers ? isIntegral(target) && isIntegral(value) : isArithmetic(target) && isArithmetic(value);
         if (!fits) {
             diags.error(node->line, node->col, "invalid operands to a compound assignment ('" + typeToString(target)
                                                    + "' and '" + typeToString(value) + "')");
             return setType(node, errorType(), false);
         }
-        //x op= v: both sides meet in their common type, only the result converts back
-        convert(node->value, commonArithmeticType(promote(target), promote(value)), "an assignment");
+        //x op= v: both sides meet in their common type, only the result converts back. a shift
+        //takes the type of its promoted left side
+        bool shift = node->op == ast::AssignOp::ShlAssign || node->op == ast::AssignOp::ShrAssign;
+        convert(node->value, shift ? promote(target) : commonArithmeticType(promote(target), promote(value)),
+                "an assignment");
         break;
     }
     }
@@ -1357,7 +1377,7 @@ const Type *TypeChecker::visitArraySubscriptExpr(ast::ArraySubscriptExpr *node) 
                                                              + typeToString(index) + "'");
         return setType(node, errorType(), false);
     }
-    convert(node->index, intType(), "an index");
+    convert(node->index, indexType(index), "an index");
     return setType(node, asPointer(base)->pointee, true);
 }
 
@@ -1507,6 +1527,48 @@ const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
 }
 
 //casts are only made by this pass, after their operand has been checked
+//(T) e: the implicit conversions where one exists, otherwise the casts only an explicit cast allows:
+//between unrelated pointers, and between pointers and integers
+const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
+    const Type *target = node->target->resolved;
+    const Type *type = check(node->sub);
+    if (isError(type) || isError(target)) return setType(node, errorType(), false);
+    if (target->is(TypeKind::Void)) return setType(node, voidType(), false);
+
+    const Type *value = decayValue(node->sub);
+    bool isPointerValue = asPointer(value) || value->is(TypeKind::Null);
+    if (isSameType(value, target)) return setType(node, target, false);
+    if (findConversion(value, node->sub->isLValue, target, table).rank != ConversionRank::Impossible) {
+        convert(node->sub, target, "a cast");
+    } else if (asPointer(target) && isPointerValue) {
+        wrap(node->sub, ast::CastKind::PointerCast, target);
+    } else if (asPointer(target) && isIntegral(value)) {
+        convert(node->sub, longType(), "a cast");
+        wrap(node->sub, ast::CastKind::IntegralToPointer, target);
+    } else if (isIntegral(target) && isPointerValue) {
+        wrap(node->sub, ast::CastKind::PointerToIntegral, target);
+    } else {
+        diags.error(node->line, node->col, "cannot cast '" + typeToString(value) + "' to '" + typeToString(target) + "'");
+        return setType(node, errorType(), false);
+    }
+    return setType(node, target, false);
+}
+
+//the operand keeps its own type: an array is not decayed, so sizeof gives the whole array
+const Type *TypeChecker::visitSizeofExpr(ast::SizeofExpr *node) {
+    const Type *operand = node->typeOperand ? node->typeOperand->resolved : stripReference(check(node->exprOperand));
+    if (isError(operand)) return setType(node, ulongType(), false);
+    const ArrayType *array = asArray(operand);
+    bool incomplete = operand->is(TypeKind::Void) || operand->is(TypeKind::Function) || (array && array->size == 0) ||
+                      (asRecord(operand) && !asRecord(operand)->isComplete);
+    if (incomplete) {
+        diags.error(node->line, node->col, "sizeof needs a complete object type, not '" + typeToString(operand) + "'");
+        return setType(node, ulongType(), false);
+    }
+    node->size = layout.sizeOf(operand);
+    return setType(node, ulongType(), false);
+}
+
 const Type *TypeChecker::visitImplicitCastExpr(ast::ImplicitCastExpr *node) { return node->type; }
 
 } // namespace sema

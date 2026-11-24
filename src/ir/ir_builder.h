@@ -52,7 +52,7 @@ public:
     Value *createSelect(Value *condition, Value *ifTrue, Value *ifFalse, const sema::Type *type);
 
     //calls. marks a called Function as used
-    Value *createCall(Value *callee, const sema::FunctionType *calleeType, const std::vector<Value *> &args);
+    Value *createCall(Value *callee, const sema::FunctionType *sourceType, const std::vector<Value *> &args);
 
     //terminators
     void        createRet(const sema::Type *returnType, Value *value);

@@ -1,0 +1,68 @@
+// && || ! in conditions lowered to jumping code: short circuit and evaluation order must hold
+int calls = 0;
+
+bool t(int id) { calls = calls + 1; printf("t%d ", id); return true; }
+bool f(int id) { calls = calls + 1; printf("f%d ", id); return false; }
+int val(int id, int v) { printf("v%d ", id); return v; }
+
+void check(int a, int b, int *p) {
+    if (a < b && b < 10) printf("[and] "); else printf("[!and] ");
+    if (a > b || b == 5) printf("[or] "); else printf("[!or] ");
+    if (!(a < b)) printf("[not] "); else printf("[!not] ");
+    if (!(a < b && b < 10) || (p && *p == 3)) printf("[mix] "); else printf("[!mix] ");
+    if (p != null && *p > 0 && !(a == b)) printf("[ptr] "); else printf("[!ptr] ");
+    if (a && b) printf("[ints] "); else printf("[!ints] ");
+    printf("\n");
+}
+
+int main() {
+    int three = 3;
+    check(1, 2, &three);
+    check(2, 1, null);
+    check(0, 5, &three);
+    check(7, 7, null);
+
+    if (f(1) && t(2)) printf("bad"); printf("\n");
+    if (t(3) || t(4)) printf("ok"); printf("\n");
+    if (f(5) || (t(6) && f(7)) || !f(8)) printf("ok"); printf("\n");
+    if (!(t(9) && t(10)) && t(11)) printf("bad"); printf("\n");
+    if (val(1, 0) || val(2, 4) && val(3, 0)) printf("bad"); else printf("else"); printf("\n");
+
+    int i = 0;
+    while (i < 10 && !(i == 4)) i = i + 1;
+    printf("while %d\n", i);
+
+    i = 0;
+    until (i >= 6 || i == 3) i = i + 1;
+    printf("until %d\n", i);
+
+    i = 0;
+    do { i = i + 1; } while (i < 100 && i % 7 != 0);
+    printf("do %d\n", i);
+
+    i = 0;
+    do { i = i + 2; } until (i > 9 || !(i < 8));
+    printf("do-until %d\n", i);
+
+    int n = 0;
+    for (int j = 0; j < 20 && (j < 5 || j % 2 == 0); j = j + 1) n = n + 1;
+    printf("for %d\n", n);
+
+    int k = (t(12) && f(13)) ? 1 : 2;
+    printf("ternary %d\n", k);
+    bool b = t(14) && f(15);
+    bool c = f(16) || t(17);
+    printf("values %d %d\n", b, c);
+
+    if (true && !false) printf("const\n");
+    while (false || false) printf("never\n");
+    printf("calls %d\n", calls);
+    return 0;
+}
+
+// in a condition, && || ! are only branches: no bool slot, no phi of a bool, no xor to negate
+// IR-LABEL: define {{.*}}check
+// IR-NOT: .result
+// IR-NOT: phi i1
+// IR-NOT: xor i1
+// IR: ret void

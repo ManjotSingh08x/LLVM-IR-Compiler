@@ -40,7 +40,7 @@ bool AsmWriter::write(std::ostream &out) {
     int id = 0;
     for (const std::unique_ptr<ir::Function> &fn : module.getFunctions()) {
         if (!fn->isDefinition()) continue;
-        FunctionEmitter emitter(*fn, am, layout, pool, id++);
+        FunctionEmitter emitter(*fn, am, layout, pool, id++, optLevel);
         AsmLines lines;
         if (!emitter.emit(lines)) {
             errorText = emitter.error();

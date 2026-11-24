@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "codegen/frame.h"
+#include "codegen/mir.h"
 #include "codegen/next_use.h"
 #include "codegen/x86.h"
 
@@ -18,7 +19,7 @@ namespace codegen {
 //rax, rcx, rdx, r11, xmm0, xmm1 are scratch for single instructions, the argument registers carry calls
 class RegisterAllocator {
 public:
-    RegisterAllocator(Frame &frame, AsmLines &out) : frame(frame), out(out) {}
+    RegisterAllocator(Frame &frame, MCode &out) : frame(frame), out(out) {}
 
     //a new block: no register holds anything, every value is in its home
     void beginBlock();
@@ -47,7 +48,7 @@ private:
     void drop(Reg reg);
 
     Frame                          &frame;
-    AsmLines                       &out;
+    MCode                          &out;
     std::map<Reg, const ir::Value *> holds;         //register descriptor
     std::map<const ir::Value *, Reg> where;         //address descriptor: register part
     std::set<const ir::Value *>      registerOnly;  //address descriptor: not in memory

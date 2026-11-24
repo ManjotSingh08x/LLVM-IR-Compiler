@@ -10,7 +10,8 @@ namespace codegen {
 //  redundant loads and stores (8.7.1): mov R, M then mov M, R drops the reload; mov M, R then
 //    mov R, M drops the store back; mov A, B then mov B, A drops the copy back; mov R, R goes
 //  unreachable code (8.7.2): instructions after jmp, ret or ud2 up to the next label
-//  flow of control (8.7.3): a jump to a jmp goes straight to its target, a jmp to the next label goes
+//  flow of control (8.7.3): a jump to a jmp goes straight to its target, a jmp to the next label goes,
+//    and a conditional jump around a jmp (jcc A; jmp B; A:) becomes the opposite jump (j!cc B)
 //  algebraic simplification (8.7.4): add/sub $0 and imul $1 go
 //  machine idioms (8.7.5): mov $0, R -> xor R, R; add/sub $1 -> inc/dec; cmp $0, R -> test R, R
 //the rewrites that change the flags (xor, inc, dec, dropping add $0) are made only when the next

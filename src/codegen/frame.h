@@ -28,6 +28,9 @@ public:
     //the 8-byte slot a phi's incoming value is copied into at the end of each predecessor
     long long phiSlot(const ir::Value *phi);
 
+    //a new 8-byte slot for a virtual register graph colouring spilled (-O3)
+    long long spillSlot() { return allocate(8, 8); }
+
     //where a callee-saved register is kept between prologue and epilogue
     long long saveSlot(Reg reg);
 

@@ -1,4 +1,4 @@
-q/ regression: global cse, dce and sink. an expression computed in a block and again in a block it
+// regression: global cse, dce and sink. an expression computed in a block and again in a block it
 // dominates is computed once; one computed on two separate paths is not merged (that would need
 // partial-redundancy elimination); a variable summed in a loop and never read disappears (a cycle
 // of phis that only feeds itself); a value used on one side of a branch moves down into it.

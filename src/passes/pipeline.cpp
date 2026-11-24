@@ -52,10 +52,11 @@ GlobalPassManager buildPipeline(int optLevel) {
     ssa->add(std::unique_ptr<FunctionPass>(new InstSimplify()));
     ssa->add(std::unique_ptr<FunctionPass>(new LoopSimplify()));
     ssa->add(std::unique_ptr<FunctionPass>(new LICM()));
-    //iv_strength_reduce is not run here: on the linear (8.6) allocator every induction variable it
+    //iv_strength_reduce at -O3 only: on the linear (8.6) allocator of -O2 every induction variable it
     //makes is a phi whose value goes through a stack slot each iteration, which costs more than the
     //multiply it saves (measured: +5% instructions, +10% stack accesses, 10% slower on an array
-    //loop). it waits for -O3, whose global allocator can keep the new variable in a register
+    //loop). -O3's graph colouring can keep the new variable in a register
+    if (optLevel >= 3) ssa->add(std::unique_ptr<FunctionPass>(new IVStrengthReduce()));
     ssa->add(std::unique_ptr<FunctionPass>(new LoopUnswitch()));
     ssa->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
     ssa->add(std::unique_ptr<FunctionPass>(new InstSimplify()));

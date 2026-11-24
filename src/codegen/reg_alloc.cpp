@@ -45,14 +45,10 @@ bool RegisterAllocator::registerOf(const ir::Value *value, Reg &reg) const {
 }
 
 void RegisterAllocator::storeHome(const ir::Value *value, Reg reg) {
-    std::string home = Mem::frame(frame.home(value)).str();
-    if (!isXmm(reg)) {
-        out.push_back("\tmovq\t" + regName(reg) + ", " + home);
-    } else if (isDoubleType(value->getType())) {
-        out.push_back("\tmovsd\t" + regName(reg) + ", " + home);
-    } else {
-        out.push_back("\tmovss\t" + regName(reg) + ", " + home);
-    }
+    MInst store;
+    store.op = !isXmm(reg) ? "movq" : isDoubleType(value->getType()) ? "movsd" : "movss";
+    store.operands = { use(reg), memOp(Mem::frame(frame.home(value))) };
+    out.push_back(store);
 }
 
 void RegisterAllocator::drop(Reg reg) {

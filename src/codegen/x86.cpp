@@ -24,9 +24,25 @@ const RegNames kGprNames[] = {
 
 } // namespace
 
-bool isXmm(Reg reg) { return reg >= Reg::XMM0; }
+namespace {
+const int kVirtualIntBase = 1000;
+const int kVirtualFloatBase = 1000000;
+} // namespace
+
+Reg  virtualInt(unsigned n) { return static_cast<Reg>(kVirtualIntBase + (int)n); }
+Reg  virtualFloat(unsigned n) { return static_cast<Reg>(kVirtualFloatBase + (int)n); }
+bool isVirtual(Reg reg) { return (int)reg >= kVirtualIntBase; }
+
+bool isXmm(Reg reg) {
+    if (isVirtual(reg)) return (int)reg >= kVirtualFloatBase;
+    return reg >= Reg::XMM0;
+}
 
 std::string regName(Reg reg, Width width) {
+    if (isVirtual(reg)) {
+        if (isXmm(reg)) return "%x" + std::to_string((int)reg - kVirtualFloatBase);
+        return "%v" + std::to_string((int)reg - kVirtualIntBase) + "." + suffix(width);
+    }
     if (isXmm(reg)) return "%xmm" + std::to_string((int)reg - (int)Reg::XMM0);
     const RegNames &names = kGprNames[(int)reg];
     switch (width) {

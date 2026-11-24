@@ -44,6 +44,18 @@ bool matchBasicIV(PhiInst *phi, BasicBlock *pre, BasicBlock *latch, BasicIV &iv)
     return true;
 }
 
+//where an induction variable's update goes in the latch: before the terminator, and before the
+//compare that feeds it when that is right in front of it, so codegen can still fuse compare and branch
+Instruction *updatePoint(BasicBlock *latch) {
+    Instruction *term = latch->getTerminator();
+    if (term->getOpcode() == Opcode::Br && latch->instructions.size() >= 2) {
+        BranchInst *br = static_cast<BranchInst *>(term);
+        Instruction *before = latch->instructions[latch->instructions.size() - 2].get();
+        if (br->isConditional() && br->condition == before) return before;
+    }
+    return term;
+}
+
 void replaceUses(Function &fn, Value *from, Value *to) {
     for (BasicBlock *block : fn.getBlocks()) {
         for (std::unique_ptr<Instruction> &inst : block->instructions) {
@@ -103,7 +115,7 @@ LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
                 phi->addIncoming(start, pre);
                 phi->addIncoming(next, latch);
                 header->insertAtFront(std::unique_ptr<Instruction>(phi));
-                latch->insertBefore(latch->getTerminator(), std::unique_ptr<Instruction>(next));
+                latch->insertBefore(updatePoint(latch), std::unique_ptr<Instruction>(next));
                 replaceUses(ctx.fn, b, phi);
                 changed = true;
                 continue;
@@ -133,7 +145,7 @@ LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
                 phi->addIncoming(start, pre);
                 phi->addIncoming(next, latch);
                 header->insertAtFront(std::unique_ptr<Instruction>(phi));
-                latch->insertBefore(latch->getTerminator(), std::unique_ptr<Instruction>(next));
+                latch->insertBefore(updatePoint(latch), std::unique_ptr<Instruction>(next));
                 replaceUses(ctx.fn, g, phi);
                 changed = true;
             }

@@ -386,17 +386,22 @@ Graph colouring (§8.8.4) uses **two passes**:
 1. Select instructions "as though there are an infinite number of symbolic registers".
 2. Assign physical registers.
 
-So isel has to emit a machine-level IR in which every SSA value, and every temporary isel needs, is a virtual register. Physical registers are not chosen during isel. This is a new layer between the IR and the `.s` output.
+**As built** (`codegen/mir.h`):
+- isel emits **machine IR** (`MInst`) at every level. Each register operand states its role: read (`Use`), written (`Def`) or both (`UseDef`).
+- Registers an instruction touches without naming them are listed as **implicit** uses and defs:
+  - `idiv` reads and writes `rax` and `rdx`;
+  - `cltd` reads `rax` and writes `rdx`;
+  - a call reads its argument registers and overwrites every caller-saved register;
+  - the jump to the epilogue reads the return register.
+- One printer turns the machine IR into text. At -O0 to -O2 the registers are physical, and the output is byte-identical to the text isel wrote before the machine IR existed (checked on all 39 programs at the time).
+- At -O3 every value gets a **virtual register** (`%v12.l`, `%x3` until colouring).
+
+The allocator never guesses what an instruction reads or writes. An instruction without that information (a raw text line) at -O3 stops compilation with an error.
 
 ### 4.2 φ elimination into copies
-Instead of using φ slots, each φ becomes a **copy** in each predecessor:
-1. **Split critical edges.** An edge from a block with several successors to a block with several predecessors gets a new block in between (the book's Fig. 9.31 idea), so the copy runs only on that edge.
-2. **Parallel copies.** All the φ nodes of one block are assigned *simultaneously* on each incoming edge, written `(a, b) := (b, a)`. To sequence them:
-   - emit any copy whose destination is not the source of another pending copy;
-   - break a remaining cycle by copying one value into a temporary first.
-
-   This solves the swap problem.
-3. Ideally, **coalescing** (§4.4) removes most of these copies.
+Instead of using φ slots, each φ becomes **copies** on each incoming edge:
+1. **Parallel copies through temporaries.** On one edge, every incoming value is first copied into a fresh register, and only then into its φ's register. All the φ nodes of a block are thus assigned at once, so `(a, b) := (b, a)` works (the swap problem). Coalescing removes the extra copies.
+2. **Copies on the edge itself.** After a conditional jump, each side does its own copies: the fall-through side straight away, the taken side behind a local label. This is edge splitting without a new IR block, and it avoids the lost-copy problem. A switch case whose block has φ nodes jumps to such a label too.
 
 ### 4.3 Graph-colouring allocation (§8.8.4)
 - **Interference graph:**
@@ -411,16 +416,41 @@ Instead of using φ slots, each φ becomes a **copy** in each predecessor:
   - Rebuild the graph and start again.
 
 ### 4.4 What a working allocator needs beyond §8.8.4
-- **Precoloured nodes:** physical registers appear as nodes with a fixed colour.
-  - Argument and return registers (`rdi … r9`, `xmm0–7`, `rax`).
-  - `rdx:rax` for `idiv`, and `cl` for shifts.
-  - At every `call`, all caller-saved registers interfere with every value live across the call. Such values therefore end up in callee-saved registers, or get spilled.
-- **Coalescing:** for a copy `a = b` where a and b do not interfere, merge their nodes so the copy disappears. Do it **conservatively**, so that merging never makes the graph uncolourable:
-  - Briggs test: the merged node has fewer than k neighbours of significant degree (≥ k).
-  - George test: every neighbour of a either already interferes with b or has fewer than k neighbours.
+- **Precoloured nodes:** every physical register the machine IR names is a node with a fixed colour, so all **14 general registers** (not `rsp`, `rbp`) and **16 xmm registers** can be handed out:
+  - argument and return registers;
+  - `rdx:rax` for `idiv`, and `cl` for shifts;
+  - at every `call`, all caller-saved registers are written, so they interfere with every value live across the call. Integers that survive a call end up in `rbx`/`r12`–`r15` (saved in the prologue) or on the stack; doubles always go to the stack (System V has no callee-saved xmm register).
+- **Coalescing**, in two phases:
+  1. **Briggs**, virtual pairs first: the merged node has fewer than k neighbours of significant degree (≥ k).
+  2. **George**, a virtual register into a physical one: every neighbour of the virtual register is precoloured, of low degree, or already interferes with the physical one.
 
-  Most of the φ copies from §4.2 disappear this way.
-- **Callee-saved registers:** save and restore in the prologue and epilogue only the ones that get used. The existing frame code already does this.
+  Merging into a fixed register first was measured to block the virtual merges behind it (a leftover copy and jump on a loop's back edge).
+- **Callee-saved registers:** only the ones used are saved and restored.
+- Each function's `.s` starts with a comment: `# graph colouring: N virtual registers, C copies coalesced, S spilled, R rounds`. The regression tests check it.
+
+### 4.5 Results and the strength-reduction ablation (step 8)
+Static totals over the 42 regression programs:
+
+| Level | Instructions | Stack accesses |
+|---|---|---|
+| -O2 | 20058 | 6741 |
+| -O3 | 14251 | 1125 |
+
+Runtime, median of 11 interleaved runs:
+
+| Benchmark | -O0 | -O1 | -O2 | -O3 without iv_strength_reduce | -O3 with |
+|---|---|---|---|---|---|
+| calls and division | 0.250 | 0.186 | 0.213 | 0.185 | 0.183 |
+| array scan + float recurrence | 0.201 | 0.199 | 0.200 | 0.104 | 0.098 |
+| three arrays, indexed loops | 0.327 | 0.261 | 0.207 | 0.190 | 0.149 |
+
+`iv_strength_reduce` was moved to -O3 because the linear allocator could not profit from it (§3.4, "Why not at -O2"). With graph colouring it does profit:
+- up to **22% faster** on the array benchmark, 6% on the scan, no change on the call-bound one;
+- statically +0.9% instructions and +6% stack accesses, from the extra induction-variable registers.
+
+Two fixes were needed before it paid off:
+- the variable's update had been inserted between the loop's compare and branch, which stopped codegen from fusing them;
+- the coalescer's order, see §4.4.
 
 ---
 

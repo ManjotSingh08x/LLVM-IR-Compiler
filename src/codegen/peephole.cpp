@@ -126,6 +126,15 @@ bool isGeneral32(const std::string &reg) {
     return false;
 }
 
+//the opposite condition code of a jump: jl -> jge
+std::string invertJump(const std::string &m) {
+    static const std::map<std::string, std::string> opposite = {
+        { "je", "jne" }, { "jne", "je" }, { "jl", "jge" }, { "jge", "jl" }, { "jg", "jle" }, { "jle", "jg" },
+        { "jb", "jae" }, { "jae", "jb" }, { "ja", "jbe" }, { "jbe", "ja" }, { "jp", "jnp" }, { "jnp", "jp" } };
+    std::map<std::string, std::string>::const_iterator it = opposite.find(m);
+    return it == opposite.end() ? "" : it->second;
+}
+
 //one sweep; true when anything changed
 bool sweep(AsmLines &text) {
     std::vector<Line> lines;
@@ -159,6 +168,26 @@ bool sweep(AsmLines &text) {
                 if (lines[j].kind == Line::Instruction && !drop[j]) {
                     drop[j] = true;
                     changed = true;
+                }
+            }
+        }
+
+        //jcc A; jmp B; A: -> j!cc B (a branch around a jump)
+        if (isConditionalJump(m) && l.operands.size() == 1 && !invertJump(m).empty()) {
+            size_t j = next(i);
+            if (j < lines.size() && lines[j].kind == Line::Instruction && !drop[j] && lines[j].mnemonic == "jmp" &&
+                lines[j].operands.size() == 1) {
+                bool landsAfter = false;
+                for (size_t k = j + 1; k < lines.size() && lines[k].kind != Line::Instruction; k++) {
+                    if (lines[k].kind == Line::Label && lines[k].label == l.operands[0]) landsAfter = true;
+                }
+                if (landsAfter) {
+                    l.mnemonic = invertJump(m);
+                    l.operands[0] = lines[j].operands[0];
+                    text[i] = format(l.mnemonic, l.operands);
+                    drop[j] = true;
+                    changed = true;
+                    continue;
                 }
             }
         }

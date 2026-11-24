@@ -10,12 +10,21 @@ const Reg kIntArgRegs[] = {Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg:
 const size_t kIntArgCount = 6;
 const size_t kFloatArgCount = 8;
 
+//what a call overwrites (system v): every general register but rbx, rbp, rsp, r12-r15, and every xmm
+const std::vector<Reg> kCallClobbers = {
+    Reg::RAX, Reg::RCX, Reg::RDX, Reg::RSI, Reg::RDI, Reg::R8, Reg::R9, Reg::R10, Reg::R11,
+    Reg::XMM0, Reg::XMM1, Reg::XMM2, Reg::XMM3, Reg::XMM4, Reg::XMM5, Reg::XMM6, Reg::XMM7,
+    Reg::XMM8, Reg::XMM9, Reg::XMM10, Reg::XMM11, Reg::XMM12, Reg::XMM13, Reg::XMM14, Reg::XMM15};
+
 Reg floatArgReg(size_t index) { return (Reg)((int)Reg::XMM0 + (int)index); }
 
 std::string imm(long long value) { return "$" + std::to_string(value); }
 
 //integer ops on bytes are done 32 bits wide, the low byte comes out the same
 Width aluWidth(Width width) { return width == Width::Byte ? Width::Long : width; }
+
+//the width a register is loaded with: bytes are loaded 32 bits wide
+Width loadWidth(Width width) { return width == Width::Quad ? Width::Quad : Width::Long; }
 
 bool isIntCompare(ir::BinaryOpKind op) {
     return ir::isCompare(op) && op != ir::BinaryOpKind::FCmpOEQ && op != ir::BinaryOpKind::FCmpUNE &&
@@ -77,11 +86,13 @@ const ir::Constant *asConstant(const ir::Value *value) {
     return static_cast<const ir::Constant *>(value);
 }
 
+std::string movFor(const sema::Type *type) { return isDoubleType(type) ? "movsd" : "movss"; }
+
 } // namespace
 
 FunctionEmitter::FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, TargetLayout &layout,
-                                 ConstantPool &pool, int id)
-    : fn(fn), am(am), layout(layout), pool(pool), id(id), ra(frame, body) {}
+                                 ConstantPool &pool, int id, int optLevel)
+    : fn(fn), am(am), layout(layout), pool(pool), id(id), global(optLevel >= 3), ra(frame, body) {}
 
 void FunctionEmitter::fail(const std::string &message) {
     if (errorText.empty()) errorText = "@" + fn.getName() + ": " + message;
@@ -93,17 +104,51 @@ std::string FunctionEmitter::label(const ir::BasicBlock *block) const {
 
 std::string FunctionEmitter::localLabel() { return ".Ltmp" + std::to_string(id) + "_" + std::to_string(localCount++); }
 
+void FunctionEmitter::op(const std::string &mnemonic, std::vector<MOperand> operands, std::vector<Reg> implicitUses,
+                         std::vector<Reg> implicitDefs) {
+    MInst inst;
+    inst.op = mnemonic;
+    inst.operands = std::move(operands);
+    inst.implicitUses = std::move(implicitUses);
+    inst.implicitDefs = std::move(implicitDefs);
+    body.push_back(inst);
+}
+
+void FunctionEmitter::placeLabel(const std::string &name) {
+    MInst inst;
+    inst.kind = MInst::Label;
+    inst.op = name;
+    body.push_back(inst);
+}
+
 bool FunctionEmitter::isRegisterValue(const ir::Value *value) const {
     if (value->getKind() == ir::ValueKind::Argument) return true;
     if (value->getKind() != ir::ValueKind::Instruction) return false;
     return !frame.isAlloca(value);
 }
 
+Reg FunctionEmitter::newVreg(bool isFloat) { return isFloat ? virtualFloat(floatVregs++) : virtualInt(intVregs++); }
+
+Reg FunctionEmitter::vregFor(const ir::Value *value) {
+    std::map<const ir::Value *, Reg>::iterator it = vregs.find(value);
+    if (it != vregs.end()) return it->second;
+    Reg reg = newVreg(isFloatType(value->getType()));
+    vregs[value] = reg;
+    return reg;
+}
+
+bool FunctionEmitter::held(const ir::Value *value, Reg &reg) {
+    if (!global) return ra.registerOf(value, reg);
+    if (!isRegisterValue(value)) return false;
+    reg = vregFor(value);
+    return true;
+}
+
 //  function structure
 
 bool FunctionEmitter::emit(AsmLines &out) {
     layoutFrame();
-    AsmLines entry;
+    MCode entry;
     storeIncomingArguments(entry);
 
     const std::vector<ir::BasicBlock *> &blocks = fn.getBlocks();
@@ -112,8 +157,28 @@ bool FunctionEmitter::emit(AsmLines &out) {
     }
     if (!errorText.empty()) return false;
 
-    //the frame is complete only now: homes were made on demand, then the save slots
-    for (Reg reg : ra.usedCalleeSaved()) frame.saveSlot(reg);
+    std::set<Reg> calleeSaved;
+    if (global) {
+        //-O3: the whole function, entry included, is coloured at once
+        MCode all = entry;
+        all.insert(all.end(), body.begin(), body.end());
+        std::map<std::string, unsigned> depths;
+        const passes::LoopInfo &loops = am.getLoops(fn);
+        for (ir::BasicBlock *block : blocks) depths[label(block)] = loops.depth(block);
+        std::string problem;
+        if (!colorMachineCode(all, frame, depths, stats, problem)) {
+            fail(problem);
+            return false;
+        }
+        entry.clear();
+        body.swap(all);
+        calleeSaved = stats.calleeSavedUsed;
+    } else {
+        calleeSaved = ra.usedCalleeSaved();
+    }
+
+    //the frame is complete only now: homes and spill slots were made on demand, then the save slots
+    for (Reg reg : calleeSaved) frame.saveSlot(reg);
     uint64_t size = frame.size();
     std::string name = symbolName(&fn);
 
@@ -122,16 +187,21 @@ bool FunctionEmitter::emit(AsmLines &out) {
     out.push_back("\t.p2align\t4");
     out.push_back("\t.type\t" + name + ",@function");
     out.push_back(name + ":");
+    if (global) {
+        out.push_back("\t# graph colouring: " + std::to_string(stats.virtuals) + " virtual registers, " +
+                      std::to_string(stats.coalesced) + " copies coalesced, " + std::to_string(stats.spilled) +
+                      " spilled, " + std::to_string(stats.rounds) + " rounds");
+    }
     out.push_back("\tpushq\t%rbp");
     out.push_back("\tmovq\t%rsp, %rbp");
     if (size != 0) out.push_back("\tsubq\t" + imm((long long)size) + ", %rsp");
-    for (Reg reg : ra.usedCalleeSaved()) {
+    for (Reg reg : calleeSaved) {
         out.push_back("\tmovq\t" + regName(reg) + ", " + Mem::frame(frame.saveSlot(reg)).str());
     }
-    out.insert(out.end(), entry.begin(), entry.end());
-    out.insert(out.end(), body.begin(), body.end());
+    printCode(entry, out);
+    printCode(body, out);
     out.push_back(".Lret" + std::to_string(id) + ":");
-    for (Reg reg : ra.usedCalleeSaved()) {
+    for (Reg reg : calleeSaved) {
         out.push_back("\tmovq\t" + Mem::frame(frame.saveSlot(reg)).str() + ", " + regName(reg));
     }
     out.push_back("\tleave");
@@ -151,34 +221,54 @@ void FunctionEmitter::layoutFrame() {
     }
 }
 
-//arguments arrive in registers (or above the return address) and are stored to their homes
-void FunctionEmitter::storeIncomingArguments(AsmLines &lines) {
+//arguments arrive in registers (or above the return address): -O0 to -O2 store them to their homes,
+//-O3 copies them into their virtual registers
+void FunctionEmitter::storeIncomingArguments(MCode &code) {
     size_t    intUsed = 0;
     size_t    floatUsed = 0;
     long long stackOffset = 16;
+    MCode saved;
+    saved.swap(body);
     for (const std::unique_ptr<ir::Argument> &arg : fn.args) {
         const sema::Type *type = arg->getType();
         if (isFloatType(type)) {
             if (floatUsed < kFloatArgCount) {
-                std::string home = Mem::frame(frame.home(arg.get())).str();
-                lines.push_back(std::string("\t") + (isDoubleType(type) ? "movsd" : "movss") + "\t" +
-                                regName(floatArgReg(floatUsed++)) + ", " + home);
+                Reg from = floatArgReg(floatUsed++);
+                if (global) {
+                    op("movaps", { use(from), def(vregFor(arg.get())) });
+                } else {
+                    op(movFor(type), { use(from), memOp(Mem::frame(frame.home(arg.get()))) });
+                }
             } else {
-                frame.setHome(arg.get(), stackOffset);
+                if (global) {
+                    op(movFor(type), { memOp(Mem::frame(stackOffset)), def(vregFor(arg.get())) });
+                } else {
+                    frame.setHome(arg.get(), stackOffset);
+                }
                 stackOffset += 8;
             }
         } else if (isIntegerLike(type)) {
             if (intUsed < kIntArgCount) {
-                lines.push_back("\tmovq\t" + regName(kIntArgRegs[intUsed++]) + ", " +
-                                Mem::frame(frame.home(arg.get())).str());
+                Reg from = kIntArgRegs[intUsed++];
+                if (global) {
+                    op("movq", { use(from), def(vregFor(arg.get())) });
+                } else {
+                    op("movq", { use(from), memOp(Mem::frame(frame.home(arg.get()))) });
+                }
             } else {
-                frame.setHome(arg.get(), stackOffset);
+                if (global) {
+                    op("movq", { memOp(Mem::frame(stackOffset)), def(vregFor(arg.get())) });
+                } else {
+                    frame.setHome(arg.get(), stackOffset);
+                }
                 stackOffset += 8;
             }
         } else {
             fail("argument %" + arg->getName() + " has an aggregate type, which is not supported");
         }
     }
+    code.swap(body);
+    body.swap(saved);
 }
 
 bool FunctionEmitter::isFusedCompare(const ir::BasicBlock *block, size_t index) const {
@@ -200,7 +290,7 @@ void FunctionEmitter::emitBlock(ir::BasicBlock *block, ir::BasicBlock *next) {
     const passes::ValueSet &liveOut = am.getLiveness(fn).liveOut(block);
     NextUse info(*block, liveOut);
 
-    body.push_back(label(block) + ":");
+    placeLabel(label(block));
     for (size_t i = 0; i < block->instructions.size(); i++) {
         ir::Instruction *inst = block->instructions[i].get();
         if (inst->isTerminator()) {
@@ -247,32 +337,32 @@ void FunctionEmitter::emitInstruction(ir::Instruction *inst, const InstNextUse &
 
 //any integer or pointer value into dst: constants, addresses of globals and allocas, cached or home values
 void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
-    const std::string d = regName(dst, width == Width::Quad ? Width::Quad : Width::Long);
+    const Width w = loadWidth(width);
     switch (value->getKind()) {
     case ir::ValueKind::Constant: {
         const ir::Constant *c = asConstant(value);
         if (c->constKind == ir::ConstantKind::Address) return loadInt(c->target, dst, width);
         long long v = c->constKind == ir::ConstantKind::Int ? c->intValue : 0;
         if (v == 0) {
-            line("xorl\t" + regName(dst, Width::Long) + ", " + regName(dst, Width::Long));
+            op("xorl", { def(dst, Width::Long), def(dst, Width::Long) });  //only writes: the old value is not read
         } else if (width != Width::Quad) {
-            line("movl\t" + imm(v) + ", " + d);
+            op("movl", { immOp(v), def(dst, Width::Long) });
         } else if (fitsInt32(v)) {
-            line("movq\t" + imm(v) + ", " + d);
+            op("movq", { immOp(v), def(dst) });
         } else {
-            line("movabsq\t" + imm(v) + ", " + d);
+            op("movabsq", { immOp(v), def(dst) });
         }
         return;
     }
     case ir::ValueKind::GlobalVariable:
-        line("leaq\t" + Mem::global(symbolName(value)).str() + ", " + regName(dst));
+        op("leaq", { memOp(Mem::global(symbolName(value))), def(dst) });
         return;
     case ir::ValueKind::Function: {
         const ir::Function *callee = static_cast<const ir::Function *>(value);
         if (callee->isDefinition()) {
-            line("leaq\t" + Mem::global(symbolName(value)).str() + ", " + regName(dst));
+            op("leaq", { memOp(Mem::global(symbolName(value))), def(dst) });
         } else {
-            line("movq\t" + symbolName(value) + "@GOTPCREL(%rip), " + regName(dst));
+            op("movq", { textOp(symbolName(value) + "@GOTPCREL(%rip)"), def(dst) });
         }
         return;
     }
@@ -280,80 +370,79 @@ void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
         break;
     }
     if (frame.isAlloca(value)) {
-        line("leaq\t" + Mem::frame(frame.allocaOffset(value)).str() + ", " + regName(dst));
+        op("leaq", { memOp(Mem::frame(frame.allocaOffset(value))), def(dst) });
         return;
     }
-    Reg held;
-    if (ra.registerOf(value, held)) {
-        if (held == dst) return;
-        line(std::string(width == Width::Quad ? "movq\t" : "movl\t") + regName(held, width == Width::Quad ? Width::Quad : Width::Long) +
-             ", " + d);
+    Reg reg;
+    if (held(value, reg)) {
+        if (reg == dst) return;
+        op(w == Width::Quad ? "movq" : "movl", { use(reg, w), def(dst, w) });
         return;
     }
-    std::string home = Mem::frame(frame.home(value)).str();
+    MOperand home = memOp(Mem::frame(frame.home(value)));
     switch (width) {
-    case Width::Byte: line("movzbl\t" + home + ", " + d); break;
-    case Width::Long: line("movl\t" + home + ", " + d); break;
-    case Width::Quad: line("movq\t" + home + ", " + d); break;
+    case Width::Byte: op("movzbl", { home, def(dst, Width::Long) }); break;
+    case Width::Long: op("movl", { home, def(dst, Width::Long) }); break;
+    case Width::Quad: op("movq", { home, def(dst) }); break;
     }
 }
 
 //an operand an alu instruction can read directly: $imm, a register or a home slot
-std::string FunctionEmitter::intSource(const ir::Value *value, Width width, Reg scratch) {
+MOperand FunctionEmitter::intSource(const ir::Value *value, Width width, Reg scratch) {
     const ir::Constant *c = asConstant(value);
-    if (c && c->constKind == ir::ConstantKind::Int && fitsInt32(c->intValue)) return imm(c->intValue);
-    if (c && c->constKind == ir::ConstantKind::Null) return "$0";
+    if (c && c->constKind == ir::ConstantKind::Int && fitsInt32(c->intValue)) return immOp(c->intValue);
+    if (c && c->constKind == ir::ConstantKind::Null) return immOp(0);
     if (isRegisterValue(value)) {
-        Reg held;
-        if (ra.registerOf(value, held)) return regName(held, width);
-        return Mem::frame(frame.home(value)).str();
+        Reg reg;
+        if (held(value, reg)) return use(reg, width);
+        return memOp(Mem::frame(frame.home(value)));
     }
     loadInt(value, scratch, width);
-    return regName(scratch, width);
+    return use(scratch, width);
 }
 
 void FunctionEmitter::loadFloat(const ir::Value *value, Reg dst) {
-    const char *mov = isDoubleType(value->getType()) ? "movsd\t" : "movss\t";
+    const std::string mov = movFor(value->getType());
     const ir::Constant *c = asConstant(value);
     if (c) {
         if (c->constKind != ir::ConstantKind::Float) return fail("unexpected floating constant");
-        line(mov + Mem::global(pool.label(c->floatValue, isDoubleType(value->getType()))).str() + ", " +
-             regName(dst));
+        op(mov, { memOp(Mem::global(pool.label(c->floatValue, isDoubleType(value->getType())))), def(dst) });
         return;
     }
-    Reg held;
-    if (ra.registerOf(value, held)) {
-        if (held != dst) line("movaps\t" + regName(held) + ", " + regName(dst));
+    Reg reg;
+    if (held(value, reg)) {
+        if (reg != dst) op("movaps", { use(reg), def(dst) });
         return;
     }
-    line(mov + Mem::frame(frame.home(value)).str() + ", " + regName(dst));
+    op(mov, { memOp(Mem::frame(frame.home(value))), def(dst) });
 }
 
-std::string FunctionEmitter::floatSource(const ir::Value *value, Reg scratch) {
+MOperand FunctionEmitter::floatSource(const ir::Value *value, Reg scratch) {
     const ir::Constant *c = asConstant(value);
     if (c && c->constKind == ir::ConstantKind::Float) {
-        return Mem::global(pool.label(c->floatValue, isDoubleType(value->getType()))).str();
+        return memOp(Mem::global(pool.label(c->floatValue, isDoubleType(value->getType()))));
     }
     if (isRegisterValue(value)) {
-        Reg held;
-        if (ra.registerOf(value, held)) return regName(held);
-        return Mem::frame(frame.home(value)).str();
+        Reg reg;
+        if (held(value, reg)) return use(reg);
+        return memOp(Mem::frame(frame.home(value)));
     }
     loadFloat(value, scratch);
-    return regName(scratch);
+    return use(scratch);
 }
 
 //the memory a pointer points at: allocas and globals directly, anything else through a register
 Mem FunctionEmitter::addressOf(const ir::Value *pointer, Reg scratch) {
     if (frame.isAlloca(pointer)) return Mem::frame(frame.allocaOffset(pointer));
     if (pointer->getKind() == ir::ValueKind::GlobalVariable) return Mem::global(symbolName(pointer));
-    Reg held;
-    if (ra.registerOf(pointer, held)) return Mem::at(held);
+    Reg reg;
+    if (held(pointer, reg)) return Mem::at(reg);
     loadInt(pointer, scratch, Width::Quad);
     return Mem::at(scratch);
 }
 
 void FunctionEmitter::finishOperands(const InstNextUse &info) {
+    if (global) return;  //virtual registers are never released by hand
     for (const std::pair<const ir::Value *const, long> &entry : info.operands) {
         if (entry.second == kDead) {
             ra.release(entry.first);
@@ -367,9 +456,14 @@ void FunctionEmitter::finishOperands(const InstNextUse &info) {
 void FunctionEmitter::defineResult(const ir::Instruction *inst, const InstNextUse &info, Reg src) {
     finishOperands(info);
     if (info.result == kDead) return;  //never read: no register, no home
-    nextUse[inst] = info.result;
-    Reg reg = ra.allocate(inst, isXmm(src), nextUse);
-    line(std::string(isXmm(src) ? "movaps\t" : "movq\t") + regName(src) + ", " + regName(reg));
+    Reg reg;
+    if (global) {
+        reg = vregFor(inst);
+    } else {
+        nextUse[inst] = info.result;
+        reg = ra.allocate(inst, isXmm(src), nextUse);
+    }
+    op(isXmm(src) ? "movaps" : "movq", { use(src), def(reg) });
 }
 
 //  memory
@@ -378,7 +472,7 @@ void FunctionEmitter::emitLoad(ir::LoadInst *inst, const InstNextUse &info) {
     const sema::Type *type = inst->getAccessType();
     Mem mem = addressOf(inst->address, Reg::R11);
     if (isFloatType(type)) {
-        line(std::string(isDoubleType(type) ? "movsd\t" : "movss\t") + mem.str() + ", %xmm0");
+        op(movFor(type), { memOp(mem), def(Reg::XMM0) });
         return defineResult(inst, info, Reg::XMM0);
     }
     if (!isIntegerLike(type)) {
@@ -388,9 +482,9 @@ void FunctionEmitter::emitLoad(ir::LoadInst *inst, const InstNextUse &info) {
         return finishOperands(info);
     }
     switch (widthOf(type)) {
-    case Width::Byte: line("movzbl\t" + mem.str() + ", %eax"); break;
-    case Width::Long: line("movl\t" + mem.str() + ", %eax"); break;
-    case Width::Quad: line("movq\t" + mem.str() + ", %rax"); break;
+    case Width::Byte: op("movzbl", { memOp(mem), def(Reg::RAX, Width::Long) }); break;
+    case Width::Long: op("movl", { memOp(mem), def(Reg::RAX, Width::Long) }); break;
+    case Width::Quad: op("movq", { memOp(mem), def(Reg::RAX) }); break;
     }
     defineResult(inst, info, Reg::RAX);
 }
@@ -402,19 +496,19 @@ void FunctionEmitter::emitStore(ir::StoreInst *inst, const InstNextUse &info) {
 
     if (isFloatType(type)) {
         loadFloat(inst->value, Reg::XMM0);
-        line(std::string(isDoubleType(type) ? "movsd\t" : "movss\t") + "%xmm0, " + mem.str());
+        op(movFor(type), { use(Reg::XMM0), memOp(mem) });
     } else if (isIntegerLike(type)) {
         Width w = widthOf(type);
-        Reg   held;
-        if (ra.registerOf(inst->value, held)) {
-            line(std::string("mov") + suffix(w) + "\t" + regName(held, w) + ", " + mem.str());
+        Reg   reg;
+        if (held(inst->value, reg)) {
+            op(std::string("mov") + suffix(w), { use(reg, w), memOp(mem) });
         } else if (c && c->constKind == ir::ConstantKind::Int && fitsInt32(c->intValue)) {
-            line(std::string("mov") + suffix(w) + "\t" + imm(c->intValue) + ", " + mem.str());
+            op(std::string("mov") + suffix(w), { immOp(c->intValue), memOp(mem) });
         } else if (c && c->constKind == ir::ConstantKind::Null) {
-            line("movq\t$0, " + mem.str());
+            op("movq", { immOp(0), memOp(mem) });
         } else {
             loadInt(inst->value, Reg::RAX, w);
-            line(std::string("mov") + suffix(w) + "\t" + regName(Reg::RAX, w) + ", " + mem.str());
+            op(std::string("mov") + suffix(w), { use(Reg::RAX, w), memOp(mem) });
         }
     } else if (c) {
         storeConstant(c, type, mem);
@@ -432,35 +526,35 @@ void FunctionEmitter::storeConstant(const ir::Constant *constant, const sema::Ty
     switch (constant->constKind) {
     case ir::ConstantKind::Int:
         if (fitsInt32(constant->intValue)) {
-            line(std::string("mov") + suffix(widthOf(type)) + "\t" + imm(constant->intValue) + ", " + mem.str());
+            op(std::string("mov") + suffix(widthOf(type)), { immOp(constant->intValue), memOp(mem) });
         } else {
-            line("movabsq\t" + imm(constant->intValue) + ", %rax");
-            line("movq\t%rax, " + mem.str());
+            op("movabsq", { immOp(constant->intValue), def(Reg::RAX) });
+            op("movq", { use(Reg::RAX), memOp(mem) });
         }
         return;
     case ir::ConstantKind::Float: {
         long long bits = (long long)floatBits(constant->floatValue, isDoubleType(type));
         if (isDoubleType(type)) {
-            line("movabsq\t" + imm(bits) + ", %rax");
-            line("movq\t%rax, " + mem.str());
+            op("movabsq", { immOp(bits), def(Reg::RAX) });
+            op("movq", { use(Reg::RAX), memOp(mem) });
         } else {
-            line("movl\t" + imm((long long)(int32_t)(uint32_t)bits) + ", " + mem.str());
+            op("movl", { immOp((long long)(int32_t)(uint32_t)bits), memOp(mem) });
         }
         return;
     }
     case ir::ConstantKind::Null:
-        line("movq\t$0, " + mem.str());
+        op("movq", { immOp(0), memOp(mem) });
         return;
     case ir::ConstantKind::Address:
         loadInt(constant->target, Reg::RAX, Width::Quad);
-        line("movq\t%rax, " + mem.str());
+        op("movq", { use(Reg::RAX), memOp(mem) });
         return;
     case ir::ConstantKind::ZeroInit: {
         uint64_t size = layout.sizeOf(type);
         uint64_t done = 0;
-        for (; done + 8 <= size; done += 8) line("movq\t$0, " + mem.plus(done).str());
-        for (; done + 4 <= size; done += 4) line("movl\t$0, " + mem.plus(done).str());
-        for (; done < size; done++) line("movb\t$0, " + mem.plus(done).str());
+        for (; done + 8 <= size; done += 8) op("movq", { immOp(0), memOp(mem.plus(done)) });
+        for (; done + 4 <= size; done += 4) op("movl", { immOp(0), memOp(mem.plus(done)) });
+        for (; done < size; done++) op("movb", { immOp(0), memOp(mem.plus(done)) });
         return;
     }
     case ir::ConstantKind::String: {
@@ -469,10 +563,10 @@ void FunctionEmitter::storeConstant(const ir::Constant *constant, const sema::Ty
         for (; done + 4 <= bytes.size(); done += 4) {
             uint32_t word = 0;
             for (int k = 3; k >= 0; k--) word = (word << 8) | (unsigned char)bytes[done + k];
-            line("movl\t" + imm((long long)(int32_t)word) + ", " + mem.plus(done).str());
+            op("movl", { immOp((long long)(int32_t)word), memOp(mem.plus(done)) });
         }
         for (; done < bytes.size(); done++) {
-            line("movb\t" + imm((long long)(signed char)bytes[done]) + ", " + mem.plus(done).str());
+            op("movb", { immOp((long long)(signed char)bytes[done]), memOp(mem.plus(done)) });
         }
         return;
     }
@@ -495,16 +589,16 @@ void FunctionEmitter::storeConstant(const ir::Constant *constant, const sema::Ty
 void FunctionEmitter::copyBytes(const Mem &from, const Mem &to, uint64_t size) {
     uint64_t done = 0;
     for (; done + 8 <= size; done += 8) {
-        line("movq\t" + from.plus(done).str() + ", %rax");
-        line("movq\t%rax, " + to.plus(done).str());
+        op("movq", { memOp(from.plus(done)), def(Reg::RAX) });
+        op("movq", { use(Reg::RAX), memOp(to.plus(done)) });
     }
     for (; done + 4 <= size; done += 4) {
-        line("movl\t" + from.plus(done).str() + ", %eax");
-        line("movl\t%eax, " + to.plus(done).str());
+        op("movl", { memOp(from.plus(done)), def(Reg::RAX, Width::Long) });
+        op("movl", { use(Reg::RAX, Width::Long), memOp(to.plus(done)) });
     }
     for (; done < size; done++) {
-        line("movb\t" + from.plus(done).str() + ", %al");
-        line("movb\t%al, " + to.plus(done).str());
+        op("movb", { memOp(from.plus(done)), def(Reg::RAX, Width::Byte) });
+        op("movb", { use(Reg::RAX, Width::Byte), memOp(to.plus(done)) });
     }
 }
 
@@ -538,14 +632,14 @@ void FunctionEmitter::emitGEP(ir::GEPInst *inst, const InstNextUse &info) {
         } else {
             Width w = widthOf(index->getType());
             loadInt(index, Reg::RCX, w);
-            if (w == Width::Long) line("movslq\t%ecx, %rcx");
-            if (w == Width::Byte) line("movsbq\t%cl, %rcx");
-            if (step != 1) line("imulq\t" + imm(step) + ", %rcx");
-            line("addq\t%rcx, %rax");
+            if (w == Width::Long) op("movslq", { use(Reg::RCX, Width::Long), def(Reg::RCX) });
+            if (w == Width::Byte) op("movsbq", { use(Reg::RCX, Width::Byte), def(Reg::RCX) });
+            if (step != 1) op("imulq", { immOp(step), useDef(Reg::RCX) });
+            op("addq", { use(Reg::RCX), useDef(Reg::RAX) });
         }
         current = next;
     }
-    if (disp != 0) line("leaq\t" + Mem::at(Reg::RAX).plus(disp).str() + ", %rax");
+    if (disp != 0) op("leaq", { memOp(Mem::at(Reg::RAX).plus(disp)), def(Reg::RAX) });
     defineResult(inst, info, Reg::RAX);
 }
 
@@ -554,8 +648,8 @@ void FunctionEmitter::emitGEP(ir::GEPInst *inst, const InstNextUse &info) {
 void FunctionEmitter::emitIntCompare(ir::BinaryInst *inst) {
     Width w = widthOf(inst->operandType);
     loadInt(inst->lhs, Reg::RAX, w);
-    std::string rhs = intSource(inst->rhs, w, Reg::RCX);
-    line(std::string("cmp") + suffix(w) + "\t" + rhs + ", " + regName(Reg::RAX, w));
+    MOperand rhs = intSource(inst->rhs, w, Reg::RCX);
+    op(std::string("cmp") + suffix(w), { rhs, use(Reg::RAX, w) });
 }
 
 void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) {
@@ -565,8 +659,8 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
 
     if (isIntCompare(inst->op)) {
         emitIntCompare(inst);
-        line(std::string("set") + conditionCode(inst->op) + "\t%al");
-        line("movzbl\t%al, %eax");
+        op(std::string("set") + conditionCode(inst->op), { def(Reg::RAX, Width::Byte) });
+        op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
         return defineResult(inst, info, Reg::RAX);
     }
 
@@ -584,8 +678,8 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
                            : inst->op == ir::BinaryOpKind::Or  ? "or"
                                                                : "xor";
         loadInt(inst->lhs, Reg::RAX, aw);
-        std::string rhs = intSource(inst->rhs, aw, Reg::RCX);
-        line(std::string(name) + suffix(aw) + "\t" + rhs + ", " + regName(Reg::RAX, aw));
+        MOperand rhs = intSource(inst->rhs, aw, Reg::RCX);
+        op(std::string(name) + suffix(aw), { rhs, useDef(Reg::RAX, aw) });
         break;
     }
     case ir::BinaryOpKind::SDiv:
@@ -593,20 +687,23 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         loadInt(inst->lhs, Reg::RAX, aw);
         loadInt(inst->rhs, Reg::RCX, aw);
         if (w == Width::Byte) {
-            line("movsbl\t%al, %eax");
-            line("movsbl\t%cl, %ecx");
+            op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+            op("movsbl", { use(Reg::RCX, Width::Byte), def(Reg::RCX, Width::Long) });
         }
-        line(aw == Width::Quad ? "cqto" : "cltd");
-        line(std::string("idiv") + suffix(aw) + "\t" + regName(Reg::RCX, aw));
+        //cltd/cqto sign-extends rax into rdx; idiv divides rdx:rax, quotient to rax, remainder to rdx
+        op(aw == Width::Quad ? "cqto" : "cltd", {}, { Reg::RAX }, { Reg::RDX });
+        op(std::string("idiv") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
         if (inst->op == ir::BinaryOpKind::SRem) result = Reg::RDX;
         break;
     case ir::BinaryOpKind::Shl:
     case ir::BinaryOpKind::AShr:
         loadInt(inst->lhs, Reg::RAX, aw);
         loadInt(inst->rhs, Reg::RCX, aw);
-        if (w == Width::Byte && inst->op == ir::BinaryOpKind::AShr) line("movsbl\t%al, %eax");
-        line(std::string(inst->op == ir::BinaryOpKind::Shl ? "shl" : "sar") + suffix(aw) + "\t%cl, " +
-             regName(Reg::RAX, aw));
+        if (w == Width::Byte && inst->op == ir::BinaryOpKind::AShr) {
+            op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        }
+        op(std::string(inst->op == ir::BinaryOpKind::Shl ? "shl" : "sar") + suffix(aw),
+           { use(Reg::RCX, Width::Byte), useDef(Reg::RAX, aw) });
         break;
     default:
         return fail("unexpected integer operation");
@@ -624,36 +721,37 @@ void FunctionEmitter::emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &i
                            : inst->op == ir::BinaryOpKind::FMul ? "mul"
                                                                 : "div";
         loadFloat(inst->lhs, Reg::XMM0);
-        std::string rhs = floatSource(inst->rhs, Reg::XMM1);
-        line(name + sfx + "\t" + rhs + ", %xmm0");
+        MOperand rhs = floatSource(inst->rhs, Reg::XMM1);
+        op(name + sfx, { rhs, useDef(Reg::XMM0) });
         return defineResult(inst, info, Reg::XMM0);
     }
 
     //ucomis a, b sets the flags as an unsigned compare of b with a, unordered sets ZF, PF and CF
-    std::string ucomi = "ucomi" + sfx + "\t";
+    std::string ucomi = "ucomi" + sfx;
     loadFloat(inst->lhs, Reg::XMM0);
     loadFloat(inst->rhs, Reg::XMM1);
+    MOperand al = def(Reg::RAX, Width::Byte);
     switch (inst->op) {
-    case ir::BinaryOpKind::FCmpOGT: line(ucomi + "%xmm1, %xmm0"); line("seta\t%al"); break;
-    case ir::BinaryOpKind::FCmpOGE: line(ucomi + "%xmm1, %xmm0"); line("setae\t%al"); break;
-    case ir::BinaryOpKind::FCmpOLT: line(ucomi + "%xmm0, %xmm1"); line("seta\t%al"); break;
-    case ir::BinaryOpKind::FCmpOLE: line(ucomi + "%xmm0, %xmm1"); line("setae\t%al"); break;
+    case ir::BinaryOpKind::FCmpOGT: op(ucomi, { use(Reg::XMM1), use(Reg::XMM0) }); op("seta", { al }); break;
+    case ir::BinaryOpKind::FCmpOGE: op(ucomi, { use(Reg::XMM1), use(Reg::XMM0) }); op("setae", { al }); break;
+    case ir::BinaryOpKind::FCmpOLT: op(ucomi, { use(Reg::XMM0), use(Reg::XMM1) }); op("seta", { al }); break;
+    case ir::BinaryOpKind::FCmpOLE: op(ucomi, { use(Reg::XMM0), use(Reg::XMM1) }); op("setae", { al }); break;
     case ir::BinaryOpKind::FCmpOEQ:
-        line(ucomi + "%xmm1, %xmm0");
-        line("sete\t%al");
-        line("setnp\t%cl");
-        line("andb\t%cl, %al");
+        op(ucomi, { use(Reg::XMM1), use(Reg::XMM0) });
+        op("sete", { al });
+        op("setnp", { def(Reg::RCX, Width::Byte) });
+        op("andb", { use(Reg::RCX, Width::Byte), useDef(Reg::RAX, Width::Byte) });
         break;
     case ir::BinaryOpKind::FCmpUNE:
-        line(ucomi + "%xmm1, %xmm0");
-        line("setne\t%al");
-        line("setp\t%cl");
-        line("orb\t%cl, %al");
+        op(ucomi, { use(Reg::XMM1), use(Reg::XMM0) });
+        op("setne", { al });
+        op("setp", { def(Reg::RCX, Width::Byte) });
+        op("orb", { use(Reg::RCX, Width::Byte), useDef(Reg::RAX, Width::Byte) });
         break;
     default:
         return fail("unexpected floating compare");
     }
-    line("movzbl\t%al, %eax");
+    op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
     defineResult(inst, info, Reg::RAX);
 }
 
@@ -661,13 +759,13 @@ void FunctionEmitter::emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &i
 void FunctionEmitter::emitUnary(ir::UnaryInst *inst, const InstNextUse &info) {
     loadFloat(inst->operand, Reg::XMM0);
     if (isDoubleType(inst->getType())) {
-        line("movq\t%xmm0, %rax");
-        line("btcq\t$63, %rax");
-        line("movq\t%rax, %xmm0");
+        op("movq", { use(Reg::XMM0), def(Reg::RAX) });
+        op("btcq", { immOp(63), useDef(Reg::RAX) });
+        op("movq", { use(Reg::RAX), def(Reg::XMM0) });
     } else {
-        line("movd\t%xmm0, %eax");
-        line("xorl\t$0x80000000, %eax");
-        line("movd\t%eax, %xmm0");
+        op("movd", { use(Reg::XMM0), def(Reg::RAX, Width::Long) });
+        op("xorl", { textOp("$0x80000000"), useDef(Reg::RAX, Width::Long) });
+        op("movd", { use(Reg::RAX, Width::Long), def(Reg::XMM0) });
     }
     defineResult(inst, info, Reg::XMM0);
 }
@@ -683,25 +781,33 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         Width wt = widthOf(to);
         loadInt(inst->operand, Reg::RAX, wf);
         if (fromBool) {
-            line("andl\t$1, %eax");
-            line(wt == Width::Quad ? "negq\t%rax" : "negl\t%eax");
+            op("andl", { immOp(1), useDef(Reg::RAX, Width::Long) });
+            if (wt == Width::Quad) {
+                op("negq", { useDef(Reg::RAX) });
+            } else {
+                op("negl", { useDef(Reg::RAX, Width::Long) });
+            }
         } else if (wf == Width::Byte) {
-            line(wt == Width::Quad ? "movsbq\t%al, %rax" : "movsbl\t%al, %eax");
+            if (wt == Width::Quad) {
+                op("movsbq", { use(Reg::RAX, Width::Byte), def(Reg::RAX) });
+            } else {
+                op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+            }
         } else if (wf == Width::Long && wt == Width::Quad) {
-            line("movslq\t%eax, %rax");
+            op("movslq", { use(Reg::RAX, Width::Long), def(Reg::RAX) });
         }
         break;
     }
     case ir::CastOpKind::ZExt: {
         Width wf = widthOf(from);
         loadInt(inst->operand, Reg::RAX, wf);
-        if (wf == Width::Byte) line("movzbl\t%al, %eax");  //clears the upper half too
-        if (wf == Width::Long) line("movl\t%eax, %eax");
+        if (wf == Width::Byte) op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });  //clears the upper half too
+        if (wf == Width::Long) op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
         break;
     }
     case ir::CastOpKind::Trunc:
         loadInt(inst->operand, Reg::RAX, widthOf(from));
-        if (ir::integerBits(to) == 1) line("andl\t$1, %eax");
+        if (ir::integerBits(to) == 1) op("andl", { immOp(1), useDef(Reg::RAX, Width::Long) });
         break;
     case ir::CastOpKind::SIToFP:
     case ir::CastOpKind::UIToFP: {
@@ -710,68 +816,69 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         loadInt(inst->operand, Reg::RAX, wf);
         Width convert = Width::Long;
         if (fromBool) {
-            line("andl\t$1, %eax");
+            op("andl", { immOp(1), useDef(Reg::RAX, Width::Long) });
         } else if (wf == Width::Byte) {
-            line(isSigned ? "movsbl\t%al, %eax" : "movzbl\t%al, %eax");
+            op(isSigned ? "movsbl" : "movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
         } else if (wf == Width::Long && !isSigned) {
-            line("movl\t%eax, %eax");  //an unsigned 32-bit value fits a signed 64-bit one
+            //an unsigned 32-bit value fits a signed 64-bit one
+            op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
             convert = Width::Quad;
         } else if (wf == Width::Quad) {
             convert = Width::Quad;  //unsigned 64-bit values above 2^63 are not handled
         }
-        line(std::string(isDoubleType(to) ? "cvtsi2sd" : "cvtsi2ss") + suffix(convert) + "\t" +
-             regName(Reg::RAX, convert) + ", %xmm0");
+        op(std::string(isDoubleType(to) ? "cvtsi2sd" : "cvtsi2ss") + suffix(convert),
+           { use(Reg::RAX, convert), def(Reg::XMM0) });
         return defineResult(inst, info, Reg::XMM0);
     }
     case ir::CastOpKind::FPToSI: {
         loadFloat(inst->operand, Reg::XMM0);
         Width wt = widthOf(to) == Width::Quad ? Width::Quad : Width::Long;
-        line(std::string(isDoubleType(from) ? "cvttsd2si" : "cvttss2si") + suffix(wt) + "\t%xmm0, " +
-             regName(Reg::RAX, wt));
+        op(std::string(isDoubleType(from) ? "cvttsd2si" : "cvttss2si") + suffix(wt), { use(Reg::XMM0), def(Reg::RAX, wt) });
         break;
     }
     case ir::CastOpKind::FPExt:
         loadFloat(inst->operand, Reg::XMM0);
-        line("cvtss2sd\t%xmm0, %xmm0");
+        op("cvtss2sd", { use(Reg::XMM0), def(Reg::XMM0) });
         return defineResult(inst, info, Reg::XMM0);
     case ir::CastOpKind::FPTrunc:
         loadFloat(inst->operand, Reg::XMM0);
-        line("cvtsd2ss\t%xmm0, %xmm0");
+        op("cvtsd2ss", { use(Reg::XMM0), def(Reg::XMM0) });
         return defineResult(inst, info, Reg::XMM0);
     case ir::CastOpKind::PtrToInt:
         loadInt(inst->operand, Reg::RAX, widthOf(to));
         break;
     case ir::CastOpKind::IntToPtr:
         loadInt(inst->operand, Reg::RAX, widthOf(from));
-        if (widthOf(from) == Width::Long) line("movl\t%eax, %eax");
-        if (widthOf(from) == Width::Byte) line("movzbl\t%al, %eax");
+        if (widthOf(from) == Width::Long) op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
+        if (widthOf(from) == Width::Byte) op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
         break;
     }
     defineResult(inst, info, Reg::RAX);
 }
 
 void FunctionEmitter::emitSelect(ir::SelectInst *inst, const InstNextUse &info) {
-    std::string cond = intSource(inst->condition, Width::Byte, Reg::RDX);
+    MOperand cond = intSource(inst->condition, Width::Byte, Reg::RDX);
+    bool constant = cond.kind == MOperand::Immediate;
     if (isFloatType(inst->getType())) {
         std::string skip = localLabel();
         loadFloat(inst->ifFalse, Reg::XMM0);
-        if (cond[0] == '$') {
-            if (cond != "$0") loadFloat(inst->ifTrue, Reg::XMM0);
+        if (constant) {
+            if (cond.value != 0) loadFloat(inst->ifTrue, Reg::XMM0);
         } else {
-            line("testb\t$1, " + cond);
-            line("je\t" + skip);
+            op("testb", { immOp(1), cond });
+            op("je", { textOp(skip) });
             loadFloat(inst->ifTrue, Reg::XMM0);
-            body.push_back(skip + ":");
+            placeLabel(skip);
         }
         return defineResult(inst, info, Reg::XMM0);
     }
     loadInt(inst->ifFalse, Reg::RAX, Width::Quad);
     loadInt(inst->ifTrue, Reg::RCX, Width::Quad);
-    if (cond[0] == '$') {
-        if (cond != "$0") line("movq\t%rcx, %rax");
+    if (constant) {
+        if (cond.value != 0) op("movq", { use(Reg::RCX), def(Reg::RAX) });
     } else {
-        line("testb\t$1, " + cond);
-        line("cmovneq\t%rcx, %rax");
+        op("testb", { immOp(1), cond });
+        op("cmovneq", { use(Reg::RCX), useDef(Reg::RAX) });  //keeps rax when the condition is false
     }
     defineResult(inst, info, Reg::RAX);
 }
@@ -808,18 +915,20 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
 
     //stack arguments first: rax and xmm0 are free to use only before the argument registers are filled
     long long stackBytes = (long long)alignTo(onStack.size() * 8, 16);
-    if (stackBytes != 0) line("subq\t" + imm(stackBytes) + ", %rsp");
+    if (stackBytes != 0) op("subq", { immOp(stackBytes), useDef(Reg::RSP) });
     for (size_t i = 0; i < onStack.size(); i++) {
-        std::string slot = Mem::at(Reg::RSP).plus((long long)i * 8).str();
+        Mem slot = Mem::at(Reg::RSP).plus((long long)i * 8);
         if (isFloatType(onStack[i]->getType())) {
             loadFloat(onStack[i], Reg::XMM0);
-            line(std::string(isDoubleType(onStack[i]->getType()) ? "movsd" : "movss") + "\t%xmm0, " + slot);
+            op(movFor(onStack[i]->getType()), { use(Reg::XMM0), memOp(slot) });
         } else {
             loadInt(onStack[i], Reg::RAX, Width::Quad);
-            line("movq\t%rax, " + slot);
+            op("movq", { use(Reg::RAX), memOp(slot) });
         }
     }
+    std::vector<Reg> argumentRegs;
     for (const std::pair<const ir::Value *, Reg> &entry : inRegs) {
+        argumentRegs.push_back(entry.second);
         if (isXmm(entry.second)) {
             loadFloat(entry.first, entry.second);
             continue;
@@ -828,26 +937,37 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         loadInt(entry.first, entry.second, w);
         //chars are passed sign-extended and bools zero-extended to 32 bits, as clang does
         if (w == Width::Byte) {
-            const char *ext = ir::integerBits(entry.first->getType()) == 1 ? "movzbl\t" : "movsbl\t";
-            line(ext + regName(entry.second, Width::Byte) + ", " + regName(entry.second, Width::Long));
+            op(ir::integerBits(entry.first->getType()) == 1 ? "movzbl" : "movsbl",
+               { use(entry.second, Width::Byte), def(entry.second, Width::Long) });
         }
     }
 
     bool direct = inst->callee->getKind() == ir::ValueKind::Function;
     if (!direct) loadInt(inst->callee, Reg::R11, Width::Quad);
-    if (type->isVariadic) line("movl\t" + imm((long long)floatUsed) + ", %eax");
+    if (type->isVariadic) {
+        op("movl", { immOp((long long)floatUsed), def(Reg::RAX, Width::Long) });
+        argumentRegs.push_back(Reg::RAX);
+    }
 
     //what the call clobbers: values still needed leave the caller-saved registers
     finishOperands(info);
-    ra.spillCallerSaved(nextUse);
+    if (!global) ra.spillCallerSaved(nextUse);
 
+    MInst call;
+    call.op = "callq";
+    call.isCall = true;
+    call.implicitUses = argumentRegs;
+    call.implicitDefs = kCallClobbers;
     if (direct) {
         const ir::Function *callee = static_cast<const ir::Function *>(inst->callee);
-        line("callq\t" + symbolName(callee) + (callee->isDefinition() ? "" : "@PLT"));
+        call.operands.push_back(textOp(symbolName(callee) + (callee->isDefinition() ? "" : "@PLT")));
     } else {
-        line("callq\t*%r11");
+        MOperand target = use(Reg::R11);
+        target.indirect = true;
+        call.operands.push_back(target);
     }
-    if (stackBytes != 0) line("addq\t" + imm(stackBytes) + ", %rsp");
+    body.push_back(call);
+    if (stackBytes != 0) op("addq", { immOp(stackBytes), useDef(Reg::RSP) });
 
     if (inst->getType()->is(sema::TypeKind::Void)) return;
     InstNextUse resultOnly;
@@ -858,17 +978,18 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
 //  phis
 
 void FunctionEmitter::emitPhi(ir::PhiInst *phi, const InstNextUse &info) {
+    if (global) return;  //defined by the copies on the edges into this block
     const sema::Type *type = phi->getType();
-    Mem slot = Mem::frame(frame.phiSlot(phi));
+    MOperand slot = memOp(Mem::frame(frame.phiSlot(phi)));
     if (isFloatType(type)) {
-        line(std::string(isDoubleType(type) ? "movsd\t" : "movss\t") + slot.str() + ", %xmm0");
+        op(movFor(type), { slot, def(Reg::XMM0) });
         return defineResult(phi, info, Reg::XMM0);
     }
     if (!isIntegerLike(type)) return fail("a phi of an aggregate value is not supported");
     switch (widthOf(type)) {
-    case Width::Byte: line("movzbl\t" + slot.str() + ", %eax"); break;
-    case Width::Long: line("movl\t" + slot.str() + ", %eax"); break;
-    case Width::Quad: line("movq\t" + slot.str() + ", %rax"); break;
+    case Width::Byte: op("movzbl", { slot, def(Reg::RAX, Width::Long) }); break;
+    case Width::Long: op("movl", { slot, def(Reg::RAX, Width::Long) }); break;
+    case Width::Quad: op("movq", { slot, def(Reg::RAX) }); break;
     }
     defineResult(phi, info, Reg::RAX);
 }
@@ -895,11 +1016,11 @@ void FunctionEmitter::branchWithCopies(const std::string &condCode, ir::BasicBlo
                                        ir::BasicBlock *ifFalse, ir::BasicBlock *deferred, const ir::BasicBlock *next) {
     if (deferred == nullptr) return branchOn(condCode, ifTrue, ifFalse, next);
     if (deferred == ifFalse) {
-        line("j" + condCode + "\t" + label(ifTrue));
+        op("j" + condCode, { textOp(label(ifTrue)) });
         storePhiCopies(block, ifFalse);
         return jumpUnless(ifFalse, next);
     }
-    line("j" + invert(condCode) + "\t" + label(ifFalse));
+    op("j" + invert(condCode), { textOp(label(ifFalse)) });
     storePhiCopies(block, ifTrue);
     jumpUnless(ifTrue, next);
 }
@@ -911,41 +1032,89 @@ void FunctionEmitter::storePhiCopies(ir::BasicBlock *block, const ir::BasicBlock
         const ir::Value *value = phi->getIncomingValueFor(block);
         if (value == nullptr) continue;
         const sema::Type *type = phi->getType();
-        Mem slot = Mem::frame(frame.phiSlot(phi));
+        MOperand slot = memOp(Mem::frame(frame.phiSlot(phi)));
         if (isFloatType(type)) {
             loadFloat(value, Reg::XMM0);
-            line(std::string(isDoubleType(type) ? "movsd\t" : "movss\t") + "%xmm0, " + slot.str());
+            op(movFor(type), { use(Reg::XMM0), slot });
             continue;
         }
         Width w = widthOf(type);
         const ir::Constant *c = asConstant(value);
-        Reg held;
-        if (ra.registerOf(value, held)) {
-            line(std::string("mov") + suffix(w) + "\t" + regName(held, w) + ", " + slot.str());
+        Reg reg;
+        if (held(value, reg)) {
+            op(std::string("mov") + suffix(w), { use(reg, w), slot });
         } else if (c && c->constKind == ir::ConstantKind::Int && fitsInt32(c->intValue)) {
-            line(std::string("mov") + suffix(w) + "\t" + imm(c->intValue) + ", " + slot.str());
+            op(std::string("mov") + suffix(w), { immOp(c->intValue), slot });
         } else if (c && c->constKind == ir::ConstantKind::Null) {
-            line("movq\t$0, " + slot.str());
+            op("movq", { immOp(0), slot });
         } else {
             loadInt(value, Reg::RAX, w);
-            line(std::string("mov") + suffix(w) + "\t" + regName(Reg::RAX, w) + ", " + slot.str());
+            op(std::string("mov") + suffix(w), { use(Reg::RAX, w), slot });
         }
     }
+}
+
+void FunctionEmitter::copyPhis(ir::BasicBlock *block, const ir::BasicBlock *succ) {
+    std::vector<std::pair<Reg, Reg>> finals;  //temporary -> phi
+    for (const std::unique_ptr<ir::Instruction> &inst : succ->instructions) {
+        if (inst->getOpcode() != ir::Opcode::Phi) break;
+        ir::PhiInst *phi = static_cast<ir::PhiInst *>(inst.get());
+        const ir::Value *value = phi->getIncomingValueFor(block);
+        if (value == nullptr) continue;
+        bool isFloat = isFloatType(phi->getType());
+        Reg temp = newVreg(isFloat);
+        Reg reg;
+        if (held(value, reg)) {
+            op(isFloat ? "movaps" : "movq", { use(reg), def(temp) });
+        } else if (isFloat) {
+            loadFloat(value, temp);
+        } else {
+            loadInt(value, temp, Width::Quad);
+        }
+        finals.push_back(std::make_pair(temp, vregFor(phi)));
+    }
+    for (const std::pair<Reg, Reg> &copy : finals) {
+        op(isXmm(copy.first) ? "movaps" : "movq", { use(copy.first), def(copy.second) });
+    }
+}
+
+void FunctionEmitter::branchSplit(const std::string &condCode, ir::BasicBlock *block, ir::BasicBlock *ifTrue,
+                                  ir::BasicBlock *ifFalse, const ir::BasicBlock *next) {
+    bool trueCopies = hasPhiFrom(block, ifTrue);
+    bool falseCopies = hasPhiFrom(block, ifFalse);
+    if (!trueCopies && !falseCopies) return branchOn(condCode, ifTrue, ifFalse, next);
+    if (!trueCopies) {
+        op("j" + condCode, { textOp(label(ifTrue)) });
+        copyPhis(block, ifFalse);
+        return jumpUnless(ifFalse, next);
+    }
+    if (!falseCopies) {
+        op("j" + invert(condCode), { textOp(label(ifFalse)) });
+        copyPhis(block, ifTrue);
+        return jumpUnless(ifTrue, next);
+    }
+    std::string trueEdge = localLabel();
+    op("j" + condCode, { textOp(trueEdge) });
+    copyPhis(block, ifFalse);
+    op("jmp", { textOp(label(ifFalse)) });
+    placeLabel(trueEdge);
+    copyPhis(block, ifTrue);
+    jumpUnless(ifTrue, next);
 }
 
 //  terminators
 
 void FunctionEmitter::jumpUnless(const ir::BasicBlock *target, const ir::BasicBlock *next) {
-    if (target != next) line("jmp\t" + label(target));
+    if (target != next) op("jmp", { textOp(label(target)) });
 }
 
 void FunctionEmitter::branchOn(const std::string &condCode, ir::BasicBlock *ifTrue, ir::BasicBlock *ifFalse,
                                const ir::BasicBlock *next) {
     if (ifTrue == next) {
-        line("j" + invert(condCode) + "\t" + label(ifFalse));
+        op("j" + invert(condCode), { textOp(label(ifFalse)) });
         return;
     }
-    line("j" + condCode + "\t" + label(ifTrue));
+    op("j" + condCode, { textOp(label(ifTrue)) });
     jumpUnless(ifFalse, next);
 }
 
@@ -953,37 +1122,53 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
                                      ir::BasicBlock *next) {
     (void)info;
     ir::BasicBlock *block = inst->getParent();
-    //the successors' phi copies come first, while the flags do not matter yet (a repeated edge
-    //carries the same values). only a loop exit may wait until after the jump, see deferredEdge
     ir::BasicBlock *deferred = nullptr;
-    if (inst->getOpcode() == ir::Opcode::Br) deferred = deferredEdge(block, static_cast<ir::BranchInst *>(inst));
-    std::set<const ir::BasicBlock *> done;
-    if (deferred) done.insert(deferred);
-    for (ir::BasicBlock *succ : inst->getSuccessors()) {
-        if (done.insert(succ).second) storePhiCopies(block, succ);
+    if (!global) {
+        //the successors' phi copies come first, while the flags do not matter yet (a repeated edge
+        //carries the same values). only a loop exit may wait until after the jump, see deferredEdge
+        if (inst->getOpcode() == ir::Opcode::Br) deferred = deferredEdge(block, static_cast<ir::BranchInst *>(inst));
+        std::set<const ir::BasicBlock *> done;
+        if (deferred) done.insert(deferred);
+        for (ir::BasicBlock *succ : inst->getSuccessors()) {
+            if (done.insert(succ).second) storePhiCopies(block, succ);
+        }
+        //end of block: values live on exit go back to memory. movs leave the flags alone
+        ra.flush(liveOut);
     }
-    //end of block: values live on exit go back to memory. movs leave the flags alone
-    ra.flush(liveOut);
 
     switch (inst->getOpcode()) {
     case ir::Opcode::Ret: {
         ir::ReturnInst *ret = static_cast<ir::ReturnInst *>(inst);
+        std::vector<Reg> returned;
         if (ret->returnValue) {
             const sema::Type *type = ret->returnType;
             if (isFloatType(type)) {
                 loadFloat(ret->returnValue, Reg::XMM0);
+                returned.push_back(Reg::XMM0);
             } else if (isIntegerLike(type)) {
                 loadInt(ret->returnValue, Reg::RAX, widthOf(type));
+                returned.push_back(Reg::RAX);
             } else {
                 return fail("returning an aggregate value is not supported");
             }
         }
-        if (next != nullptr) line("jmp\t.Lret" + std::to_string(id));
+        //the epilogue reads the return value: the jump to it (or a marker when it falls through) says so
+        if (next != nullptr) {
+            op("jmp", { textOp(".Lret" + std::to_string(id)) }, returned);
+        } else {
+            MInst marker;
+            marker.kind = MInst::Marker;
+            marker.implicitUses = returned;
+            body.push_back(marker);
+        }
         return;
     }
     case ir::Opcode::Br: {
         ir::BranchInst *br = static_cast<ir::BranchInst *>(inst);
-        if (!br->isConditional()) return jumpUnless(br->target, next);
+        if (!br->isConditional()) {
+            if (global) copyPhis(block, br->target);
+            return jumpUnless(br->target, next);
+        }
 
         const ir::Instruction *condInst = br->condition->getKind() == ir::ValueKind::Instruction
                                               ? static_cast<const ir::Instruction *>(br->condition)
@@ -991,29 +1176,59 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
         if (condInst && fused.count(condInst)) {
             ir::BinaryInst *cmp = static_cast<ir::BinaryInst *>(br->condition);
             emitIntCompare(cmp);
+            if (global) return branchSplit(conditionCode(cmp->op), block, br->target, br->falseTarget, next);
             return branchWithCopies(conditionCode(cmp->op), block, br->target, br->falseTarget, deferred, next);
         }
         const ir::Constant *c = asConstant(br->condition);
         if (c) {
             ir::BasicBlock *taken = c->intValue ? br->target : br->falseTarget;
-            if (taken == deferred) storePhiCopies(block, taken);
+            if (global) {
+                copyPhis(block, taken);
+            } else if (taken == deferred) {
+                storePhiCopies(block, taken);
+            }
             return jumpUnless(taken, next);
         }
-        line("testb\t$1, " + intSource(br->condition, Width::Byte, Reg::RAX));
+        op("testb", { immOp(1), intSource(br->condition, Width::Byte, Reg::RAX) });
+        if (global) return branchSplit("ne", block, br->target, br->falseTarget, next);
         return branchWithCopies("ne", block, br->target, br->falseTarget, deferred, next);
     }
     case ir::Opcode::Switch: {
         ir::SwitchInst *sw = static_cast<ir::SwitchInst *>(inst);
         Width w = widthOf(sw->condition->getType());
         loadInt(sw->condition, Reg::RAX, w);
+        //-O3: a case whose block has phis goes through a local label that does that edge's copies
+        //(in order of first use, so the output does not depend on addresses)
+        std::vector<std::pair<const ir::BasicBlock *, std::string>> edgeLabels;
         for (const std::pair<long long, ir::BasicBlock *> &c : sw->cases) {
-            line(std::string("cmp") + suffix(w) + "\t" + imm(c.first) + ", " + regName(Reg::RAX, w));
-            line("je\t" + label(c.second));
+            std::string target = label(c.second);
+            if (global && hasPhiFrom(block, c.second)) {
+                std::string edge;
+                for (const std::pair<const ir::BasicBlock *, std::string> &e : edgeLabels) {
+                    if (e.first == c.second) edge = e.second;
+                }
+                if (edge.empty()) {
+                    edge = localLabel();
+                    edgeLabels.push_back(std::make_pair(c.second, edge));
+                }
+                target = edge;
+            }
+            op(std::string("cmp") + suffix(w), { immOp(c.first), use(Reg::RAX, w) });
+            op("je", { textOp(target) });
         }
-        return jumpUnless(sw->defaultTarget, next);
+        if (!global) return jumpUnless(sw->defaultTarget, next);
+        copyPhis(block, sw->defaultTarget);
+        if (edgeLabels.empty()) return jumpUnless(sw->defaultTarget, next);
+        op("jmp", { textOp(label(sw->defaultTarget)) });
+        for (const std::pair<const ir::BasicBlock *, std::string> &edge : edgeLabels) {
+            placeLabel(edge.second);
+            copyPhis(block, edge.first);
+            op("jmp", { textOp(label(edge.first)) });
+        }
+        return;
     }
     case ir::Opcode::Unreachable:
-        line("ud2");
+        op("ud2");
         return;
     default:
         return fail("unknown terminator");

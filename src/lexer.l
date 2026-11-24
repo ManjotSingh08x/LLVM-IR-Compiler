@@ -61,7 +61,12 @@ struct TokenDepth {
 };
 static std::vector<TokenDepth> g_tokenDepths;
 
+static int  g_prevTokenId = 0;
+static bool g_lastSemiAfterRBrace = false;  //the latest ; came right after a }, as in "};"
+
 static void countBraces(int id) {
+    if (id == TOK_SEMI) g_lastSemiAfterRBrace = g_prevTokenId == TOK_RBRACE;
+    g_prevTokenId = id;
     g_depthBeforeToken = g_braceDepth;
     g_tokenDepths.push_back({ yylloc.first_line, yylloc.first_column, g_braceDepth });
     if (id == TOK_LBRACE) g_braceDepth++;
@@ -320,6 +325,12 @@ void resyncBraces(int target) {
     if (skipped) {
         int next = yylex();
         if (next != TOK_SEMI) pushBackToken(next);
+    }
+    if (depth < target && g_lastSemiAfterRBrace) {
+        //the skipped "};" closed a class or struct: give back its ; too, after the braces
+        YYSTYPE value;
+        value.tok = g_lastRBraceTok;
+        g_tokenQueue.push_front({ TOK_SEMI, value, yylloc });
     }
     for (; depth < target; depth++) {
         YYSTYPE value;

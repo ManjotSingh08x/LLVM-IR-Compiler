@@ -4,6 +4,7 @@
 #include <cstdlib>
 
 #include "semantic/constants.h"
+#include "semantic/type_layout.h"
 
 namespace ir {
 
@@ -50,6 +51,11 @@ Value *IRVisitor::emitRValue(ast::Expr *expr) {
         return emitBinary(static_cast<ast::BinaryExpr *>(expr));
     case ast::ASTKind::ConditionalExpr:
         return emitConditional(static_cast<ast::ConditionalExpr *>(expr), false);
+    case ast::ASTKind::CommaExpr: {
+        ast::CommaExpr *comma = static_cast<ast::CommaExpr *>(expr);
+        emitIgnored(comma->lhs.get());
+        return emitRValue(comma->rhs.get());
+    }
     case ast::ASTKind::CallExpr:
         return emitCall(static_cast<ast::CallExpr *>(expr));
     case ast::ASTKind::NewExpr:
@@ -115,6 +121,13 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
         return emitAssign(static_cast<ast::AssignExpr *>(expr));
     case ast::ASTKind::ConditionalExpr:
         if (expr->isLValue) return emitConditional(static_cast<ast::ConditionalExpr *>(expr), true);
+        break;
+    case ast::ASTKind::CommaExpr:
+        if (expr->isLValue) {
+            ast::CommaExpr *comma = static_cast<ast::CommaExpr *>(expr);
+            emitIgnored(comma->lhs.get());
+            return emitAddressOf(comma->rhs.get());
+        }
         break;
     case ast::ASTKind::ImplicitCastExpr: {
         //binding a Base& to a Derived object: the base part of the same object
@@ -559,6 +572,26 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
     case ast::CastKind::IntegralToPointer:
         return builder.createCast(CastOpKind::IntToPtr, emitRValue(sub), sub->type, module.pointerType());
 
+    case ast::CastKind::BaseToDerived: {
+        Value *address = emitRValue(sub);
+        const sema::RecordSymbol *base = sema::asRecord(sema::unqualified(sema::asPointer(sub->type)->pointee));
+        const sema::RecordSymbol *derived = sema::asRecord(sema::unqualified(sema::asPointer(node->type)->pointee));
+        std::vector<unsigned> path;
+        if (!RecordLayout::findBasePath(derived, base, path)) return address;
+        sema::TypeLayout layout(symTab);
+        uint64_t offset = 0;
+        const sema::RecordSymbol *current = derived;
+        for (unsigned index : path) {
+            offset += layout.elementOffset(current->type, index);
+            current = current->bases[index].record;
+        }
+        if (offset == 0) return address;
+        Value *moved = builder.createElementGEP(sema::charType(), address,
+                                                module.getInt(sema::longType(), -(long long)offset));
+        Value *isNull = builder.createBinary(BinaryOpKind::ICmpEQ, module.pointerType(), address,
+                                             module.getNull(module.pointerType()));
+        return builder.createSelect(isNull, module.getNull(module.pointerType()), moved, module.pointerType());
+    }
     case ast::CastKind::DerivedToBase: {
         if (const sema::PointerType *target = sema::asPointer(node->type)) {
             const sema::RecordSymbol *from = sema::asRecord(sema::asPointer(sub->type)->pointee);

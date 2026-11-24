@@ -65,6 +65,7 @@ enum class ASTKind {
     BinaryExpr,
     AssignExpr,
     ConditionalExpr,
+    CommaExpr,
     CallExpr,
     ArraySubscriptExpr,
     MemberExpr,

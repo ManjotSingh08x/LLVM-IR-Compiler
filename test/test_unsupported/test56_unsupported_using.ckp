@@ -1,0 +1,7 @@
+namespace tools { int version = 3; }
+
+// Tests: using namespace (unsupported)
+using namespace tools;
+
+// Tests: using alias (unsupported)
+using Number = int;

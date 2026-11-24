@@ -444,7 +444,7 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
 %token <tok> TOK_IF TOK_ELSE TOK_FOR TOK_WHILE TOK_DO TOK_SWITCH TOK_CASE
 %token <tok> TOK_STRUCT TOK_CLASS TOK_PUBLIC TOK_PRIVATE TOK_PROTECTED
 %token <tok> TOK_NEW TOK_DELETE TOK_TRUE TOK_FALSE TOK_THIS TOK_NULL TOK_SIZEOF
-%token <tok> TOK_STATIC TOK_TYPEDEF TOK_UNTIL
+%token <tok> TOK_STATIC TOK_TYPEDEF TOK_UNTIL TOK_STATIC_CAST
 %token <tok> TOK__KEYWORD_END
 
 %token <tok> TOK_PLUS TOK_MINUS TOK_STAR TOK_SLASH TOK_PERCENT
@@ -471,7 +471,7 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
 %type <bases>    inheritance_opt base_list
 %type <base>     base_specifier
 %type <op>       access_specifier assignment_operator capture_default
-%type <type>     simple_type builtin_type struct_type type_specifier allocation_type type_name
+%type <type>     simple_type builtin_type struct_type type_specifier allocation_type type_name cast_type_name
 %type <dtor>     abstract_declarator_opt abstract_declarator direct_abstract_declarator paren_function_head
 %type <qname>    qualified_name scoped_name
 %type <params>   parameter_list_opt parameter_list
@@ -525,7 +525,7 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
     relational_expression shift_expression additive_expression
     multiplicative_expression unary_expression delete_operand
     postfix_expression primary_expression lambda_expression
-    allocation_suffix_opt capture_list capture integer_specifiers type_name abstract_declarator_opt
+    allocation_suffix_opt capture_list capture integer_specifiers type_name cast_type_name abstract_declarator_opt
     abstract_declarator direct_abstract_declarator paren_function_head string_literal cast_expression
 
 %nonassoc IDENTIFIER_EXPRESSION
@@ -1134,6 +1134,8 @@ expression_opt
 
 expression
     : assignment_expression           { $$ = $1; }
+    | expression TOK_COMMA assignment_expression
+                                      { $$ = new ast::CommaExpr(own($1), own($3), LOC(@2)); }
     ;
 
 assignment_expression
@@ -1250,6 +1252,10 @@ type_name
     | struct_type abstract_declarator_opt             { $$ = typeName($1, $2); }
     ;
 
+cast_type_name
+    : type_specifier abstract_declarator_opt          { $$ = typeName($1, $2); }
+    ;
+
 //a declarator with no name, as in C: *, [3], (*)[3], (*)(int)
 abstract_declarator_opt
     : /* empty */                                     { $$ = nullptr; }
@@ -1360,6 +1366,10 @@ allocation_dimensions
 
 postfix_expression
     : primary_expression              { $$ = $1; }
+    | TOK_STATIC_CAST TOK_LT cast_type_name TOK_GT TOK_LPAREN expression TOK_RPAREN
+                                      { ast::CastExpr *cast = new ast::CastExpr(own($3), own($6), LOC(@1));
+                                        cast->isStatic = true;
+                                        $$ = cast; }
     | postfix_expression TOK_LBRACKET expression TOK_RBRACKET
                                       { $$ = new ast::ArraySubscriptExpr(own($1), own($3), LOC(@2)); }
     | postfix_expression TOK_LPAREN argument_list_opt TOK_RPAREN

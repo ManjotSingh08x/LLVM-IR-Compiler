@@ -38,6 +38,7 @@ public:
     void visitBinaryExpr(ast::BinaryExpr *node);
     void visitAssignExpr(ast::AssignExpr *node);
     void visitConditionalExpr(ast::ConditionalExpr *node);
+    void visitCommaExpr(ast::CommaExpr *node);
     void visitCallExpr(ast::CallExpr *node);
     void visitArraySubscriptExpr(ast::ArraySubscriptExpr *node);
     void visitMemberExpr(ast::MemberExpr *node);
@@ -70,6 +71,8 @@ private:
     void declareParams(const ast::NodeList<ast::ParamDecl> &params, const FunctionType *signature);
 
     const Type         *resolveType(ast::TypeSpec *spec, Scope *scope, bool allowUnsized);
+    bool                computeSizes(ast::Expr *expr, Scope *scope);
+    const Type         *operandType(ast::Expr *expr, Scope *scope);
     const Type         *parameterType(ast::ParamDecl *param, Scope *scope);
     const FunctionType *signatureOf(ast::FunctionDecl *node, Scope *scope);
     const Type         *sizeFromInitializer(const Type *type, ast::VarDecl *node);

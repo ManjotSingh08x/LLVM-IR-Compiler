@@ -350,6 +350,8 @@ void TypeChecker::initFromValue(std::unique_ptr<ast::Expr> &value, const Type *t
 //{ ... } for an array, a record or a single value
 void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     list->type = type;
+    //the declared type was already reported, so its values are not checked against it
+    if (isError(type)) return;
     std::string what = "'" + typeToString(type) + "'";
 
     if (const ArrayType *array = asArray(type)) {
@@ -1025,7 +1027,11 @@ const Type *TypeChecker::visitReturnStmt(ast::ReturnStmt *node) {
             check(node->value);
             type = unqualified(decayValue(node->value));
         }
-        if (isError(type)) return nullptr;
+        if (isError(type)) {
+            //the lambda's type is unknown, so its calls must not be reported again
+            if (context.returnType == nullptr) context.returnType = errorType();
+            return nullptr;
+        }
         if (context.returnType == nullptr) {
             context.returnType = type;
         } else if (!isSameType(context.returnType, type)) {
@@ -1369,6 +1375,13 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
     return setType(node, target, true);
 }
 
+const Type *TypeChecker::visitCommaExpr(ast::CommaExpr *node) {
+    const Type *left = check(node->lhs);
+    const Type *right = check(node->rhs);
+    if (isError(left) || isError(right)) return setType(node, errorType(), false);
+    return setType(node, right, node->rhs->isLValue);
+}
+
 const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
     checkCondition(node->cond, "a condition");
     const Type *t = check(node->trueExpr);
@@ -1666,8 +1679,26 @@ const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
     const Type *value = decayValue(node->sub);
     bool isPointerValue = asPointer(value) || value->is(TypeKind::Null);
     if (isSameType(value, target)) return setType(node, target, false);
-    if (findConversion(value, node->sub->isLValue, target, table).rank != ConversionRank::Impossible) {
+    bool implicit = findConversion(value, node->sub->isLValue, target, table).rank != ConversionRank::Impossible;
+    const PointerType *fromPointer = asPointer(value);
+    const PointerType *toPointer = asPointer(target);
+    RecordSymbol *fromRecord = fromPointer ? asRecord(unqualified(fromPointer->pointee)) : nullptr;
+    RecordSymbol *toRecord = toPointer ? asRecord(unqualified(toPointer->pointee)) : nullptr;
+    bool downcast = fromRecord && toRecord && fromRecord != toRecord && isDerivedFrom(toRecord, fromRecord);
+    if (node->isStatic && !implicit) {
+        bool allowed = fromPointer && toPointer && !(fromPointer->pointee->isConst() && !toPointer->pointee->isConst()) &&
+                       (downcast || unqualified(fromPointer->pointee)->is(TypeKind::Void) ||
+                        unqualified(toPointer->pointee)->is(TypeKind::Void));
+        if (!allowed) {
+            diags.error(node->line, node->col,
+                        "static_cast cannot convert '" + typeToString(value) + "' to '" + typeToString(target) + "'");
+            return setType(node, errorType(), false);
+        }
+    }
+    if (implicit) {
         convert(node->sub, target, "a cast");
+    } else if (downcast) {
+        wrap(node->sub, ast::CastKind::BaseToDerived, target);
     } else if (asPointer(target) && isPointerValue) {
         wrap(node->sub, ast::CastKind::PointerCast, target);
     } else if (asPointer(target) && isIntegral(value)) {
@@ -1683,8 +1714,30 @@ const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
 }
 
 //the operand keeps its own type: an array is not decayed, so sizeof gives the whole array
+const Type *TypeChecker::sizeofOperand(std::unique_ptr<ast::Expr> &expr) {
+    if (expr->getKind() != ast::ASTKind::ParenExpr) return check(expr);
+    ast::ParenExpr *paren = static_cast<ast::ParenExpr *>(expr.get());
+    if (paren->sub->getKind() != ast::ASTKind::DeclRefExpr) return check(expr);
+
+    ast::DeclRefExpr *ref = static_cast<ast::DeclRefExpr *>(paren->sub.get());
+    Lookup lookup = lookupRef(ref);
+    if (!lookup.symbols.empty() && !lookup.ambiguous) {
+        Symbol *symbol = lookup.symbols[0];
+        const Type *named = nullptr;
+        if (symbol->kind == SymbolKind::Record) named = table.recordType(static_cast<RecordSymbol *>(symbol));
+        if (symbol->kind == SymbolKind::Typedef) named = symbol->type;
+        if (named) {
+            ref->symbol = symbol;
+            setType(ref, named, false);
+            return setType(paren, named, false);
+        }
+    }
+    const Type *type = finishDeclRef(ref, lookup);
+    return setType(paren, type, ref->isLValue);
+}
+
 const Type *TypeChecker::visitSizeofExpr(ast::SizeofExpr *node) {
-    const Type *operand = node->typeOperand ? node->typeOperand->resolved : stripReference(check(node->exprOperand));
+    const Type *operand = node->typeOperand ? node->typeOperand->resolved : stripReference(sizeofOperand(node->exprOperand));
     if (isError(operand)) return setType(node, ulongType(), false);
     const ArrayType *array = asArray(operand);
     bool incomplete = operand->is(TypeKind::Void) || operand->is(TypeKind::Function) || (array && array->size == 0) ||

@@ -1,0 +1,13 @@
+// Tests: enum class (unsupported)
+enum class Mode { On, Off };
+
+// Tests: union (unsupported)
+union Value { int asInt; char asChar; };
+
+// Tests: bit-fields (unsupported)
+struct Flags { int ready : 1; };
+
+// Tests: unnamed struct in a typedef (unsupported)
+typedef struct { int x; } Point;
+
+

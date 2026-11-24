@@ -1,0 +1,28 @@
+class Base { public: int id; };
+class Extra { public: int tag; };
+class Derived : public Base, public Extra { public: int value; };
+
+int main() {
+    // Tests: static_cast between arithmetic types
+    int rounded = static_cast<int>(2.75);
+    double ratio = static_cast<double>(rounded) / 4;
+
+    // Tests: static_cast through void pointers
+    int count = 7;
+    void *raw = static_cast<void *>(&count);
+    int *back = static_cast<int *>(raw);
+
+    // Tests: static_cast up to a base class and back down
+    Derived d;
+    d.tag = 5;
+    d.value = 9;
+    Extra *extra = static_cast<Extra *>(&d);
+    Derived *same = static_cast<Derived *>(extra);
+
+    // Tests: static_cast of a null pointer stays null
+    Extra *none = nullptr;
+    Derived *stillNone = static_cast<Derived *>(none);
+
+    printf("%d %.2f %d %d %d %d %d\n", rounded, ratio, *back, extra->tag, same->value, same == &d, stillNone == nullptr);
+    return 0;
+}

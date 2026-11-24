@@ -55,6 +55,7 @@ public:
         case ASTKind::BinaryExpr:         return derived().visitBinaryExpr(static_cast<BinaryExpr *>(node));
         case ASTKind::AssignExpr:         return derived().visitAssignExpr(static_cast<AssignExpr *>(node));
         case ASTKind::ConditionalExpr:    return derived().visitConditionalExpr(static_cast<ConditionalExpr *>(node));
+        case ASTKind::CommaExpr:          return derived().visitCommaExpr(static_cast<CommaExpr *>(node));
         case ASTKind::CallExpr:           return derived().visitCallExpr(static_cast<CallExpr *>(node));
         case ASTKind::ArraySubscriptExpr: return derived().visitArraySubscriptExpr(static_cast<ArraySubscriptExpr *>(node));
         case ASTKind::MemberExpr:         return derived().visitMemberExpr(static_cast<MemberExpr *>(node));
@@ -115,6 +116,7 @@ public:
     RetTy visitBinaryExpr(BinaryExpr *node) { return derived().visitExpr(node); }
     RetTy visitAssignExpr(AssignExpr *node) { return derived().visitExpr(node); }
     RetTy visitConditionalExpr(ConditionalExpr *node) { return derived().visitExpr(node); }
+    RetTy visitCommaExpr(CommaExpr *node) { return derived().visitExpr(node); }
     RetTy visitCallExpr(CallExpr *node) { return derived().visitExpr(node); }
     RetTy visitArraySubscriptExpr(ArraySubscriptExpr *node) { return derived().visitExpr(node); }
     RetTy visitMemberExpr(MemberExpr *node) { return derived().visitExpr(node); }

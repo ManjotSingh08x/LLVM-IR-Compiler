@@ -1,0 +1,24 @@
+int trace(int x) {
+    printf("eval %d\n", x);
+    return x;
+}
+
+int main() {
+    // Tests: comma operator evaluates left to right and gives the right value
+    int last = (trace(1), trace(2), trace(3));
+
+    // Tests: comma operator in a for loop header
+    int steps = 0;
+    for (int i = 0, j = 6; i < j; i++, j--) steps++;
+
+    // Tests: comma operator as an assignment target
+    int x = 1, y = 2;
+    (x, y) = 9;
+
+    // Tests: comma operator in a condition
+    int n = 0;
+    while (n++, n < 3) {}
+
+    printf("%d %d %d %d %d\n", last, steps, x, y, n);
+    return 0;
+}

@@ -1,0 +1,7 @@
+// Tests: cast to a class pointer by its bare name (unsupported)
+struct Dog { int age; };
+int age(void *p) { return ((Dog *)p)->age; }
+
+// Tests: cast to a typedef name (unsupported)
+typedef int Number;
+int whole(double d) { return (Number)d; }

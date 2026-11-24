@@ -1,0 +1,7 @@
+// Tests: #include (unsupported)
+#include <cstdio>
+
+// Tests: #define (unsupported)
+#define LIMIT 10
+
+int main() { return 0; }

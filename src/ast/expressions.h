@@ -135,6 +135,15 @@ public:
     std::unique_ptr<Expr> falseExpr;
 };
 
+class CommaExpr : public Expr {
+public:
+    CommaExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, int line, int col)
+        : Expr(ASTKind::CommaExpr, line, col), lhs(std::move(lhs)), rhs(std::move(rhs)) {}
+
+    std::unique_ptr<Expr> lhs;
+    std::unique_ptr<Expr> rhs;
+};
+
 class CallExpr : public Expr {
 public:
     CallExpr(std::unique_ptr<Expr> callee, NodeList<Expr> args, int line, int col)
@@ -191,6 +200,7 @@ public:
 
     std::unique_ptr<TypeSpec> target;
     std::unique_ptr<Expr>     sub;
+    bool                      isStatic = false;
 };
 
 //sizeof e or sizeof(T), e is type checked but never evaluated
@@ -261,6 +271,7 @@ enum class CastKind {
     FunctionToPointer,
     NullToPointer,
     DerivedToBase,
+    BaseToDerived,
     PointerToVoid,
     PointerCast,        //between unrelated pointer types, the address is unchanged
     PointerToIntegral,

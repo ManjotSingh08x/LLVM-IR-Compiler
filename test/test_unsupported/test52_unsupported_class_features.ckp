@@ -1,0 +1,21 @@
+// Tests: virtual function (unsupported)
+class Shape { public: virtual int area() { return 0; } };
+
+// Tests: pure virtual function (unsupported)
+class Base { public: virtual int id() = 0; };
+
+// Tests: operator overloading (unsupported)
+struct Vec { int x; Vec operator+(Vec o) { Vec r; r.x = x + o.x; return r; } };
+
+// Tests: constructor initializer list (unsupported)
+class Point { public: int x; Point(int v) : x(v) {} };
+
+// Tests: friend function (unsupported)
+class Box { int size; friend int peek(Box &b); };
+
+// Tests: const member function (unsupported)
+class Counter { int n; public: int get() const { return n; } };
+
+// Tests: pointer to member (unsupported)
+struct Pair { int a; };
+int Pair::*member = &Pair::a;

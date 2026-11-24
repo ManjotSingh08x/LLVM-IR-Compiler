@@ -20,10 +20,8 @@ make clean                            # delete build/ and outputs/
 Every file under `test/` is a test, except those in `test/expected/` and `test/inputs/`. A file the compiler rejects only has its errors printed. A file it accepts is compiled at each level and checked:
 - the IR is verified after every pass;
 - the optimized IR passes clang's verifier;
-- the FileCheck lines in the file (`// IR-GE2:`, `// ASM-O3:` ...) match the optimized IR or assembly;
 - the program links and runs, and its output must match `test/expected/<name>.out`, or the output of the unoptimized program when there is none.
 
-Standard input comes from `test/inputs/<name>.in` when that file exists. Both are found by file name, so they also work for a file outside `test/`.
 
 | Folder | Tests |
 |---|---|
@@ -32,6 +30,7 @@ Standard input comes from `test/inputs/<name>.in` when that file exists. Both ar
 | `test/test_ir/` | arithmetic, arrays and pointers, classes, functions, input, const and namespaces; semantic errors |
 | `test/test_codegen/` | integer and floating code, calls, memory, objects, short and float |
 | `test/test_optimization/` | one small program per optimization, with FileCheck lines showing its effect |
+| `test/test_unsupported/` | every C++ feature the compiler rejects, grouped by kind, one error per feature |
 
 To compile one file:
 
@@ -55,8 +54,6 @@ To debug the optimizer:
 <p align="center">
   <img src="docs/architecture.svg" alt="Compiler pipeline: lexer, parser and semantic analysis with the symbol table; IR generation; the optimizer stages by level; x86-64 code generation; gcc/clang link" width="100%">
 </p>
-
-Semantic analysis builds the symbol table, a tree of scopes, and keeps it. Every AST node points into the tree. IR generation does not look names up again: it reads the resolved symbols, and takes from them the mangled function names, the LLVM types, record layouts and lambda captures.
 
 ## Limitations
 

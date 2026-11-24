@@ -57,6 +57,7 @@ public:
     void visitBinaryExpr(BinaryExpr *node);
     void visitAssignExpr(AssignExpr *node);
     void visitConditionalExpr(ConditionalExpr *node);
+    void visitCommaExpr(CommaExpr *node);
     void visitCallExpr(CallExpr *node);
     void visitArraySubscriptExpr(ArraySubscriptExpr *node);
     void visitMemberExpr(MemberExpr *node);

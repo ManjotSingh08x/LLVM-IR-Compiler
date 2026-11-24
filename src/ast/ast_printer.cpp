@@ -45,6 +45,7 @@ const char *kindName(ASTKind kind) {
     case ASTKind::BinaryExpr:         return "BinaryExpr";
     case ASTKind::AssignExpr:         return "AssignExpr";
     case ASTKind::ConditionalExpr:    return "ConditionalExpr";
+    case ASTKind::CommaExpr:          return "CommaExpr";
     case ASTKind::CallExpr:           return "CallExpr";
     case ASTKind::ArraySubscriptExpr: return "ArraySubscriptExpr";
     case ASTKind::MemberExpr:         return "MemberExpr";
@@ -210,6 +211,7 @@ const char *castKindName(CastKind kind) {
     case CastKind::FunctionToPointer:  return "function-to-pointer";
     case CastKind::NullToPointer:      return "null-to-pointer";
     case CastKind::DerivedToBase:      return "derived-to-base";
+    case CastKind::BaseToDerived:      return "base-to-derived";
     case CastKind::PointerToVoid:      return "pointer-to-void";
     case CastKind::PointerCast:        return "pointer";
     case CastKind::PointerToIntegral:  return "pointer-to-integral";
@@ -461,6 +463,12 @@ void ASTPrinter::visitConditionalExpr(ConditionalExpr *node) {
     child("false", node->falseExpr.get());
 }
 
+void ASTPrinter::visitCommaExpr(CommaExpr *node) {
+    line(*node, "");
+    child("left", node->lhs.get());
+    child("right", node->rhs.get());
+}
+
 void ASTPrinter::visitCallExpr(CallExpr *node) {
     line(*node, std::to_string(node->args.size()) + " arg(s)");
     child("callee", node->callee.get());
@@ -511,7 +519,7 @@ void ASTPrinter::visitLambdaExpr(LambdaExpr *node) {
 }
 
 void ASTPrinter::visitCastExpr(CastExpr *node) {
-    line(*node, quoted(typeString(node->target.get())));
+    line(*node, std::string(node->isStatic ? "static_cast " : "") + quoted(typeString(node->target.get())));
     child(nullptr, node->sub.get());
 }
 

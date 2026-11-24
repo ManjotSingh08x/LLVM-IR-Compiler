@@ -50,6 +50,7 @@ public:
     const Type *visitBinaryExpr(ast::BinaryExpr *node);
     const Type *visitAssignExpr(ast::AssignExpr *node);
     const Type *visitConditionalExpr(ast::ConditionalExpr *node);
+    const Type *visitCommaExpr(ast::CommaExpr *node);
     const Type *visitCallExpr(ast::CallExpr *node);
     const Type *visitArraySubscriptExpr(ast::ArraySubscriptExpr *node);
     const Type *visitMemberExpr(ast::MemberExpr *node);
@@ -99,6 +100,7 @@ private:
 
     Lookup lookupName(const std::string &name, int line, int col);
     Lookup lookupRef(ast::DeclRefExpr *node);
+    const Type *sizeofOperand(std::unique_ptr<ast::Expr> &expr);
     bool   lookupMember(RecordSymbol *record, const std::string &name, Lookup &result);
     void   captureVariable(Symbol *symbol, const std::vector<Scope *> &lambdas, int line, int col);
     RecordSymbol *thisRecord(int line, int col);

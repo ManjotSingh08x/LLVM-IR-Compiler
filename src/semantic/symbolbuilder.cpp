@@ -1,6 +1,7 @@
 #include "semantic/symbolbuilder.h"
 
 #include "semantic/constants.h"
+#include "semantic/type_layout.h"
 
 namespace sema {
 
@@ -722,6 +723,11 @@ void SymbolBuilder::visitConditionalExpr(ast::ConditionalExpr *node) {
     visit(node->falseExpr.get());
 }
 
+void SymbolBuilder::visitCommaExpr(ast::CommaExpr *node) {
+    visit(node->lhs.get());
+    visit(node->rhs.get());
+}
+
 void SymbolBuilder::visitCallExpr(ast::CallExpr *node) {
     visit(node->callee.get());
     for (const std::unique_ptr<ast::Expr> &arg : node->args) visit(arg.get());
@@ -746,8 +752,94 @@ void SymbolBuilder::visitCastExpr(ast::CastExpr *node) {
     visit(node->sub.get());
 }
 
+bool SymbolBuilder::computeSizes(ast::Expr *expr, Scope *scope) {
+    if (expr == nullptr) return true;
+    switch (expr->getKind()) {
+    case ast::ASTKind::ParenExpr:
+        return computeSizes(static_cast<ast::ParenExpr *>(expr)->sub.get(), scope);
+    case ast::ASTKind::CastExpr:
+        return computeSizes(static_cast<ast::CastExpr *>(expr)->sub.get(), scope);
+    case ast::ASTKind::UnaryExpr:
+        return computeSizes(static_cast<ast::UnaryExpr *>(expr)->operand.get(), scope);
+    case ast::ASTKind::BinaryExpr:
+        return computeSizes(static_cast<ast::BinaryExpr *>(expr)->lhs.get(), scope) &&
+               computeSizes(static_cast<ast::BinaryExpr *>(expr)->rhs.get(), scope);
+    case ast::ASTKind::ConditionalExpr: {
+        ast::ConditionalExpr *cond = static_cast<ast::ConditionalExpr *>(expr);
+        return computeSizes(cond->cond.get(), scope) && computeSizes(cond->trueExpr.get(), scope) &&
+               computeSizes(cond->falseExpr.get(), scope);
+    }
+    case ast::ASTKind::SizeofExpr: {
+        ast::SizeofExpr *node = static_cast<ast::SizeofExpr *>(expr);
+        const Type *type = node->typeOperand ? resolveType(node->typeOperand.get(), scope, false)
+                                             : operandType(node->exprOperand.get(), scope);
+        if (type == nullptr) return true;
+        if (isError(type)) return false;
+        type = stripReference(type);
+        const ArrayType *array = asArray(type);
+        if (type->is(TypeKind::Void) || type->is(TypeKind::Function) || (array && array->size == 0) ||
+            (asRecord(type) && !asRecord(type)->isComplete)) {
+            diags.error(node->line, node->col, "sizeof needs a complete object type, not '" + typeToString(type) + "'");
+            return false;
+        }
+        node->size = TypeLayout(table).sizeOf(type);
+        return true;
+    }
+    default:
+        return true;
+    }
+}
+
+const Type *SymbolBuilder::operandType(ast::Expr *expr, Scope *scope) {
+    if (expr == nullptr) return nullptr;
+    switch (expr->getKind()) {
+    case ast::ASTKind::ParenExpr:
+        return operandType(static_cast<ast::ParenExpr *>(expr)->sub.get(), scope);
+    case ast::ASTKind::ArraySubscriptExpr: {
+        const Type *base = operandType(static_cast<ast::ArraySubscriptExpr *>(expr)->base.get(), scope);
+        if (base == nullptr || isError(base)) return base;
+        base = stripReference(base);
+        if (const ArrayType *array = asArray(base)) return array->element;
+        if (const PointerType *pointer = asPointer(base)) return pointer->pointee;
+        return nullptr;
+    }
+    case ast::ASTKind::UnaryExpr: {
+        ast::UnaryExpr *unary = static_cast<ast::UnaryExpr *>(expr);
+        if (unary->op != ast::UnaryOp::Deref) return nullptr;
+        const Type *base = operandType(unary->operand.get(), scope);
+        if (base == nullptr || isError(base)) return base;
+        base = stripReference(base);
+        if (const ArrayType *array = asArray(base)) return array->element;
+        if (const PointerType *pointer = asPointer(base)) return pointer->pointee;
+        return nullptr;
+    }
+    case ast::ASTKind::DeclRefExpr:
+        break;
+    default:
+        return nullptr;
+    }
+
+    ast::DeclRefExpr *ref = static_cast<ast::DeclRefExpr *>(expr);
+    const std::vector<Symbol *> *found = nullptr;
+    if (!ref->qualifier.empty()) {
+        QualifierTarget target = resolveQualifier(scope, ref->qualifier, ref->line, ref->col);
+        if (!target.scope) return nullptr;
+        found = target.scope->find(ref->name);
+    } else {
+        for (; scope != nullptr && found == nullptr; scope = scope->parent) found = scope->find(ref->name);
+    }
+    if (found == nullptr) {
+        diags.error(ref->line, ref->col, "use of undeclared identifier '" + ref->name + "'");
+        return errorType();
+    }
+    Symbol *symbol = (*found)[0];
+    if (symbol->kind == SymbolKind::Record) return table.recordType(static_cast<RecordSymbol *>(symbol));
+    if (symbol->kind == SymbolKind::Typedef || symbol->kind == SymbolKind::Variable) return symbol->type;
+    return nullptr;
+}
+
 void SymbolBuilder::visitSizeofExpr(ast::SizeofExpr *node) {
-    if (node->typeOperand) resolveType(node->typeOperand.get(), current, false);
+    if (node->typeOperand && !node->typeOperand->resolved) resolveType(node->typeOperand.get(), current, false);
     visit(node->exprOperand.get());
 }
 
@@ -858,6 +950,7 @@ const Type *SymbolBuilder::resolveType(ast::TypeSpec *spec, Scope *scope, bool a
         }
         long long size = 0;
         if (spec->size) {
+            if (!computeSizes(spec->size.get(), scope)) break;
             bindConstantNames(spec->size.get(), scope);
             if (!evaluateConstant(spec->size.get(), size)) {
                 diags.error(spec->size->line, spec->size->col, "an array size must be an integer constant");

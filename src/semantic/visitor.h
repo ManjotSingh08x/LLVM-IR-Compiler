@@ -5,7 +5,6 @@
 
 namespace ast {
 
-//visit() dispatches to visitX, falling back to the visit of the node's family
 template <class Derived, class RetTy = void>
 class ASTVisitor {
 public:
@@ -132,6 +131,6 @@ private:
     Derived &derived() { return *static_cast<Derived *>(this); }
 };
 
-} // namespace ast
+}
 
 #endif

@@ -1,4 +1,3 @@
-//the call graph of a module: who calls whom, plus the facts inlining needs
 #ifndef DATAFLOW_DFA_CALLGRAPH_H
 #define DATAFLOW_DFA_CALLGRAPH_H
 
@@ -10,11 +9,12 @@
 
 namespace passes {
 
+//records which functions call which others
 class CallGraph {
 public:
     struct CallSite {
         ir::CallInst *call;
-        ir::Function *callee;  //null for an indirect call
+        ir::Function *callee;
     };
 
     struct Node {
@@ -22,11 +22,11 @@ public:
         std::vector<CallSite>    calls;
         std::vector<ir::Function *> callees;
         std::vector<ir::Function *> callers;
-        size_t                   callSiteCount = 0;  //direct calls of fn from anywhere
-        size_t                   size = 0;           //instructions in fn
+        size_t                   callSiteCount = 0;
+        size_t                   size = 0;
         bool                     hasIndirectCall = false;
-        bool                     addressTaken = false;  //used other than as a direct callee
-        bool                     recursive = false;     //in a cycle of the call graph
+        bool                     addressTaken = false;
+        bool                     recursive = false;
         size_t                   scc = 0;
     };
 
@@ -34,9 +34,9 @@ public:
 
     const Node &node(const ir::Function *fn) const;
 
-    //strongly connected components, callees before callers
     const std::vector<std::vector<ir::Function *>> &sccs() const { return components; }
 
+    //orders functions so callees come before callers
     std::vector<ir::Function *> bottomUp() const;
 
     void dump(std::ostream &out) const;
@@ -55,6 +55,6 @@ private:
     size_t                                 nextIndex = 0;
 };
 
-} // namespace passes
+}
 
 #endif

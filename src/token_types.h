@@ -52,4 +52,4 @@ inline const std::unordered_map<std::string, int>& keywordTable() {
     return kw;
 }
 
-#endif 
+#endif

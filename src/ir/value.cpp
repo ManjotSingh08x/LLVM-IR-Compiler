@@ -53,4 +53,4 @@ void GlobalVariable::dump(std::ostream &out) const {
         << initializer->getOperand() << "\n";
 }
 
-} // namespace ir
+}

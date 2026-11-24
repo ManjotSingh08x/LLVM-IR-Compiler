@@ -84,4 +84,4 @@ bool RecordLayout::needsDestruction(const sema::RecordSymbol *record) {
     return needed;
 }
 
-} // namespace ir
+}

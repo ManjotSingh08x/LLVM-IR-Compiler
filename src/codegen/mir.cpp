@@ -15,7 +15,7 @@ MOperand registerOp(Reg reg, Width width, Role role) {
 
 bool tracked(Reg reg) { return reg != Reg::RBP && reg != Reg::RSP; }
 
-} // namespace
+}
 
 std::string MOperand::str() const {
     switch (kind) {
@@ -90,7 +90,7 @@ bool isRegisterCopy(const MInst &inst, Reg &from, Reg &to) {
     const MOperand &a = inst.operands[0];
     const MOperand &b = inst.operands[1];
     if (a.kind != MOperand::Register || b.kind != MOperand::Register || a.indirect) return false;
-    if (isXmm(a.reg) != isXmm(b.reg)) return false;  //movq between an xmm and a general register
+    if (isXmm(a.reg) != isXmm(b.reg)) return false;
     if (!isXmm(a.reg) && (a.width != Width::Quad || b.width != Width::Quad)) return false;
     from = a.reg;
     to = b.reg;
@@ -104,4 +104,4 @@ void printCode(const MCode &code, AsmLines &out) {
     }
 }
 
-} // namespace codegen
+}

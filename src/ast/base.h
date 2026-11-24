@@ -5,18 +5,16 @@
 #include <string>
 #include <vector>
 
-//semantic results are held by pointer so the ast does not depend on semantic headers
 namespace sema {
 class Type;
 class Symbol;
 class FunctionSymbol;
 class RecordSymbol;
 class Scope;
-} // namespace sema
+}
 
 namespace ast {
 
-//one kind per concrete node, First/Last markers bound each family
 enum class ASTKind {
     Program,
     TypeSpec,
@@ -115,7 +113,6 @@ protected:
     using ASTNode::ASTNode;
 };
 
-//the type and lvalue flag are set by the type checker
 class Expr : public ASTNode {
 public:
     const sema::Type *type = nullptr;
@@ -134,6 +131,6 @@ public:
     sema::Scope   *scope = nullptr;
 };
 
-} // namespace ast
+}
 
 #endif

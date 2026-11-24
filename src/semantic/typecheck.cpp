@@ -34,12 +34,10 @@ const char *accessWord(ast::AccessKind access) {
     return access == ast::AccessKind::Private ? "private" : "protected";
 }
 
-//int, or long when the index is unsigned or 64-bit, so the offset is extended correctly
 const Type *indexType(const Type *index) {
     return isUnsigned(promote(index)) || integerSize(index) == 8 ? longType() : intType();
 }
 
-//a local variable or parameter, which a lambda must capture to use
 bool isLocal(const Symbol *symbol) {
     if (symbol->kind == SymbolKind::Parameter) return true;
     if (symbol->kind != SymbolKind::Variable || symbol->isStatic) return false;
@@ -47,7 +45,6 @@ bool isLocal(const Symbol *symbol) {
     return kind == ScopeKind::Function || kind == ScopeKind::Block || kind == ScopeKind::Lambda;
 }
 
-//inside the record or a record nested in it, which may use its private members
 bool isWithin(const RecordSymbol *context, const RecordSymbol *record) {
     for (; context != nullptr; context = context->outer) {
         if (context == record) return true;
@@ -55,7 +52,6 @@ bool isWithin(const RecordSymbol *context, const RecordSymbol *record) {
     return false;
 }
 
-//a base link is accessible from here: public always, private in derived, protected in further derived
 bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, const BaseClass &base) {
     if (base.access == ast::AccessKind::Private) return isWithin(here, derived);
     if (base.access == ast::AccessKind::Protected) {
@@ -64,7 +60,6 @@ bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, con
     return true;
 }
 
-//how many base subobjects of this type derived holds, more than one is ambiguous
 unsigned countBasePaths(const RecordSymbol *derived, const RecordSymbol *base) {
     unsigned total = 0;
     for (const BaseClass &parent : derived->bases) {
@@ -77,7 +72,6 @@ unsigned countBasePaths(const RecordSymbol *derived, const RecordSymbol *base) {
     return total;
 }
 
-//the chain of bases walked from derived down to base, the first one found
 bool findBaseChain(const RecordSymbol *derived, const RecordSymbol *base, std::vector<BaseClass> &chain) {
     for (const BaseClass &parent : derived->bases) {
         chain.push_back(parent);
@@ -103,7 +97,6 @@ ast::Expr *withoutParens(ast::Expr *expr) {
     return expr;
 }
 
-//the object a member is reached through: s in s.x, *p in p->x, after findMember decays p
 bool isConstObject(const ast::MemberExpr *node) {
     const Type *base = node->base->type;
     if (!node->isArrow) return base->isConst();
@@ -111,13 +104,11 @@ bool isConstObject(const ast::MemberExpr *node) {
     return pointer && pointer->pointee->isConst();
 }
 
-//const int, int *const or an array of const elements
 bool isConstObjectType(const Type *type) {
     while (asArray(type)) type = asArray(type)->element;
     return type->isConst();
 }
 
-//a const member, at any depth, makes a whole object of the record unassignable
 const Symbol *constField(const RecordSymbol *record) {
     for (const Symbol *field : record->fields) {
         const Type *type = field->type;
@@ -140,14 +131,13 @@ std::string argumentTypes(const ast::NodeList<ast::Expr> &args) {
     return out + ")";
 }
 
-} // namespace
+}
 
 void TypeChecker::check(ast::Program *program) {
     current = program->scope;
     for (const std::unique_ptr<ast::Decl> &decl : program->decls) checkTopLevel(decl.get());
 }
 
-//a declaration at file scope or in a namespace, whose scope is current
 void TypeChecker::checkTopLevel(ast::Decl *decl) {
     switch (decl->getKind()) {
     case ast::ASTKind::RecordDecl:
@@ -188,7 +178,6 @@ void TypeChecker::checkRecord(ast::RecordDecl *node) {
             checkFunction(static_cast<ast::FunctionDecl *>(member.get()));
             break;
         case ast::ASTKind::VarDecl: {
-            //a member initializer, int start{0}, is checked in the record's scope
             Scope *saved = current;
             current = node->scope;
             checkVarDecl(static_cast<ast::VarDecl *>(member.get()));
@@ -212,7 +201,6 @@ void TypeChecker::checkFunction(ast::FunctionDecl *node) {
     context.returnType = fn->signature()->returnType;
     current = node->scope;
 
-    //a definition needs the size of its return value and of every parameter
     if (isIncompleteRecord(context.returnType)) {
         diags.error(node->line, node->col, "'" + node->name.str() + "' returns the incomplete type '"
                                                + typeToString(context.returnType) + "'");
@@ -245,7 +233,6 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     Symbol *symbol = node->symbol;
     if (symbol == nullptr) return;
 
-    //auto takes its initializer's decayed type
     if (symbol->type->is(TypeKind::Auto)) {
         std::unique_ptr<ast::Expr> *value = &node->init;
         if (node->initStyle == ast::InitStyle::Brace) {
@@ -263,7 +250,6 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
             return;
         }
         check(*value);
-        //auto copies the value, so the source's own const is dropped; const auto keeps the copy const
         const Type *deduced = unqualified(decayValue(*value));
         if (deduced->is(TypeKind::Void) || deduced->is(TypeKind::Null)) {
             diags.error(node->line, node->col, "'auto' cannot be deduced from a value of type '"
@@ -282,14 +268,12 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     RecordSymbol *record = asRecord(type);
     switch (node->initStyle) {
     case ast::InitStyle::None:
-        //a const member gets its value from a constructor, a brace list or a definition outside the class
         if (isConstObjectType(type) && !record && symbol->kind == SymbolKind::Variable && !symbol->parentRecord) {
             diags.error(node->line, node->col, "the const variable '" + node->name.str() + "' must be initialised");
         }
         if (record) {
             node->constructor = construct(record, node->ctorArgs, node->line, node->col);
         } else if (const ArrayType *array = asArray(type)) {
-            //every element of an array of objects is default constructed
             while (asArray(array->element)) array = asArray(array->element);
             if (RecordSymbol *element = asRecord(array->element)) {
                 node->constructor = construct(element, node->ctorArgs, node->line, node->col);
@@ -324,7 +308,6 @@ void TypeChecker::initFromValue(std::unique_ptr<ast::Expr> &value, const Type *t
         return;
     }
 
-    //a char array may be filled from a string literal that fits, \0 included
     if (const ArrayType *array = asArray(type)) {
         if (value->getKind() == ast::ASTKind::StringLiteral && array->element->is(TypeKind::Char)) {
             check(value);
@@ -347,10 +330,8 @@ void TypeChecker::initFromValue(std::unique_ptr<ast::Expr> &value, const Type *t
     convert(value, type, "initialisation");
 }
 
-//{ ... } for an array, a record or a single value
 void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     list->type = type;
-    //the declared type was already reported, so its values are not checked against it
     if (isError(type)) return;
     std::string what = "'" + typeToString(type) + "'";
 
@@ -363,13 +344,11 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     }
 
     if (RecordSymbol *record = asRecord(type)) {
-        //a class with constructors takes the list as constructor arguments
         if (!record->constructors.empty()) {
             for (std::unique_ptr<ast::Expr> &item : list->inits) check(item);
             list->constructor = construct(record, list->inits, list->line, list->col);
             return;
         }
-        //otherwise the list fills the fields in order
         if (!record->bases.empty()) {
             diags.error(list->line, list->col, "brace initialisation of " + what + ", which has base classes, is not supported");
             return;
@@ -382,7 +361,6 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
         return;
     }
 
-    //a single value: int a{5}, int b{}, Point *p{&q}
     if (list->inits.size() > 1) {
         diags.error(list->line, list->col, "too many initializers for " + what);
         return;
@@ -400,7 +378,6 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     }
 }
 
-//the constructor for these arguments, null for implicit ones
 FunctionSymbol *TypeChecker::construct(RecordSymbol *record, ast::NodeList<ast::Expr> &args, int line, int col) {
     if (record->constructors.empty()) {
         if (args.empty()) return nullptr;
@@ -431,7 +408,7 @@ FunctionSymbol *TypeChecker::construct(RecordSymbol *record, ast::NodeList<ast::
 
 TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, int col) {
     Lookup result;
-    std::vector<Scope *> lambdas;  //the lambdas left on the way out
+    std::vector<Scope *> lambdas;
 
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Record) {
@@ -443,7 +420,6 @@ TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, i
         }
 
         if (const std::vector<Symbol *> *found = scope->find(name)) {
-            //only what is declared before the use, builtins have no position
             for (Symbol *symbol : *found) {
                 bool before = symbol->line < line || (symbol->line == line && symbol->col < col);
                 if (symbol->line == 0 || before) result.symbols.push_back(symbol);
@@ -460,7 +436,6 @@ TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, i
     return result;
 }
 
-//a name as written: N::f looks only where its qualifier points, f looks outward from here
 TypeChecker::Lookup TypeChecker::lookupRef(ast::DeclRefExpr *node) {
     if (node->qualifier.empty()) return lookupName(node->name, node->line, node->col);
 
@@ -487,7 +462,6 @@ TypeChecker::Lookup TypeChecker::lookupRef(ast::DeclRefExpr *node) {
     return result;
 }
 
-//own members first, then each base, ambiguous when found through two
 bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lookup &result) {
     if (const std::vector<Symbol *> *found = record->members->find(name)) {
         result.symbols = *found;
@@ -499,7 +473,6 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     for (const BaseClass &base : record->bases) {
         Lookup inBase;
         if (!lookupMember(base.record, name, inBase)) continue;
-        //every base is its own subobject, so a second path is ambiguous
         if (found) {
             result.ambiguous = true;
             continue;
@@ -514,7 +487,6 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     return found;
 }
 
-//a local used in a lambda must be captured by it and every enclosing lambda
 void TypeChecker::captureVariable(Symbol *symbol, const std::vector<Scope *> &lambdas, int line, int col) {
     for (Scope *scope : lambdas) {
         ast::LambdaExpr *lambda = scope->lambda;
@@ -533,7 +505,6 @@ void TypeChecker::captureVariable(Symbol *symbol, const std::vector<Scope *> &la
     }
 }
 
-//the record this points at, or null with an error when there is no this
 RecordSymbol *TypeChecker::thisRecord(int line, int col) {
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Lambda) {
@@ -558,7 +529,6 @@ RecordSymbol *TypeChecker::thisRecord(int line, int col) {
     return nullptr;
 }
 
-//a member named without an object belongs to this
 bool TypeChecker::memberOfThis(Symbol *member, int line, int col) {
     RecordSymbol *record = thisRecord(line, col);
     if (record == nullptr) return false;
@@ -570,7 +540,6 @@ bool TypeChecker::memberOfThis(Symbol *member, int line, int col) {
     return true;
 }
 
-//the record whose members the code being checked may see, for access rules
 RecordSymbol *TypeChecker::contextRecord() {
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Record) return scope->record;
@@ -578,7 +547,6 @@ RecordSymbol *TypeChecker::contextRecord() {
     return nullptr;
 }
 
-//private members are usable in their record, protected also in derived records
 void TypeChecker::checkAccess(Symbol *member, const Lookup &lookup, int line, int col) {
     RecordSymbol *owner = member->parentRecord;
     if (owner == nullptr) return;
@@ -661,7 +629,6 @@ const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &loo
     return setType(node, errorType(), false);
 }
 
-//checks the object of a member access and finds the member in its record
 bool TypeChecker::findMember(ast::MemberExpr *node, Lookup &result) {
     const Type *base = check(node->base);
     if (isError(base)) return false;
@@ -709,15 +676,12 @@ const Type *TypeChecker::finishMember(ast::MemberExpr *node, const Lookup &looku
         return setType(node, errorType(), false);
     }
     checkAccess(symbol, lookup, node->line, node->col);
-    //through a pointer the member is an lvalue, with . when the object is, static always
     bool isLValue = node->isArrow || node->base->isLValue || symbol->kind == SymbolKind::Variable;
-    //a field of a const object is const too, a static member belongs to no object
     const Type *type = symbol->type;
     if (symbol->kind == SymbolKind::Field && isConstObject(node) && !asReference(type)) type = table.constOf(type);
     return setType(node, type, isLValue);
 }
 
-//the best overload: no argument converts worse and at least one better
 FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> &candidates,
                                             ast::NodeList<ast::Expr> &args, const std::string &name,
                                             int line, int col) {
@@ -725,7 +689,6 @@ FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> 
         if (isError(arg->type)) return nullptr;
     }
 
-    //each argument's rank, and within a rank the conversion that adds no const is better
     std::vector<FunctionSymbol *> viable;
     std::vector<std::vector<int>> ranks;
     for (FunctionSymbol *candidate : candidates) {
@@ -774,7 +737,6 @@ FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> 
     return nullptr;
 }
 
-//converts each argument to its parameter, variadic extras get the C promotions
 void TypeChecker::applyArguments(const FunctionType *signature, ast::NodeList<ast::Expr> &args,
                                  const std::string &name, int line, int col) {
     if (args.size() < signature->params.size() || (args.size() > signature->params.size() && !signature->isVariadic)) {
@@ -814,7 +776,6 @@ const Type *TypeChecker::check(std::unique_ptr<ast::Expr> &expr) {
     return type ? type : errorType();
 }
 
-//array and function decay, for every operator but & and sizeof
 const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     if (expr->type->is(TypeKind::Array)) {
         wrap(expr, ast::CastKind::ArrayToPointer, decay(expr->type, table));
@@ -824,7 +785,6 @@ const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     return expr->type;
 }
 
-//Derived -> Base needs the base to be accessible, as member access does
 void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line, int col,
                                       const std::string &what) {
     const PointerType *fromPointer = asPointer(from);
@@ -856,7 +816,6 @@ void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line
     }
 }
 
-//findConversion, but a string literal may still initialise a char *
 Conversion TypeChecker::conversionOf(ast::Expr *expr, const Type *to) {
     const PointerType *pointer = asPointer(unqualified(to));
     if (withoutParens(expr)->getKind() == ast::ASTKind::StringLiteral && pointer
@@ -884,7 +843,6 @@ bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, cons
             checkBaseConversion(expr->type, step.result, expr->line, expr->col, what);
         }
         wrap(expr, step.kind, step.result);
-        //a reference binds to the base part of the same object, other steps make a temporary
         if (bindsReference && step.kind == ast::CastKind::DerivedToBase) expr->isLValue = true;
     }
     return true;
@@ -906,7 +864,6 @@ void TypeChecker::checkCondition(std::unique_ptr<ast::Expr> &cond, const std::st
     convert(cond, boolType(), what);
 }
 
-//something that may be assigned to or incremented
 bool TypeChecker::checkModifiable(ast::Expr *expr, const std::string &what) {
     if (isError(expr->type)) return false;
     if (!expr->isLValue || asArray(expr->type) || asFunction(expr->type) || asClosure(expr->type)) {
@@ -1019,7 +976,6 @@ const Type *TypeChecker::visitForStmt(ast::ForStmt *node) {
     return nullptr;
 }
 
-//a lambda's return type comes from its first return, later ones must match
 const Type *TypeChecker::visitReturnStmt(ast::ReturnStmt *node) {
     if (context.lambda) {
         const Type *type = voidType();
@@ -1028,7 +984,6 @@ const Type *TypeChecker::visitReturnStmt(ast::ReturnStmt *node) {
             type = unqualified(decayValue(node->value));
         }
         if (isError(type)) {
-            //the lambda's type is unknown, so its calls must not be reported again
             if (context.returnType == nullptr) context.returnType = errorType();
             return nullptr;
         }
@@ -1072,7 +1027,6 @@ const Type *TypeChecker::visitContinueStmt(ast::ContinueStmt *node) {
     return nullptr;
 }
 
-//gotos are resolved after the whole function, labels may come later
 const Type *TypeChecker::visitGotoStmt(ast::GotoStmt *node) {
     context.gotos.push_back(node);
     return nullptr;
@@ -1132,7 +1086,6 @@ const Type *TypeChecker::visitFloatLiteral(ast::FloatLiteral *node) {
 
 const Type *TypeChecker::visitCharLiteral(ast::CharLiteral *node) { return setType(node, charType(), false); }
 
-//a string literal is an array of its characters and the closing \0
 const Type *TypeChecker::visitStringLiteral(ast::StringLiteral *node) {
     uint64_t size = stringLiteralLength(node->spelling) + 1;
     return setType(node, table.arrayOf(table.constOf(charType()), size), true);
@@ -1243,7 +1196,6 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     std::string invalid = "invalid operands to '" + std::string(opSpelling(node->op)) + "' ('"
                         + typeToString(left) + "' and '" + typeToString(right) + "')";
 
-    //both numbers: convert to the common type. a shift has the type of its promoted left side
     if (isArithmetic(left) && isArithmetic(right)) {
         const Type *common = commonArithmeticType(promote(left), promote(right));
         if (node->op == ast::BinaryOp::Shl || node->op == ast::BinaryOp::Shr) common = promote(left);
@@ -1278,7 +1230,6 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     }
 
     switch (node->op) {
-    //pointer arithmetic: pointer +/- int and pointer - pointer
     case ast::BinaryOp::Add:
         if (isObjectPointer(left) && isIntegral(right)) {
             convert(node->rhs, indexType(right), "an operand");
@@ -1294,14 +1245,12 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
             convert(node->rhs, indexType(right), "an operand");
             return setType(node, unqualified(left), false);
         }
-        //const int * - int * is fine: only the objects pointed at must be of one type
         if (isObjectPointer(left) && isObjectPointer(right)
             && isSameType(unqualified(asPointer(left)->pointee), unqualified(asPointer(right)->pointee))) {
             return setType(node, intType(), false);
         }
         break;
 
-    //pointers compare with the same type, a base, void or null
     case ast::BinaryOp::Eq:
     case ast::BinaryOp::Ne:
     case ast::BinaryOp::Lt:
@@ -1347,7 +1296,6 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
             convert(node->value, indexType(value), "an assignment");
             break;
         }
-        //fall through, numbers on both sides
     case ast::AssignOp::MulAssign:
     case ast::AssignOp::DivAssign:
     case ast::AssignOp::RemAssign:
@@ -1365,7 +1313,6 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
                                                    + "' and '" + typeToString(value) + "')");
             return setType(node, errorType(), false);
         }
-        //x op= v: both sides meet in their common type, only the result converts back
         bool shift = node->op == ast::AssignOp::ShlAssign || node->op == ast::AssignOp::ShrAssign;
         convert(node->value, shift ? promote(target) : commonArithmeticType(promote(target), promote(value)),
                 "an assignment");
@@ -1388,7 +1335,6 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
     const Type *f = check(node->falseExpr);
     if (isError(t) || isError(f)) return setType(node, errorType(), false);
 
-    //both the same object: the result names it
     if (isSameType(t, f) && node->trueExpr->isLValue && node->falseExpr->isLValue && !asArray(t)) {
         return setType(node, t, true);
     }
@@ -1418,7 +1364,6 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
     return setType(node, errorType(), false);
 }
 
-//calls by name or member use overload resolution, other callees are values
 const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
     for (std::unique_ptr<ast::Expr> &arg : node->args) check(arg);
 
@@ -1453,7 +1398,6 @@ const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
             setType(callee, errorType(), false);
             return setType(node, errorType(), false);
         }
-        //a method named without an object is called on this
         if (!viaMember && fn->isMethod() && !memberOfThis(fn, node->line, node->col)) {
             setType(callee, errorType(), false);
             return setType(node, errorType(), false);
@@ -1502,7 +1446,6 @@ const Type *TypeChecker::visitArraySubscriptExpr(ast::ArraySubscriptExpr *node) 
     const Type *index = check(node->index);
     if (isError(base) || isError(index)) return setType(node, errorType(), false);
 
-    //a[b] is *(a + b), so either side may be the pointer: 3[arr] is arr[3]
     if (isIntegral(base) && (index->is(TypeKind::Array) || asPointer(index))) {
         std::swap(node->base, node->index);
         std::swap(base, index);
@@ -1564,7 +1507,6 @@ const Type *TypeChecker::visitNewExpr(ast::NewExpr *node) {
 
     case ast::NewForm::Array:
     case ast::NewForm::ArrayInit: {
-        //new T[n][3][4]: inner sizes must be constants, the result is int (*)[3][4]
         const Type *count = check(node->dims[0]);
         if (!isError(count)) {
             count = decayValue(node->dims[0]);
@@ -1610,7 +1552,6 @@ const Type *TypeChecker::visitDeleteExpr(ast::DeleteExpr *node) {
     return setType(node, voidType(), false);
 }
 
-//a brace list has no type of its own, initFromList handles it
 const Type *TypeChecker::visitInitListExpr(ast::InitListExpr *node) {
     if (node->type) return node->type;
     diags.error(node->line, node->col, "a brace list can only initialise a variable");
@@ -1620,7 +1561,6 @@ const Type *TypeChecker::visitInitListExpr(ast::InitListExpr *node) {
 const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
     ClosureType *closure = table.closureType(node);
 
-    //the capture list is resolved where the lambda is written, outside its body
     for (ast::LambdaCapture &capture : node->captures) {
         if (capture.kind == ast::LambdaCapture::Kind::This) {
             if (hasCapture(node, ast::LambdaCapture::Kind::This, "")) {
@@ -1669,7 +1609,6 @@ const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
     return setType(node, closure, false);
 }
 
-//(T) e: an implicit conversion if one exists, else pointer-pointer or pointer-integer casts
 const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
     const Type *target = node->target->resolved;
     const Type *type = check(node->sub);
@@ -1713,7 +1652,6 @@ const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
     return setType(node, target, false);
 }
 
-//the operand keeps its own type: an array is not decayed, so sizeof gives the whole array
 const Type *TypeChecker::sizeofOperand(std::unique_ptr<ast::Expr> &expr) {
     if (expr->getKind() != ast::ASTKind::ParenExpr) return check(expr);
     ast::ParenExpr *paren = static_cast<ast::ParenExpr *>(expr.get());
@@ -1752,4 +1690,4 @@ const Type *TypeChecker::visitSizeofExpr(ast::SizeofExpr *node) {
 
 const Type *TypeChecker::visitImplicitCastExpr(ast::ImplicitCastExpr *node) { return node->type; }
 
-} // namespace sema
+}

@@ -68,7 +68,6 @@ BasicBlock *BasicBlock::splitAt(Instruction *inst, const std::string &label) {
     instructions.erase(instructions.begin() + at, instructions.end());
     if (allocaCount > instructions.size()) allocaCount = instructions.size();
 
-    //control now reaches the old successors from the tail
     if (Instruction *term = tail->getTerminator()) {
         for (BasicBlock *next : term->getSuccessors()) {
             for (std::unique_ptr<Instruction> &phi : next->instructions) {
@@ -92,7 +91,7 @@ void BasicBlock::addEdge(BasicBlock *from, BasicBlock *to) {
 
 void BasicBlock::dump(std::ostream &out) const {
     out << name << ":";
-    //predecessors are written as a comment, as clang does
+
     if (!predecessors.empty()) {
         out << "  ; preds = ";
         std::set<const BasicBlock *> written;
@@ -185,7 +184,7 @@ void Function::recomputeCFG() {
         block->predecessors.clear();
         block->successors.clear();
     }
-    //only edges between placed blocks count, a removed block is no longer in the graph
+
     std::set<const BasicBlock *> placed(layout.begin(), layout.end());
     for (BasicBlock *block : layout) {
         Instruction *term = block->getTerminator();
@@ -206,7 +205,6 @@ void Function::discard(std::unique_ptr<Instruction> inst) {
 void Function::finalizeCFG(Module &module) {
     if (layout.empty()) return;
 
-    //find every block reachable from entry
     std::set<BasicBlock *> reached;
     std::vector<BasicBlock *> work;
     work.push_back(layout.front());
@@ -221,7 +219,6 @@ void Function::finalizeCFG(Module &module) {
         }
     }
 
-    //keep only reachable blocks, appending any that were never written into
     std::vector<BasicBlock *> kept;
     for (BasicBlock *block : layout) {
         if (reached.count(block)) kept.push_back(block);
@@ -234,7 +231,6 @@ void Function::finalizeCFG(Module &module) {
     }
     layout = kept;
 
-    //a removed block can no longer be a predecessor
     for (BasicBlock *block : layout) {
         std::vector<BasicBlock *> preds;
         for (BasicBlock *pred : block->predecessors) {
@@ -243,7 +239,6 @@ void Function::finalizeCFG(Module &module) {
         block->predecessors = preds;
     }
 
-    //a block that runs off its end returns the zero value
     const sema::Type *returnType = fnType->returnType;
     for (BasicBlock *block : layout) {
         if (block->isTerminated()) continue;
@@ -429,13 +424,11 @@ void Module::dump(std::ostream &out) const {
     if (!globals.empty()) out << "\n";
     for (const std::unique_ptr<GlobalVariable> &global : globals) global->dump(out);
 
-    //the function listed here runs before main starts
     if (globalInit) {
         out << "@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] "
             << "[{ i32, ptr, ptr } { i32 65535, ptr @" << globalInit->getName() << ", ptr null }]\n";
     }
 
-    //a declaration is only written for a function the program uses
     for (const std::unique_ptr<Function> &fn : functions) {
         if (!fn->isDefinition() && !fn->isUsed) continue;
         out << "\n";
@@ -443,4 +436,4 @@ void Module::dump(std::ostream &out) const {
     }
 }
 
-} // namespace ir
+}

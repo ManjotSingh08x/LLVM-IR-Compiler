@@ -19,7 +19,6 @@ const Constant *intConstant(const Value *value) {
     return c && c->constKind == ConstantKind::Int ? c : nullptr;
 }
 
-//matches i = phi [init, pre], [i +/- c, latch]
 bool matchBasicIV(PhiInst *phi, BasicBlock *pre, BasicBlock *latch, BasicIV &iv) {
     unsigned bits = integerBits(phi->getType());
     if ((bits != 32 && bits != 64) || phi->incoming.size() != 2) return false;
@@ -44,7 +43,6 @@ bool matchBasicIV(PhiInst *phi, BasicBlock *pre, BasicBlock *latch, BasicIV &iv)
     return true;
 }
 
-//before the latch terminator and the compare feeding it, so compare and branch can still fuse
 Instruction *updatePoint(BasicBlock *latch) {
     Instruction *term = latch->getTerminator();
     if (term->getOpcode() == Opcode::Br && latch->instructions.size() >= 2) {
@@ -63,7 +61,7 @@ void replaceUses(Function &fn, Value *from, Value *to) {
     }
 }
 
-} // namespace
+}
 
 LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
     BasicBlock *pre = loop.preheader();
@@ -86,7 +84,6 @@ LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
         for (Instruction *user : users) {
             if (!loop.contains(user->getParent())) continue;
 
-            //j = i * k or i << s
             if (user->getOpcode() == Opcode::Binary) {
                 BinaryInst *b = static_cast<BinaryInst *>(user);
                 const Constant *k = nullptr;
@@ -120,7 +117,6 @@ LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
                 continue;
             }
 
-            //p = getelementptr T, base, i
             if (user->getOpcode() == Opcode::GEP) {
                 GEPInst *g = static_cast<GEPInst *>(user);
                 if (ctx.isDefinedInLoop(g->base, loop) || g->indices.empty() || g->indices.back() != iv.phi) continue;
@@ -153,4 +149,4 @@ LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
     return changed ? LoopResult::Changed : LoopResult::Unchanged;
 }
 
-} // namespace passes
+}

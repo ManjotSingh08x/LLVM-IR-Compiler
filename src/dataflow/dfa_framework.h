@@ -1,4 +1,3 @@
-//the iterative data-flow framework shared by every analysis
 #ifndef DATAFLOW_DFA_FRAMEWORK_H
 #define DATAFLOW_DFA_FRAMEWORK_H
 
@@ -13,13 +12,11 @@
 
 namespace passes {
 
-//the reachable blocks in reverse postorder
 std::vector<ir::BasicBlock *> reversePostorder(const ir::Function &fn);
 
 enum class Direction { Forward, Backward };
 enum class Meet { Union, Intersection };
 
-//a data-flow problem in gen/kill form: f(x) = gen U (x - kill)
 template <typename T>
 struct DataflowProblem {
     using Set = std::set<T>;
@@ -27,15 +24,12 @@ struct DataflowProblem {
     Direction direction = Direction::Forward;
     Meet      meet = Meet::Union;
 
-    //the value at entry (forward) or exit (backward)
     Set boundary;
-    //the starting value of every block
     Set top;
 
     std::map<const ir::BasicBlock *, Set> gen;
     std::map<const ir::BasicBlock *, Set> kill;
 
-    //optional change to the value along an edge, used for phis
     std::function<void(const ir::BasicBlock *from, const ir::BasicBlock *to, Set &value)> edge;
 };
 
@@ -68,10 +62,10 @@ void meetInto(std::set<T> &acc, const std::set<T> &value, Meet meet) {
     acc.swap(both);
 }
 
-} // namespace detail
+}
 
-//iterates until no block's value changes
 template <typename T>
+//iterates the data-flow equations until nothing changes
 DataflowResult<T> solve(const ir::Function &fn, const DataflowProblem<T> &problem) {
     using Set = std::set<T>;
     const bool forward = problem.direction == Direction::Forward;
@@ -139,6 +133,6 @@ DataflowResult<T> solve(const ir::Function &fn, const DataflowProblem<T> &proble
     return result;
 }
 
-} // namespace passes
+}
 
 #endif

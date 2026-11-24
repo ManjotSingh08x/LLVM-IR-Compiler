@@ -23,7 +23,7 @@ const Type theNull(TypeKind::Null);
 const Type theAuto(TypeKind::Auto);
 const Type theError(TypeKind::Error);
 
-} // namespace
+}
 
 const Type *voidType() { return &theVoid; }
 const Type *boolType() { return &theBool; }
@@ -145,12 +145,11 @@ bool sameType(const Type *a, const Type *b, bool withConst) {
     case TypeKind::Closure:
         return asClosure(a)->lambda == asClosure(b)->lambda;
     default:
-        //the builtins have no parts, the same kind is the same type
         return true;
     }
 }
 
-} // namespace
+}
 
 bool isSameType(const Type *a, const Type *b) { return sameType(a, b, true); }
 
@@ -191,7 +190,7 @@ const Type *commonArithmeticType(const Type *a, const Type *b) {
     const Type *u = isUnsigned(a) ? a : b;
     const Type *s = isUnsigned(a) ? b : a;
     if (integerSize(u) >= integerSize(s)) return u;
-    return s;  //a wider signed type holds every value of the narrower unsigned one
+    return s;
 }
 
 namespace {
@@ -212,11 +211,10 @@ bool isPromotion(const Type *from, const Type *to) {
     return false;
 }
 
-} // namespace
+}
 
 namespace {
 
-//a T lvalue binds to a T & or const T &, a Derived lvalue to a Base &, but const never goes away
 bool bindsDirectly(const Type *from, const Type *referee, Conversion &result) {
     if (from->isConst() && !referee->isConst()) return false;
     const Type *object = unqualified(from);
@@ -234,7 +232,6 @@ bool bindsDirectly(const Type *from, const Type *referee, Conversion &result) {
     return false;
 }
 
-//const may be added at a level only when every level above it in the target is const too
 bool qualifiesTo(const PointerType *from, const PointerType *to, bool &addsConst) {
     const Type *f = from->pointee;
     const Type *t = to->pointee;
@@ -254,12 +251,11 @@ bool qualifiesTo(const PointerType *from, const PointerType *to, bool &addsConst
     }
 }
 
-} // namespace
+}
 
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table) {
     Conversion result;
 
-    //an error was already reported, let it through
     if (isError(from) || isError(to)) {
         result.rank = ConversionRank::Exact;
         return result;
@@ -268,14 +264,12 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
     if (const ReferenceType *reference = asReference(to)) {
         if (isLValue && bindsDirectly(from, reference->referee, result)) return result;
         result = Conversion();
-        //a const T & also binds to a temporary holding any value that converts to T
         if (!reference->referee->isConst()) return result;
         result = findConversion(from, isLValue, unqualified(reference->referee), table);
         result.addsConst = true;
         return result;
     }
 
-    //a value is read out of its object, so the object's own const no longer applies
     from = unqualified(from);
     to = unqualified(to);
 
@@ -284,7 +278,6 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
         return result;
     }
 
-    //array and function decay count as an exact match
     const Type *value = from;
     if (from->is(TypeKind::Array)) {
         value = decay(from, table);
@@ -318,10 +311,8 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
     const PointerType *fromPointer = asPointer(value);
     const PointerType *toPointer = asPointer(to);
     if (fromPointer && toPointer) {
-        //adding const changes no bits, so no cast is needed
         if (qualifiesTo(fromPointer, toPointer, result.addsConst)) return result;
         result.addsConst = false;
-        //void * and Base * keep whatever const the object had
         bool keepsConst = !fromPointer->pointee->isConst() || toPointer->pointee->isConst();
         if (keepsConst && toPointer->pointee->is(TypeKind::Void) && !fromPointer->pointee->is(TypeKind::Function)) {
             result.rank = ConversionRank::Conversion;
@@ -337,7 +328,6 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
         }
     }
 
-    //a derived object copied into a base object keeps only the base part
     if (asRecord(value) && asRecord(to) && isDerivedFrom(asRecord(value), asRecord(to))) {
         result.rank = ConversionRank::Conversion;
         result.steps.push_back({ ast::CastKind::DerivedToBase, to });
@@ -389,7 +379,6 @@ std::string paramList(const FunctionType *fn) {
     return out + ")";
 }
 
-//built from the outside in, inside is what has been spelled around the name
 std::string spell(const Type *type, const std::string &inside) {
     switch (type->getKind()) {
     case TypeKind::Pointer:
@@ -434,7 +423,7 @@ std::string recordPath(const RecordSymbol *record) {
     return (record->outer ? recordPath(record->outer) : "") + lengthPrefixed(record->name);
 }
 
-} // namespace
+}
 
 std::string typeToString(const Type *type) {
     if (type == nullptr) return "<none>";
@@ -469,7 +458,6 @@ std::string mangleType(const Type *type) {
         return out + "E";
     }
     case TypeKind::Record: {
-        //a nested or namespaced record is wrapped in N..E so its parts are not read as parameters
         const RecordSymbol *record = asRecord(type);
         const RecordSymbol *outermost = record;
         while (outermost->outer) outermost = outermost->outer;
@@ -546,7 +534,6 @@ std::string toLLVMType(const Type *type) {
         out += ")";
         return out;
     }
-    //a record inside another type is named, its layout is written by toLLVMRecord
     case TypeKind::Record: {
         const RecordSymbol *rec = asRecord(type);
         return "%" + std::string(rec->isClass ? "class." : "struct.") + rec->mangledName;
@@ -577,4 +564,4 @@ std::string toLLVMType(const Type *type) {
     return "<none>";
 }
 
-} // namespace sema
+}

@@ -1,4 +1,3 @@
-//the top-level pass driver: runs global passes and module stages in order
 #ifndef PIPELINE_GLOBAL_PASS_MANAGER_H
 #define PIPELINE_GLOBAL_PASS_MANAGER_H
 
@@ -12,6 +11,7 @@
 
 namespace passes {
 
+//runs module stages and global passes in order
 class GlobalPassManager {
 public:
     void addGlobal(std::unique_ptr<GlobalPass> pass);
@@ -21,14 +21,13 @@ public:
 
     void setOptions(const PassOptions &newOptions) { options = newOptions; }
 
-    //false when --verify-each found broken ir, see error()
     bool run(ir::Module &module, AnalysisManager &am);
 
     const std::string &error() const { return errorText; }
 
 private:
     struct Stage {
-        std::unique_ptr<GlobalPass>        global;  //exactly one of the two is set
+        std::unique_ptr<GlobalPass>        global;
         std::unique_ptr<ModulePassManager> module;
     };
 
@@ -39,6 +38,6 @@ private:
     std::string        errorText;
 };
 
-} // namespace passes
+}
 
 #endif

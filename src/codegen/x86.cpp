@@ -25,12 +25,12 @@ const RegNames kGprNames[] = {
     {"r15", "r15d", "r15w", "r15b"},
 };
 
-} // namespace
+}
 
 namespace {
 const int kVirtualIntBase = 1000;
 const int kVirtualFloatBase = 1000000;
-} // namespace
+}
 
 Reg  virtualInt(unsigned n) { return static_cast<Reg>(kVirtualIntBase + (int)n); }
 Reg  virtualFloat(unsigned n) { return static_cast<Reg>(kVirtualFloatBase + (int)n); }
@@ -73,7 +73,7 @@ Width widthOf(const sema::Type *type) {
     case 8:  return Width::Byte;
     case 16: return Width::Word;
     case 32: return Width::Long;
-    default: return Width::Quad;  //i64 and every pointer
+    default: return Width::Quad;
     }
 }
 
@@ -157,4 +157,4 @@ std::string escapeAscii(const std::string &bytes) {
     return out;
 }
 
-} // namespace codegen
+}

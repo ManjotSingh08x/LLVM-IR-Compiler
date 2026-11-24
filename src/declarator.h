@@ -8,7 +8,6 @@ struct Initializer {
     std::unique_ptr<ast::Expr> value;
 };
 
-//everything after the type name, the innermost null inner is where the type name goes
 struct Declarator {
     ast::QualifiedName             name;
     int                            line = 0;

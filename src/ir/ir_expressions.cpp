@@ -1,4 +1,4 @@
-//expressions lower via emitLValue (the address) or emitRValue (the value)
+
 #include "ir/ir_visitor.h"
 
 #include <cstdlib>
@@ -14,10 +14,10 @@ bool isPointerLike(const sema::Type *type) {
     return type->is(sema::TypeKind::Pointer) || type->is(sema::TypeKind::Null);
 }
 
-} // namespace
+}
 
 Value *IRVisitor::emitRValue(ast::Expr *expr) {
-    //an object in memory: compute where it is, then read it
+
     if (expr->isLValue) {
         Value *address = emitLValue(expr);
         if (sema::asArray(expr->type) || sema::asFunction(expr->type)) return address;
@@ -65,7 +65,7 @@ Value *IRVisitor::emitRValue(ast::Expr *expr) {
     case ast::ASTKind::ImplicitCastExpr:
         return emitCast(static_cast<ast::ImplicitCastExpr *>(expr));
     case ast::ASTKind::CastExpr: {
-        //the conversion is in the implicit casts under it; a cast to void only discards
+
         ast::CastExpr *cast = static_cast<ast::CastExpr *>(expr);
         if (cast->type->is(sema::TypeKind::Void)) {
             emitIgnored(cast->sub.get());
@@ -81,7 +81,7 @@ Value *IRVisitor::emitRValue(ast::Expr *expr) {
         return builder.createLoad(expr->type, address);
     }
     case ast::ASTKind::LambdaExpr: {
-        //a closure object made in a temporary slot and read as a whole
+
         AllocaInst *temp = builder.createEntryAlloca(expr->type, "closure.tmp");
         emitLambdaInto(temp, static_cast<ast::LambdaExpr *>(expr));
         return builder.createLoad(expr->type, temp);
@@ -106,10 +106,10 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
     }
     case ast::ASTKind::UnaryExpr: {
         ast::UnaryExpr *unary = static_cast<ast::UnaryExpr *>(expr);
-        //*p names the object p points at, so its address is the value of p
+
         if (unary->op == ast::UnaryOp::Deref) return emitRValue(unary->operand.get());
         if (unary->op == ast::UnaryOp::PreInc || unary->op == ast::UnaryOp::PreDec) {
-            return emitIncDec(unary).address;  //++x names x itself
+            return emitIncDec(unary).address;
         }
         break;
     }
@@ -130,7 +130,7 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
         }
         break;
     case ast::ASTKind::ImplicitCastExpr: {
-        //binding a Base& to a Derived object: the base part of the same object
+
         ast::ImplicitCastExpr *cast = static_cast<ast::ImplicitCastExpr *>(expr);
         if (cast->castKind == ast::CastKind::DerivedToBase && !sema::asPointer(cast->type)) {
             Value *object = emitAddressOf(cast->sub.get());
@@ -141,11 +141,10 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
     default:
         break;
     }
-    //a value that is not in memory yet, but whose address is needed
+
     return materialize(emitRValue(expr), expr->type);
 }
 
-//&& and || in a condition branch straight to the targets without making a bool
 void IRVisitor::emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFalse) {
     switch (expr->getKind()) {
     case ast::ASTKind::ParenExpr:
@@ -174,7 +173,6 @@ void IRVisitor::emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFa
     builder.createCondBr(emitRValue(expr), ifTrue, ifFalse);
 }
 
-//an expression statement: computed for its side effects. an lvalue is not read
 void IRVisitor::emitIgnored(ast::Expr *expr) {
     if (expr->isLValue) {
         emitLValue(expr);
@@ -188,7 +186,6 @@ Value *IRVisitor::emitAddressOf(ast::Expr *expr) {
     return materialize(emitRValue(expr), expr->type);
 }
 
-//spills a value to a new stack slot and returns its address
 Value *IRVisitor::materialize(Value *value, const sema::Type *type) {
     AllocaInst *temp = builder.createEntryAlloca(type, "tmp");
     builder.createStore(type, value, temp);
@@ -204,14 +201,13 @@ Value *IRVisitor::emitDeclRefAddress(ast::DeclRefExpr *node) {
         return fn;
     }
     case sema::SymbolKind::Field:
-        //a member named without this->, inside a method
+
         return fieldAddress(ctx().thisPtr, ctx().thisRecord, symbol);
     default:
         return variableAddress(symbol);
     }
 }
 
-//the address a variable names, loaded through the slot for references
 Value *IRVisitor::variableAddress(const sema::Symbol *symbol) {
     VariableBinding binding;
     std::map<const sema::Symbol *, VariableBinding>::iterator local = ctx().locals.find(symbol);
@@ -229,11 +225,10 @@ Value *IRVisitor::variableAddress(const sema::Symbol *symbol) {
     return binding.slot;
 }
 
-//s.f or p->f: the object's address, moved to the declaring base, then the field
 Value *IRVisitor::emitMemberAddress(ast::MemberExpr *node) {
     sema::Symbol *member = node->symbol;
     if (member->kind == sema::SymbolKind::Variable) {
-        emitIgnored(node->base.get());  //obj.staticMember still evaluates obj
+        emitIgnored(node->base.get());
         return variableAddress(member);
     }
 
@@ -249,9 +244,8 @@ Value *IRVisitor::emitMemberAddress(ast::MemberExpr *node) {
     return fieldAddress(object, record, member);
 }
 
-//a[i]: getelementptr on the decayed base pointer
 Value *IRVisitor::emitSubscriptAddress(ast::ArraySubscriptExpr *node) {
-    //the left operand is evaluated first, as written in the source
+
     Value *base = nullptr;
     Value *index = nullptr;
     if (node->reversed) {
@@ -287,12 +281,11 @@ Value *IRVisitor::emitUnary(ast::UnaryExpr *node) {
     case ast::UnaryOp::PreInc:
     case ast::UnaryOp::PreDec:
     case ast::UnaryOp::Deref:
-        break;  //lvalues, handled by emitRValue through emitLValue
+        break;
     }
     return emitLValue(node);
 }
 
-//++x, x++, --x, x--, the operand is evaluated once
 IncDecResult IRVisitor::emitIncDec(ast::UnaryExpr *node) {
     ast::Expr *operand = node->operand.get();
     const sema::Type *type = operand->type;
@@ -343,7 +336,7 @@ Value *IRVisitor::emitBinary(ast::BinaryExpr *node) {
     default:
         break;
     }
-    //both operands were converted to the type of the result
+
     return emitArithmetic(node->op, node->type, lhs, rhs);
 }
 
@@ -368,7 +361,6 @@ Value *IRVisitor::emitArithmetic(ast::BinaryOp op, const sema::Type *type, Value
     return builder.createBinary(kind, type, lhs, rhs);
 }
 
-//signed integer, ordered float (except !=) and unsigned pointer compares
 Value *IRVisitor::emitCompare(ast::BinaryOp op, const sema::Type *operandType, Value *lhs, Value *rhs) {
     BinaryOpKind kind = BinaryOpKind::ICmpEQ;
     if (isPointerLike(operandType)) {
@@ -405,7 +397,6 @@ Value *IRVisitor::emitCompare(ast::BinaryOp op, const sema::Type *operandType, V
     return builder.createBinary(kind, operandType, lhs, rhs);
 }
 
-//p + n, n + p and p - n move p by n elements
 Value *IRVisitor::emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value *rhs) {
     bool pointerOnLeft = sema::asPointer(node->lhs->type) != nullptr;
     Value *pointer = pointerOnLeft ? lhs : rhs;
@@ -417,7 +408,6 @@ Value *IRVisitor::emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value
     return builder.createElementGEP(sema::asPointer(node->type)->pointee, pointer, count);
 }
 
-//q - p: byte distance divided exactly by the element size
 Value *IRVisitor::emitPointerDifference(ast::BinaryExpr *node, Value *lhs, Value *rhs) {
     const sema::Type *element = sema::asPointer(node->lhs->type)->pointee;
     Value *left = builder.createCast(CastOpKind::PtrToInt, lhs, module.pointerType(), sema::longType());
@@ -427,7 +417,6 @@ Value *IRVisitor::emitPointerDifference(ast::BinaryExpr *node, Value *lhs, Value
     return builder.createCast(CastOpKind::Trunc, count, sema::longType(), sema::intType());
 }
 
-//short-circuit logic through a stack slot instead of a phi
 Value *IRVisitor::emitShortCircuit(ast::BinaryExpr *node) {
     bool isAnd = node->op == ast::BinaryOp::LogicalAnd;
     AllocaInst *slot = builder.createEntryAlloca(sema::boolType(), isAnd ? "and.result" : "or.result");
@@ -454,7 +443,6 @@ Value *IRVisitor::emitShortCircuit(ast::BinaryExpr *node) {
     return builder.createLoad(sema::boolType(), slot);
 }
 
-//x = v and x op= v, the value is computed before the address
 Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
     ast::Expr *target = node->target.get();
     const sema::Type *targetType = target->type;
@@ -501,7 +489,6 @@ Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
     return address;
 }
 
-//c ? a : b with branches, an lvalue when both arms are lvalues of one type
 Value *IRVisitor::emitConditional(ast::ConditionalExpr *node, bool wantAddress) {
     const sema::Type *slotType = wantAddress ? module.pointerType() : node->type;
     bool hasValue = wantAddress || !node->type->is(sema::TypeKind::Void);
@@ -547,7 +534,6 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
         }
         return emitArithmeticConversion(emitRValue(sub), sub->type, node->type);
 
-    //an array decays to its first element: gep with two zero indices
     case ast::CastKind::ArrayToPointer: {
         Value *array = emitAddressOf(sub);
         std::vector<Value *> indices;
@@ -556,14 +542,12 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
         return builder.createGEP(sub->type, array, indices);
     }
 
-    //a function's address is the function itself, @name
     case ast::CastKind::FunctionToPointer:
         return emitLValue(sub);
 
     case ast::CastKind::NullToPointer:
         return module.getNull(node->type);
 
-    //every pointer is ptr in llvm, so only the sema type changes
     case ast::CastKind::PointerToVoid:
     case ast::CastKind::PointerCast:
         return emitRValue(sub);
@@ -597,7 +581,7 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
             const sema::RecordSymbol *from = sema::asRecord(sema::asPointer(sub->type)->pointee);
             return adjustToBase(emitRValue(sub), from, sema::asRecord(target->pointee), true);
         }
-        //slicing: a Derived value copied into a Base keeps only its base part
+
         Value *object = emitAddressOf(sub);
         Value *base = adjustToBase(object, sema::asRecord(sub->type), sema::asRecord(node->type), false);
         return builder.createLoad(node->type, base);
@@ -606,7 +590,6 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
     return emitRValue(sub);
 }
 
-//conversions between bool (i1), char (i8), int (i32), float and double
 Value *IRVisitor::emitArithmeticConversion(Value *value, const sema::Type *from, const sema::Type *to) {
     if (from->getKind() == to->getKind()) return value;
 
@@ -632,13 +615,12 @@ Value *IRVisitor::emitArithmeticConversion(Value *value, const sema::Type *from,
 
     unsigned fromBits = integerBits(from);
     unsigned toBits = integerBits(to);
-    if (toBits == fromBits) return value;  //int and unsigned int: the same bits, read differently
+    if (toBits == fromBits) return value;
     if (toBits < fromBits) return builder.createCast(CastOpKind::Trunc, value, from, to);
     bool fromUnsigned = from->is(sema::TypeKind::Bool) || sema::isUnsigned(from);
     return builder.createCast(fromUnsigned ? CastOpKind::ZExt : CastOpKind::SExt, value, from, to);
 }
 
-//count * sizeof(type) in bytes, via getelementptr from null and ptrtoint
 Value *IRVisitor::sizeOf(const sema::Type *type, Value *count) {
     std::vector<Value *> indices;
     indices.push_back(count);
@@ -646,4 +628,4 @@ Value *IRVisitor::sizeOf(const sema::Type *type, Value *count) {
     return builder.createCast(CastOpKind::PtrToInt, end, module.pointerType(), sema::longType());
 }
 
-} // namespace ir
+}

@@ -1,4 +1,4 @@
-//object lifetime: initialization, construction, destruction, new, delete and base conversions
+
 #include "ir/ir_visitor.h"
 
 #include "semantic/constants.h"
@@ -7,7 +7,6 @@ namespace ir {
 
 namespace {
 
-//the expression a reference is bound to: int &r = x, int &r{x}, int &r(x)
 ast::Expr *referenceSource(ast::VarDecl *decl) {
     switch (decl->initStyle) {
     case ast::InitStyle::Copy:
@@ -24,10 +23,10 @@ ast::Expr *referenceSource(ast::VarDecl *decl) {
     return nullptr;
 }
 
-} // namespace
+}
 
 void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl) {
-    //a reference stores the address of the object it is bound to
+
     if (sema::asReference(type)) {
         ast::Expr *source = referenceSource(decl);
         if (source) builder.createStore(type, emitLValue(source), address);
@@ -36,7 +35,7 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
 
     switch (decl->initStyle) {
     case ast::InitStyle::None:
-        //Dog d; runs the default constructor. int x; leaves x as it is
+
         emitDefaultConstruct(address, type, decl->constructor);
         return;
 
@@ -45,7 +44,7 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
             if (decl->constructor) {
                 emitConstructorCall(decl->constructor, address, decl->ctorArgs);
             } else if (decl->ctorArgs.size() == 1) {
-                builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);  //Point b(a): a copy
+                builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);
             } else {
                 emitDefaultConstruct(address, type, nullptr);
             }
@@ -61,7 +60,6 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
     }
 }
 
-//one initializer value: a brace list, a string for a char array, or a lambda
 void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr) {
     if (expr->getKind() == ast::ASTKind::InitListExpr) {
         emitInitList(address, type, static_cast<ast::InitListExpr *>(expr));
@@ -69,7 +67,7 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     }
     const sema::ArrayType *array = sema::asArray(type);
     if (array && expr->getKind() == ast::ASTKind::StringLiteral) {
-        //char array from a string: the characters, the \0, then zeros
+
         std::string bytes = sema::decodeStringLiteral(static_cast<ast::StringLiteral *>(expr)->spelling);
         bytes.resize(array->size, '\0');
         builder.createStore(type, module.getString(type, bytes), address);
@@ -86,7 +84,6 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     builder.createStore(type, emitRValue(expr), address);
 }
 
-//{ ... }: constructor arguments or element and field fill, the rest zero or default constructed
 void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list) {
     if (list->constructor) {
         emitConstructorCall(list->constructor, address, list->inits);
@@ -136,7 +133,6 @@ void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitLi
     }
 }
 
-//a field without an initializer: its in-class initializer or default construction
 void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *record, const sema::Symbol *field) {
     ast::VarDecl *decl = RecordLayout::fieldDeclaration(field);
     if (decl == nullptr && !layout.needsConstruction(field->type)) return;
@@ -155,7 +151,6 @@ void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *re
     ctx().thisRecord = savedRecord;
 }
 
-//default-constructs an object with no initializer, element-wise for arrays
 void IRVisitor::emitDefaultConstruct(Value *address, const sema::Type *type, const sema::FunctionSymbol *chosen) {
     if (const sema::ArrayType *array = sema::asArray(type)) {
         if (!layout.needsConstruction(type)) return;
@@ -195,7 +190,6 @@ void IRVisitor::emitConstructorCall(const sema::FunctionSymbol *ctor, Value *add
     builder.createCall(functionFor(ctor), ctor->loweredType, values);
 }
 
-//the start of every constructor: bases in order, then the fields in order
 void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value *thisPtr) {
     for (size_t i = 0; i < record->bases.size(); i++) {
         Value *base = builder.createStructGEP(record->type, thisPtr, (unsigned)i);
@@ -204,7 +198,6 @@ void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value
     for (const sema::Symbol *field : record->fields) emitFieldDefaultInit(thisPtr, record, field);
 }
 
-//the end of every destructor: fields in reverse order, then bases in reverse
 void IRVisitor::emitMemberDestruction(const sema::RecordSymbol *record, Value *thisPtr) {
     for (size_t i = record->fields.size(); i > 0; i--) {
         const sema::Symbol *field = record->fields[i - 1];
@@ -236,7 +229,6 @@ Function *IRVisitor::destructorFunction(const sema::RecordSymbol *record) {
     return implicitStructor(record, false);
 }
 
-//the implicit constructor or destructor for a record that needs one, body emitted later
 Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isConstructor) {
     std::string name = "class_" + RecordLayout::recordPath(record) + (isConstructor ? "_C_v" : "_D_v");
     Function *fn = module.findFunction(name);
@@ -302,14 +294,12 @@ void IRVisitor::emitElementAction(Value *element, const sema::Type *elementType,
     }
 }
 
-//the address of a field, moved into the base subobject when inherited
 Value *IRVisitor::fieldAddress(Value *object, const sema::RecordSymbol *objectRecord, const sema::Symbol *field) {
     const sema::RecordSymbol *owner = field->parentRecord;
     Value *base = adjustToBase(object, objectRecord, owner, false);
     return builder.createStructGEP(owner->type, base, RecordLayout::fieldIndex(owner, field));
 }
 
-//the address of a base subobject, a null pointer stays null via select
 Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, const sema::RecordSymbol *to,
                                bool keepNull) {
     if (from == to || from == nullptr || to == nullptr) return address;
@@ -346,9 +336,8 @@ void IRVisitor::callFree(Value *pointer) {
     builder.createCall(fn, fn->fnType, args);
 }
 
-//new T and new T[n], with an 8 byte count cookie in front when elements have destructors
 Value *IRVisitor::emitNew(ast::NewExpr *node) {
-    //the expression type is a pointer to the element, NewExpr::type is as written
+
     const sema::Type *resultType = static_cast<ast::Expr *>(node)->type;
     const sema::Type *element = sema::asPointer(resultType)->pointee;
 
@@ -367,7 +356,7 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
                 emitDefaultConstruct(object, element, nullptr);
             }
         } else if (node->args.empty()) {
-            builder.createStore(element, module.getZero(element), object);  //new int() is 0
+            builder.createStore(element, module.getZero(element), object);
         } else {
             builder.createStore(element, emitRValue(node->args[0].get()), object);
         }
@@ -394,7 +383,7 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
             emitInitValue(slot, element, list->inits[i].get());
         }
         initialised = module.getInt64((long long)list->inits.size());
-        //the elements the list leaves out are zero, or default constructed
+
         ElementAction rest = layout.needsConstruction(element) ? ElementAction::DefaultConstruct : ElementAction::ZeroFill;
         emitElementLoop(elements, element, initialised, count, rest, nullptr);
     } else if (layout.needsConstruction(element)) {
@@ -403,7 +392,6 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
     return elements;
 }
 
-//delete and delete[], null skips the destructor, delete[] reads the cookie
 Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     Value *pointer = emitRValue(node->operand.get());
     const sema::Type *element = sema::asPointer(node->operand->type)->pointee;
@@ -435,4 +423,4 @@ Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     return nullptr;
 }
 
-} // namespace ir
+}

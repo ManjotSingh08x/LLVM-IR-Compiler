@@ -12,12 +12,11 @@ namespace sema {
 class RecordSymbol;
 class SymbolTable;
 
-//semantic type, compare with isSameType, never by address
 enum class TypeKind {
     Void, Bool, Char, SChar, UChar, Short, UShort, Int, UInt, Long, ULong, Float, Double,
-    Null,     //the type of the null literal, converts to any pointer
-    Auto,     //an auto variable before its initializer is checked
-    Error,    //the type of an expression that already produced an error
+    Null,
+    Auto,
+    Error,
     Pointer, Reference, Array, Function, Record, Closure
 };
 
@@ -32,7 +31,6 @@ public:
     TypeKind getKind() const { return kind; }
     bool is(TypeKind other) const { return kind == other; }
 
-    //const int is an int with the same kind, made by SymbolTable::constOf
     bool isConst() const { return unqualifiedType != nullptr; }
 
     const Type *unqualifiedType = nullptr;
@@ -55,7 +53,6 @@ public:
     const Type *referee;
 };
 
-//a size of 0 is an unsized [] until its size is known
 class ArrayType : public Type {
 public:
     ArrayType(const Type *element, uint64_t size)
@@ -83,7 +80,6 @@ public:
     RecordSymbol *record;
 };
 
-//a lambda's own type, its signature known once the body is checked
 class ClosureType : public Type {
 public:
     explicit ClosureType(ast::LambdaExpr *lambda) : Type(TypeKind::Closure), lambda(lambda) {}
@@ -109,7 +105,6 @@ const Type *nullType();
 const Type *autoType();
 const Type *errorType();
 
-//views of a type as one of the compound kinds, null when it is not that kind
 const PointerType   *asPointer(const Type *type);
 const ReferenceType *asReference(const Type *type);
 const ArrayType     *asArray(const Type *type);
@@ -119,40 +114,36 @@ RecordSymbol        *asRecord(const Type *type);
 
 bool isIntegral(const Type *type);
 bool isUnsigned(const Type *type);
-unsigned integerSize(const Type *type);  //bytes of an integral type, 0 for anything else
+unsigned integerSize(const Type *type);
 bool isFloating(const Type *type);
 bool isArithmetic(const Type *type);
-bool isScalar(const Type *type);      //arithmetic, pointers and null: usable as a condition
+bool isScalar(const Type *type);
 bool isObjectPointer(const Type *type);
 bool isError(const Type *type);
 bool isIncompleteRecord(const Type *type);
 
-//structural equality: same kind, same const and same parts, records by declaration
 bool isSameType(const Type *a, const Type *b);
 
-//isSameType ignoring const at every level
 bool isSameUnqualified(const Type *a, const Type *b);
 
-//the type without its top-level const: const int is int, const int * stays as it is
 const Type *unqualified(const Type *type);
 
-//true when base is a base of derived at any depth
+//checks whether a record inherits from another
 bool isDerivedFrom(const RecordSymbol *derived, const RecordSymbol *base);
 
 const Type *stripReference(const Type *type);
 
+//arrays and functions become pointers
 const Type *decay(const Type *type, SymbolTable &table);
 
-//the integer promotion: bool, the chars and the shorts become int
+//applies integer promotion rules
 const Type *promote(const Type *type);
 
-//the usual arithmetic conversions of two promoted types
+//finds the common type of two operands
 const Type *commonArithmeticType(const Type *a, const Type *b);
 
-//how well a value converts to a type, best first
 enum class ConversionRank { Exact, Promotion, Conversion, Impossible };
 
-//the implicit casts from a value to a target type, in order
 struct ConversionStep {
     ast::CastKind kind;
     const Type   *result;
@@ -161,23 +152,21 @@ struct ConversionStep {
 struct Conversion {
     ConversionRank              rank = ConversionRank::Impossible;
     std::vector<ConversionStep> steps;
-    bool                        addsConst = false;  //int * to const int *, int to const int &: loses a tie
+    bool                        addsConst = false;
 };
 
+//ranks the implicit conversion between two types
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table);
 
-//C style spelling for messages: int **(*)[10]
 std::string typeToString(const Type *type);
 
-//the type code used in mangled names
+//builds the type's name fragment for symbols
 std::string mangleType(const Type *type);
 
-//the llvm type a value is stored as, pointers are opaque ptr
 std::string toLLVMType(const Type *type);
 
-//the llvm record layout spelling: bases in order, then fields
 std::string toLLVMRecord(const RecordSymbol *record);
 
-} // namespace sema
+}
 
 #endif

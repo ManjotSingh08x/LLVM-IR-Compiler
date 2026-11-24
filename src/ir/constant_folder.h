@@ -13,11 +13,12 @@ struct FoldedNumber {
     const sema::Type *type = nullptr;
 };
 
-//folds global and static initializers to constants, null means the code must run at startup
+//evaluates initializers at compile time
 class ConstantFolder {
 public:
     ConstantFolder(Module &module, RecordLayout &layout) : module(module), layout(layout) {}
 
+    //folds a global initializer into a constant
     Constant *foldVariable(ast::VarDecl *decl, const sema::Type *type);
 
     Constant *fold(ast::Expr *expr, const sema::Type *type);
@@ -38,6 +39,6 @@ private:
     RecordLayout &layout;
 };
 
-} // namespace ir
+}
 
 #endif

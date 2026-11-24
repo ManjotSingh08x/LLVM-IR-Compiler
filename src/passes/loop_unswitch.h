@@ -1,4 +1,3 @@
-//moves a branch on a loop-invariant condition out of the loop
 #ifndef PASSES_LOOP_UNSWITCH_H
 #define PASSES_LOOP_UNSWITCH_H
 
@@ -6,6 +5,7 @@
 
 namespace passes {
 
+//hoists invariant branches out of loops by duplicating
 class LoopUnswitch : public LoopPass {
 public:
     const char *name() const override { return "loop_unswitch"; }
@@ -17,6 +17,6 @@ protected:
     LoopResult runOnLoop(Loop &loop, LoopContext &ctx) override;
 };
 
-} // namespace passes
+}
 
 #endif

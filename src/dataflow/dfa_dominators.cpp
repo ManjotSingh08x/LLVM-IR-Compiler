@@ -18,7 +18,6 @@ Dominators::Dominators(const ir::Function &fn) : fn(fn) {
     DataflowResult<const ir::BasicBlock *> result = solve(fn, problem);
     for (ir::BasicBlock *block : rpo) dom[block] = result.out[block];
 
-    //idom(n) is the strict dominator of n that has the most dominators itself
     for (ir::BasicBlock *block : rpo) {
         ir::BasicBlock *best = nullptr;
         size_t bestSize = 0;
@@ -45,7 +44,6 @@ Dominators::Dominators(const ir::Function &fn) : fn(fn) {
         for (size_t i = c.size(); i-- > 0;) stack.push_back(c[i]);
     }
 
-    //dominance frontiers: walk up from each predecessor of a join to the join's idom
     for (ir::BasicBlock *block : rpo) {
         std::vector<ir::BasicBlock *> preds;
         for (ir::BasicBlock *pred : block->predecessors) {
@@ -115,4 +113,4 @@ void Dominators::dump(std::ostream &out) const {
     }
 }
 
-} // namespace passes
+}

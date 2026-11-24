@@ -8,29 +8,27 @@
 
 namespace codegen {
 
-//the stack frame of one function, every offset relative to %rbp
+//assigns stack slots and tracks frame size
 class Frame {
 public:
     void addAlloca(const ir::Value *alloca, uint64_t size, uint64_t align);
     bool isAlloca(const ir::Value *value) const { return allocas.count(value) != 0; }
     long long allocaOffset(const ir::Value *alloca) const;
 
-    //the 8-byte memory home of a value
+    //gives a value its stack home slot
     long long home(const ir::Value *value);
     void      setHome(const ir::Value *value, long long offset) { homes[value] = offset; }
 
-    //frame bytes holding a loaded record or array whole
     long long aggregateSlot(const ir::Value *value, uint64_t size, uint64_t align);
     bool      isAggregate(const ir::Value *value) const { return aggregates.count(value) != 0; }
 
-    //the slot a phi's incoming value is copied into at the end of each predecessor
+    //gives a phi node its shared stack slot
     long long phiSlot(const ir::Value *phi);
 
     long long spillSlot() { return allocate(8, 8); }
 
     long long saveSlot(Reg reg);
 
-    //bytes to reserve below %rbp, rounded to 16 so calls see an aligned stack
     uint64_t size() const;
 
 private:
@@ -44,6 +42,6 @@ private:
     std::map<Reg, long long>               saves;
 };
 
-} // namespace codegen
+}
 
 #endif

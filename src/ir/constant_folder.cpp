@@ -35,14 +35,12 @@ FoldedNumber makeInt(long long value, const sema::Type *type) {
     return number;
 }
 
-//an integer constant's bits read as unsigned at the width of its type
 unsigned long long zeroExtended(long long value, const sema::Type *type) {
     unsigned bits = integerBits(type);
     if (bits == 0 || bits >= 64) return (unsigned long long)value;
     return (unsigned long long)value & ((1ULL << bits) - 1);
 }
 
-//an integer value as C sees it: unsigned types zero-extended, the rest sign-extended
 long long asWritten(const FoldedNumber &number) {
     return number.type && sema::isUnsigned(number.type) ? (long long)zeroExtended(number.intValue, number.type)
                                                         : number.intValue;
@@ -56,15 +54,15 @@ FoldedNumber makeFloat(double value, const sema::Type *type) {
     return number;
 }
 
-} // namespace
+}
 
 Constant *ConstantFolder::foldVariable(ast::VarDecl *decl, const sema::Type *type) {
-    //a constructor, or a member that needs one, always runs as code
+
     if (decl->constructor != nullptr || layout.needsConstruction(type)) return nullptr;
 
     switch (decl->initStyle) {
     case ast::InitStyle::None:
-        return module.getZero(type);  //globals start as zero in c++
+        return module.getZero(type);
     case ast::InitStyle::Copy:
     case ast::InitStyle::Brace:
         return fold(decl->init.get(), type);
@@ -78,7 +76,6 @@ Constant *ConstantFolder::foldVariable(ast::VarDecl *decl, const sema::Type *typ
 Constant *ConstantFolder::fold(ast::Expr *expr, const sema::Type *type) {
     expr = withoutParens(expr);
 
-    //a reference holds the address of what it is bound to
     if (sema::asReference(type)) return foldAddress(expr);
 
     if (expr->getKind() == ast::ASTKind::InitListExpr) {
@@ -92,7 +89,6 @@ Constant *ConstantFolder::fold(ast::Expr *expr, const sema::Type *type) {
         }
         return nullptr;
 
-    //copying another object is not a constant
     case sema::TypeKind::Record:
     case sema::TypeKind::Closure:
         return nullptr;
@@ -108,7 +104,6 @@ Constant *ConstantFolder::fold(ast::Expr *expr, const sema::Type *type) {
     }
 }
 
-//{ ... } for an array, a plain record or a single value, missing elements are zero
 Constant *ConstantFolder::foldList(ast::InitListExpr *list, const sema::Type *type) {
     if (list->constructor != nullptr) return nullptr;
 
@@ -152,7 +147,6 @@ Constant *ConstantFolder::foldList(ast::InitListExpr *list, const sema::Type *ty
     return fold(list->inits[0].get(), type);
 }
 
-//a char array from a string: the characters, the \0, then zeros
 Constant *ConstantFolder::foldStringArray(ast::StringLiteral *literal, const sema::ArrayType *array) {
     std::string bytes = sema::decodeStringLiteral(literal->spelling);
     bytes.resize(array->size, '\0');
@@ -179,19 +173,19 @@ Constant *ConstantFolder::foldPointer(ast::Expr *expr) {
         switch (cast->castKind) {
         case ast::CastKind::NullToPointer:
             return module.getNull(module.pointerType());
-        case ast::CastKind::ArrayToPointer:     //the first element is at the array's address
+        case ast::CastKind::ArrayToPointer:
         case ast::CastKind::FunctionToPointer:
             return foldAddress(cast->sub.get());
-        case ast::CastKind::PointerToVoid:      //the same address, only the type changes
+        case ast::CastKind::PointerToVoid:
         case ast::CastKind::PointerCast:
             return foldPointer(cast->sub.get());
-        case ast::CastKind::IntegralToPointer: {  //(T *)0 is the null pointer
+        case ast::CastKind::IntegralToPointer: {
             FoldedNumber number;
             if (!foldNumber(cast->sub.get(), number) || number.isFloat || number.intValue != 0) return nullptr;
             return module.getNull(module.pointerType());
         }
         default:
-            return nullptr;  //a base class conversion may move the address
+            return nullptr;
         }
     }
 
@@ -200,7 +194,6 @@ Constant *ConstantFolder::foldPointer(ast::Expr *expr) {
     }
 }
 
-//the address of a string literal, a global variable or a function
 Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
     expr = withoutParens(expr);
 
@@ -212,7 +205,7 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
 
     if (expr->getKind() != ast::ASTKind::DeclRefExpr) return nullptr;
     sema::Symbol *symbol = static_cast<ast::DeclRefExpr *>(expr)->symbol;
-    if (symbol == nullptr || symbol->mangledName.empty()) return nullptr;  //locals have no global name
+    if (symbol == nullptr || symbol->mangledName.empty()) return nullptr;
 
     if (symbol->kind == sema::SymbolKind::Function) {
         Function *fn = module.findFunction(symbol->mangledName);
@@ -220,7 +213,7 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
         fn->isUsed = true;
         return module.getAddress(fn);
     }
-    //a global reference would have to be read first, which is not a constant
+
     if (symbol->kind != sema::SymbolKind::Variable || sema::asReference(symbol->type)) return nullptr;
     GlobalVariable *global = module.findGlobal(symbol->mangledName);
     if (global == nullptr) return nullptr;
@@ -230,7 +223,7 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
 bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
     switch (expr->getKind()) {
     case ast::ASTKind::DeclRefExpr: {
-        //a const integer variable with a constant value
+
         long long value = 0;
         if (!sema::evaluateConstant(expr, value)) return false;
         out = makeInt(value, expr->type);
@@ -312,7 +305,7 @@ bool ConstantFolder::foldUnary(ast::UnaryExpr *expr, FoldedNumber &out) {
     case ast::UnaryOp::BitNot:
         out = makeInt(~operand.intValue, expr->type);
         return true;
-    case ast::UnaryOp::LogicalNot:  //the operand was already converted to bool
+    case ast::UnaryOp::LogicalNot:
         out = makeInt(operand.intValue == 0 ? 1 : 0, sema::boolType());
         return true;
     default:
@@ -320,7 +313,6 @@ bool ConstantFolder::foldUnary(ast::UnaryExpr *expr, FoldedNumber &out) {
     }
 }
 
-//both operands were already converted to the same type by the type checker
 bool ConstantFolder::foldBinary(ast::BinaryExpr *expr, FoldedNumber &out) {
     FoldedNumber a;
     FoldedNumber b;
@@ -356,7 +348,7 @@ bool ConstantFolder::foldBinary(ast::BinaryExpr *expr, FoldedNumber &out) {
     case ast::BinaryOp::Mul: out = makeInt((long long)((unsigned long long)x * (unsigned long long)y), type); return true;
     case ast::BinaryOp::Div:
     case ast::BinaryOp::Rem:
-        //division by zero and the smallest value / -1 are undefined: leave them to run
+
         if (y == 0) return false;
         if (isUnsignedOp) {
             out = makeInt((long long)(expr->op == ast::BinaryOp::Div ? ux / uy : ux % uy), type);
@@ -386,7 +378,6 @@ bool ConstantFolder::foldBinary(ast::BinaryExpr *expr, FoldedNumber &out) {
     return false;
 }
 
-//what an implicit conversion does to a value
 FoldedNumber ConstantFolder::convertNumber(const FoldedNumber &number, const sema::Type *to) {
     if (to->is(sema::TypeKind::Bool)) {
         bool truth = number.isFloat ? number.floatValue != 0.0 : number.intValue != 0;
@@ -397,7 +388,7 @@ FoldedNumber ConstantFolder::convertNumber(const FoldedNumber &number, const sem
         bool fromUnsigned = sema::isUnsigned(number.type);
         return makeFloat(fromUnsigned ? (double)zeroExtended(number.intValue, number.type) : (double)number.intValue, to);
     }
-    if (number.isFloat) {  //truncates toward zero
+    if (number.isFloat) {
         if (sema::isUnsigned(to)) return makeInt((long long)(unsigned long long)number.floatValue, to);
         return makeInt((long long)number.floatValue, to);
     }
@@ -409,4 +400,4 @@ Constant *ConstantFolder::numberConstant(const FoldedNumber &number) {
     return module.getInt(number.type, number.intValue);
 }
 
-} // namespace ir
+}

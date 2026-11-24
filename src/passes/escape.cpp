@@ -13,7 +13,7 @@ bool isScalarSlot(const sema::Type *type) {
     return sema::isIntegral(type) || sema::isFloating(type) || type->is(sema::TypeKind::Pointer);
 }
 
-} // namespace
+}
 
 const Value *EscapeInfo::baseOf(const Value *address) {
     while (address->getKind() == ValueKind::Instruction &&
@@ -36,7 +36,7 @@ EscapeInfo::EscapeInfo(const Function &fn) {
     for (const Instruction *alloca : allocas) {
         const sema::Type *slotType = static_cast<const AllocaInst *>(alloca)->getAccessType();
         bool escapes = false;
-        bool wholeAccessOnly = true;  //only direct loads and stores of the slot's own type
+        bool wholeAccessOnly = true;
         std::vector<const Value *> work(1, alloca);
         while (!work.empty() && !escapes) {
             const Value *address = work.back();
@@ -49,7 +49,7 @@ EscapeInfo::EscapeInfo(const Function &fn) {
                 case Opcode::Store: {
                     const StoreInst *store = static_cast<const StoreInst *>(user);
                     if (store->value == address) {
-                        escapes = true;  //the address itself is written to memory
+                        escapes = true;
                     } else if (address != alloca || !sema::isSameUnqualified(store->getAccessType(), slotType)) {
                         wholeAccessOnly = false;
                     }
@@ -60,7 +60,7 @@ EscapeInfo::EscapeInfo(const Function &fn) {
                         wholeAccessOnly = false;
                         work.push_back(user);
                     } else {
-                        escapes = true;  //used as an index, so as a number
+                        escapes = true;
                     }
                     break;
                 default:
@@ -85,9 +85,7 @@ bool EscapeInfo::mayAlias(const Value *a, const Value *b) const {
         return base->getKind() == ValueKind::Instruction &&
                static_cast<const Instruction *>(base)->getOpcode() == Opcode::Alloca;
     };
-    //two different stack slots or globals never overlap
     if (isObject(baseA) && isObject(baseB) && baseA != baseB) return false;
-    //a slot nobody else can reach is only touched through its own addresses
     auto isPrivate = [&](const Value *base) {
         return base->getKind() == ValueKind::Instruction && !escapes(base) &&
                static_cast<const Instruction *>(base)->getOpcode() == Opcode::Alloca;
@@ -105,4 +103,4 @@ bool EscapeInfo::callMayTouch(const Value *address) const {
     return true;
 }
 
-} // namespace passes
+}

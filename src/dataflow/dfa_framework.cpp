@@ -26,4 +26,4 @@ std::vector<ir::BasicBlock *> reversePostorder(const ir::Function &fn) {
     return postorder;
 }
 
-} // namespace passes
+}

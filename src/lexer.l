@@ -11,14 +11,13 @@
 #include <iomanip>
 #include "token_types.h"
 
-//yylex below serves tokens put back by error recovery before scanning new ones
 #define YY_DECL static int scanToken(void)
 
 struct TokenRecord {
     std::string lexeme;
     int         id;
     int         line;
-    std::string declType;   //what an identifier was declared as, filled by the parser
+    std::string declType;
 };
 
 struct LexError {
@@ -40,12 +39,10 @@ static int cmtCol    = 1;
 
 static std::string g_strBuf;
 
-//brace depth so far and before the last token, so error recovery resumes at the right block
 int        g_braceDepth = 0;
 int        g_depthBeforeToken = 0;
 static int g_lastRBraceTok = -1;
 
-//tokens put back by error recovery, read before the scanner
 struct QueuedToken {
     int     id;
     YYSTYPE value;
@@ -53,7 +50,6 @@ struct QueuedToken {
 };
 static std::deque<QueuedToken> g_tokenQueue;
 
-//each token's start and the brace depth before it, for error recovery
 struct TokenDepth {
     int line;
     int col;
@@ -62,7 +58,7 @@ struct TokenDepth {
 static std::vector<TokenDepth> g_tokenDepths;
 
 static int  g_prevTokenId = 0;
-static bool g_lastSemiAfterRBrace = false;  //the latest ; came right after a }, as in "};"
+static bool g_lastSemiAfterRBrace = false;
 
 static void countBraces(int id) {
     if (id == TOK_SEMI) g_lastSemiAfterRBrace = g_prevTokenId == TOK_RBRACE;
@@ -76,7 +72,6 @@ static void countBraces(int id) {
 static int addToken(int id) {
     countBraces(id);
     if (id == TOK_RBRACE) g_lastRBraceTok = (int)g_tokens.size();
-    //a token's semantic value is its index in g_tokens
     yylval.tok = (int)g_tokens.size();
     g_tokens.push_back({ std::string(yytext), id, tokLine, std::string() });
     return id;
@@ -108,7 +103,6 @@ static std::string showChar(char c) {
     return buf;
 }
 
-//tracks token columns and parser locations
 #define YY_USER_ACTION                                    \
     tokLine = yylineno;                                   \
     tokCol  = g_col;                                      \
@@ -125,7 +119,6 @@ static std::string showChar(char c) {
 %option yylineno
 %option nounput noinput
 
-
 DIGIT       [0-9]
 HEXDIGIT    [0-9a-fA-F]
 LETTER      [a-zA-Z_]
@@ -135,12 +128,10 @@ FLOATNUM    ({DIGIT}+"."{DIGIT}*{EXPONENT}?|"."{DIGIT}+{EXPONENT}?|{DIGIT}+{EXPO
 INTSUFFIX   ([uU]([lL]|ll|LL)?|([lL]|ll|LL)[uU]?)
 CHARBODY    ([^'\\\n]|\\.)
 
-
 %x BLOCK_COMMENT
 %x STRING_LIT
 
 %%
-
 
 "/*"                    { cmtLine = tokLine; cmtCol = tokCol;
                           BEGIN(BLOCK_COMMENT); }
@@ -156,7 +147,6 @@ CHARBODY    ([^'\\\n]|\\.)
 
 [ \t\r]+                { }
 \n                      { }
-
 
 {LETTER}{IDCHAR}*       { auto it = keywordTable().find(yytext);
                           if (it != keywordTable().end()) return addToken(it->second);
@@ -178,11 +168,10 @@ CHARBODY    ([^'\\\n]|\\.)
                                        + yytext);
                           else
                               return addToken(TOK_INT_LITERAL);
-                        }                                         // decimal integer with range check
+                        }
 
 ({DIGIT}|"."{DIGIT})[0-9a-zA-Z_.]*  { addError(std::string("malformed numeric literal: ")
-                                               + yytext); }      // starts like a number but has trailing junk
-
+                                               + yytext); }
 
 '\\x{HEXDIGIT}{1,2}'    { return addToken(TOK_CHAR_LITERAL); }
 '{CHARBODY}'            { if (yytext[1] == '\\' && !isValidEscape(yytext[2]))
@@ -194,7 +183,6 @@ CHARBODY    ([^'\\\n]|\\.)
 '{CHARBODY}{2,}'        { addError(std::string("multi-character literal: ")
                                    + yytext); }
 '{CHARBODY}*            { addError("unterminated character literal"); }
-
 
 \"                      { g_strBuf = "\"";
                           litLine = tokLine; litCol = tokCol;
@@ -217,62 +205,58 @@ CHARBODY    ([^'\\\n]|\\.)
                                      "unterminated string literal at end of file");
                           BEGIN(INITIAL); yyterminate(); }
 
-
-"++"    { return addToken(TOK_INC); }             
-"--"    { return addToken(TOK_DEC); }             
-"+="    { return addToken(TOK_PLUS_ASSIGN); }      
-"-="    { return addToken(TOK_MINUS_ASSIGN); }     
-"*="    { return addToken(TOK_STAR_ASSIGN); }      
-"/="    { return addToken(TOK_SLASH_ASSIGN); }     
-"%="    { return addToken(TOK_PERCENT_ASSIGN); }   
+"++"    { return addToken(TOK_INC); }
+"--"    { return addToken(TOK_DEC); }
+"+="    { return addToken(TOK_PLUS_ASSIGN); }
+"-="    { return addToken(TOK_MINUS_ASSIGN); }
+"*="    { return addToken(TOK_STAR_ASSIGN); }
+"/="    { return addToken(TOK_SLASH_ASSIGN); }
+"%="    { return addToken(TOK_PERCENT_ASSIGN); }
 "<<="   { return addToken(TOK_SHL_ASSIGN); }
 ">>="   { return addToken(TOK_SHR_ASSIGN); }
 "&="    { return addToken(TOK_AND_ASSIGN); }
 "|="    { return addToken(TOK_OR_ASSIGN); }
 "^="    { return addToken(TOK_XOR_ASSIGN); }
-"=="    { return addToken(TOK_EQ); }               
-"!="    { return addToken(TOK_NEQ); }              
-"<="    { return addToken(TOK_LE); }               
-">="    { return addToken(TOK_GE); }               
-"&&"    { return addToken(TOK_AND); }              
-"||"    { return addToken(TOK_OR); }               
-"<<"    { return addToken(TOK_SHL); }              
-">>"    { return addToken(TOK_SHR); }              
-"->"    { return addToken(TOK_ARROW); }            
-"::"    { return addToken(TOK_SCOPE); }            
+"=="    { return addToken(TOK_EQ); }
+"!="    { return addToken(TOK_NEQ); }
+"<="    { return addToken(TOK_LE); }
+">="    { return addToken(TOK_GE); }
+"&&"    { return addToken(TOK_AND); }
+"||"    { return addToken(TOK_OR); }
+"<<"    { return addToken(TOK_SHL); }
+">>"    { return addToken(TOK_SHR); }
+"->"    { return addToken(TOK_ARROW); }
+"::"    { return addToken(TOK_SCOPE); }
 
-"+"     { return addToken(TOK_PLUS); }             
-"-"     { return addToken(TOK_MINUS); }            
-"*"     { return addToken(TOK_STAR); }             
-"/"     { return addToken(TOK_SLASH); }            
-"%"     { return addToken(TOK_PERCENT); }          
-"="     { return addToken(TOK_ASSIGN); }           
-"<"     { return addToken(TOK_LT); }               
-">"     { return addToken(TOK_GT); }               
-"!"     { return addToken(TOK_NOT); }              
-"&"     { return addToken(TOK_BITAND); }           
-"|"     { return addToken(TOK_BITOR); }            
-"^"     { return addToken(TOK_BITXOR); }           
-"~"     { return addToken(TOK_BITNOT); }           
-"."     { return addToken(TOK_DOT); }              
-"?"     { return addToken(TOK_QUESTION); }         
-":"     { return addToken(TOK_COLON); }            
+"+"     { return addToken(TOK_PLUS); }
+"-"     { return addToken(TOK_MINUS); }
+"*"     { return addToken(TOK_STAR); }
+"/"     { return addToken(TOK_SLASH); }
+"%"     { return addToken(TOK_PERCENT); }
+"="     { return addToken(TOK_ASSIGN); }
+"<"     { return addToken(TOK_LT); }
+">"     { return addToken(TOK_GT); }
+"!"     { return addToken(TOK_NOT); }
+"&"     { return addToken(TOK_BITAND); }
+"|"     { return addToken(TOK_BITOR); }
+"^"     { return addToken(TOK_BITXOR); }
+"~"     { return addToken(TOK_BITNOT); }
+"."     { return addToken(TOK_DOT); }
+"?"     { return addToken(TOK_QUESTION); }
+":"     { return addToken(TOK_COLON); }
 
-
-"("     { return addToken(TOK_LPAREN); }          
-")"     { return addToken(TOK_RPAREN); }          
-"{"     { return addToken(TOK_LBRACE); }          
-"}"     { return addToken(TOK_RBRACE); }          
-"["     { return addToken(TOK_LBRACKET); }        
-"]"     { return addToken(TOK_RBRACKET); }        
-";"     { return addToken(TOK_SEMI); }            
-","     { return addToken(TOK_COMMA); }          
-
+"("     { return addToken(TOK_LPAREN); }
+")"     { return addToken(TOK_RPAREN); }
+"{"     { return addToken(TOK_LBRACE); }
+"}"     { return addToken(TOK_RBRACE); }
+"["     { return addToken(TOK_LBRACKET); }
+"]"     { return addToken(TOK_RBRACKET); }
+";"     { return addToken(TOK_SEMI); }
+","     { return addToken(TOK_COMMA); }
 
 .       { addError("illegal character '" + showChar(yytext[0]) + "'"); }
 
 %%
-
 
 int yylex(void) {
     if (!g_tokenQueue.empty()) {
@@ -285,12 +269,12 @@ int yylex(void) {
     return scanToken();
 }
 
-//puts the parser's lookahead token back (yylval and yylloc still hold it)
+//returns a token to the front of the queue
 void pushBackToken(int id) {
     g_tokenQueue.push_front({ id, yylval, yylloc });
 }
 
-//the brace depth before the token that starts at line:col, the depth of the latest token if none does
+//brace depth just before the token at this position
 int depthAt(int line, int col) {
     for (size_t i = g_tokenDepths.size(); i-- > 0;) {
         if (g_tokenDepths[i].line == line && g_tokenDepths[i].col == col) return g_tokenDepths[i].depth;
@@ -302,7 +286,7 @@ static int braceEffect(int id) {
     return id == TOK_LBRACE ? 1 : id == TOK_RBRACE ? -1 : 0;
 }
 
-//after error recovery, skips or restores braces so the parser resumes at brace depth target
+//skips or inserts braces to restore the given depth
 void resyncBraces(int target) {
     int depth = g_braceDepth;
     for (const QueuedToken &token : g_tokenQueue) depth -= braceEffect(token.id);
@@ -321,13 +305,11 @@ void resyncBraces(int target) {
         }
         depth += braceEffect(id);
     }
-    //a skipped body often ends in "};", the ; belongs to it
     if (skipped) {
         int next = yylex();
         if (next != TOK_SEMI) pushBackToken(next);
     }
     if (depth < target && g_lastSemiAfterRBrace) {
-        //the skipped "};" closed a class or struct: give back its ; too, after the braces
         YYSTYPE value;
         value.tok = g_lastRBraceTok;
         g_tokenQueue.push_front({ TOK_SEMI, value, yylloc });
@@ -345,7 +327,6 @@ void setDeclType(int index, const std::string &type){
     }
 }
 
-//typedef names already hold the declaration's type when the parser marks them
 void replaceDeclType(int index, const std::string &type){
     if(index >= 0 && index < (int)g_tokens.size()){
         g_tokens[index].declType = type;

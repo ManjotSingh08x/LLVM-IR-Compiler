@@ -64,7 +64,6 @@ public:
     bool                  isUntil = false;
 };
 
-//do ... until (c) loops while c is false
 class DoStmt : public Stmt {
 public:
     DoStmt(std::unique_ptr<Stmt> body, std::unique_ptr<Expr> cond, int line, int col)
@@ -75,7 +74,6 @@ public:
     bool                  isUntil = false;
 };
 
-//every part but the body may be null, init declarations get their own scope
 class ForStmt : public Stmt {
 public:
     ForStmt(std::unique_ptr<Stmt> init, std::unique_ptr<Expr> cond, std::unique_ptr<Expr> inc,
@@ -148,6 +146,6 @@ public:
     std::unique_ptr<Stmt> sub;
 };
 
-} // namespace ast
+}
 
 #endif

@@ -1,4 +1,3 @@
-//live variables: which values are live into and out of each block
 #ifndef DATAFLOW_DFA_LIVENESS_H
 #define DATAFLOW_DFA_LIVENESS_H
 
@@ -12,11 +11,11 @@ namespace passes {
 
 using ValueSet = std::set<const ir::Value *>;
 
+//computes which values are live at block boundaries
 class Liveness {
 public:
     explicit Liveness(const ir::Function &fn);
 
-    //arguments and instructions that produce a value
     static bool isTracked(const ir::Value *value);
 
     const ValueSet &liveIn(const ir::BasicBlock *block) const { return find(in, block); }
@@ -42,6 +41,6 @@ private:
 
 void dumpValueSet(std::ostream &out, const ValueSet &values);
 
-} // namespace passes
+}
 
 #endif

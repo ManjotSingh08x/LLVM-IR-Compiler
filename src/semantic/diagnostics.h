@@ -17,7 +17,6 @@ public:
     bool   empty() const { return errors.empty(); }
     size_t count() const { return errors.size(); }
 
-    //sorted by position, since the passes do not visit the file in order
     void print(std::ostream &out, const char *filename) {
         std::stable_sort(errors.begin(), errors.end(), [](const Error &a, const Error &b) {
             return a.line != b.line ? a.line < b.line : a.col < b.col;
@@ -39,6 +38,6 @@ private:
     std::vector<Error> errors;
 };
 
-} // namespace sema
+}
 
 #endif

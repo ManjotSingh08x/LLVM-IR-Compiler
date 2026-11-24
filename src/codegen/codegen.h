@@ -9,10 +9,9 @@
 
 namespace codegen {
 
-//writes the module as x86-64 assembly (phis must be gone); false with the reason in error on unsupported ir
 bool emitAssembly(ir::Module &module, passes::AnalysisManager &am, int optLevel, std::ostream &out,
                   std::string &error);
 
-} // namespace codegen
+}
 
 #endif

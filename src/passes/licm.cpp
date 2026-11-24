@@ -26,13 +26,12 @@ bool mayTrap(const Instruction &inst) {
            op == BinaryOpKind::URem;
 }
 
-} // namespace
+}
 
 LoopResult LICM::runOnLoop(Loop &loop, LoopContext &ctx) {
     BasicBlock *pre = loop.preheader();
     if (pre == nullptr) return LoopResult::Unchanged;
 
-    //repeat until no new invariant instruction is found
     std::set<const Instruction *> invariant;
     bool grew = true;
     while (grew) {
@@ -46,7 +45,6 @@ LoopResult LICM::runOnLoop(Loop &loop, LoopContext &ctx) {
                     if (!invariant.count(static_cast<Instruction *>(operand))) all = false;
                 }
                 if (!all) continue;
-                //a trapping instruction must dominate every exit, and a loop with no exit never qualifies
                 if (mayTrap(*inst) && (loop.exits.empty() || !ctx.dominatesAllExits(inst->getParent(), loop))) continue;
                 invariant.insert(inst.get());
                 grew = true;
@@ -55,7 +53,6 @@ LoopResult LICM::runOnLoop(Loop &loop, LoopContext &ctx) {
     }
     if (invariant.empty()) return LoopResult::Unchanged;
 
-    //hoist in dominator-tree order so operands reach the preheader first
     Instruction *preTerm = pre->getTerminator();
     for (BasicBlock *block : ctx.doms.preorder()) {
         if (!loop.contains(block)) continue;
@@ -68,4 +65,4 @@ LoopResult LICM::runOnLoop(Loop &loop, LoopContext &ctx) {
     return LoopResult::Changed;
 }
 
-} // namespace passes
+}

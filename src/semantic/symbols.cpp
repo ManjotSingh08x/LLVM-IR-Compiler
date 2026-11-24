@@ -60,14 +60,13 @@ std::string QualifierTarget::spelling() const {
 
 namespace {
 
-//a namespace or class that can hold the next part of a qualified name
 Symbol *container(const std::vector<Symbol *> *found) {
     if (found == nullptr) return nullptr;
     Symbol *symbol = (*found)[0];
     return symbol->kind == SymbolKind::Namespace || symbol->kind == SymbolKind::Record ? symbol : nullptr;
 }
 
-} // namespace
+}
 
 QualifierTarget resolveQualifier(Scope *from, const std::vector<std::string> &qualifier, int line, int col) {
     QualifierTarget target;
@@ -239,10 +238,10 @@ void dumpScope(std::ostream &out, Scope *scope, int depth) {
     for (const std::unique_ptr<Scope> &child : scope->children) dumpScope(out, child.get(), depth + 1);
 }
 
-} // namespace
+}
 
 void SymbolTable::dump(std::ostream &out) {
     dumpScope(out, root.get(), 0);
 }
 
-} // namespace sema
+}

@@ -1,4 +1,3 @@
-//def-use chains: the instructions that read each value
 #ifndef DATAFLOW_DFA_DEFUSE_H
 #define DATAFLOW_DFA_DEFUSE_H
 
@@ -10,6 +9,7 @@
 
 namespace passes {
 
+//maps each value to the instructions using it
 class DefUse {
 public:
     explicit DefUse(const ir::Function &fn);
@@ -24,6 +24,6 @@ private:
     std::map<const ir::Value *, std::vector<ir::Instruction *>> userMap;
 };
 
-} // namespace passes
+}
 
 #endif

@@ -11,14 +11,12 @@
 
 namespace sema {
 
-//first semantic pass: builds the scope tree, resolves types and mangles names
 class SymbolBuilder : public ast::ASTVisitor<SymbolBuilder> {
 public:
     SymbolBuilder(SymbolTable &table, Diagnostics &diags) : table(table), diags(diags) {}
 
     void build(ast::Program *program);
 
-    //statements: open scopes and declare locals
     void visitCompoundStmt(ast::CompoundStmt *node);
     void visitDeclStmt(ast::DeclStmt *node);
     void visitExprStmt(ast::ExprStmt *node);
@@ -32,7 +30,6 @@ public:
     void visitCaseStmt(ast::CaseStmt *node);
     void visitDefaultStmt(ast::DefaultStmt *node);
 
-    //expressions: walked only for lambdas and the types in new
     void visitParenExpr(ast::ParenExpr *node);
     void visitUnaryExpr(ast::UnaryExpr *node);
     void visitBinaryExpr(ast::BinaryExpr *node);
@@ -50,7 +47,6 @@ public:
     void visitLambdaExpr(ast::LambdaExpr *node);
 
 private:
-    //declares every name before any body is built
     void declareBuiltins();
     void declareRecord(ast::RecordDecl *node, Scope *scope, RecordSymbol *outer);
     void declareMethod(ast::FunctionDecl *node, RecordSymbol *record, ast::AccessKind access);
@@ -64,7 +60,6 @@ private:
     void defineStaticMember(ast::VarDecl *node, RecordSymbol *record);
     Symbol *declareVariable(ast::VarDecl *node, Scope *scope, SymbolKind kind);
 
-    //builds the function bodies
     void buildBodies(ast::Decl *decl);
     void buildFunction(ast::FunctionDecl *node);
     void buildInitializer(ast::VarDecl *node, Scope *scope);
@@ -90,11 +85,11 @@ private:
     Diagnostics &diags;
     Scope       *current = nullptr;
 
-    std::map<std::string, Symbol *> mangledNames;    //to catch two symbols given one name
-    unsigned                        localRecordCount = 0;  //numbers records declared in function bodies
-    std::set<Symbol *>              definedStatics;  //static members defined outside their class
+    std::map<std::string, Symbol *> mangledNames;
+    unsigned                        localRecordCount = 0;
+    std::set<Symbol *>              definedStatics;
 };
 
-} // namespace sema
+}
 
 #endif

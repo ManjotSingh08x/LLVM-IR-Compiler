@@ -31,14 +31,13 @@ bool isPure(const Instruction &inst) {
     }
 }
 
-//a memory value known until something may change that memory
 struct Known {
     Value            *address;
     const sema::Type *type;
     Value            *value;
 };
 
-} // namespace
+}
 
 bool removeUnusedValues(Function &fn) {
     bool removedAny = false;
@@ -65,7 +64,7 @@ bool removeUnusedValues(Function &fn) {
 bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
     (void)am;
     EscapeInfo escape(fn);
-    std::map<Value *, Value *> replaced;  //an instruction -> the value that replaces it
+    std::map<Value *, Value *> replaced;
     std::set<Instruction *> dead;
     bool changed = false;
 
@@ -84,7 +83,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
     };
 
     for (BasicBlock *block : fn.getBlocks()) {
-        std::map<std::string, Instruction *> available;  //value numbers of the block's expressions
+        std::map<std::string, Instruction *> available;
         std::vector<Known> known;
         std::vector<StoreInst *> unread;
 
@@ -123,7 +122,6 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
             }
             case Opcode::Store: {
                 StoreInst *store = static_cast<StoreInst *>(inst);
-                //an unread store to the same place is dead
                 for (size_t i = 0; i < unread.size();) {
                     if (unread[i]->address == store->address &&
                         formatType(unread[i]->getAccessType()) == formatType(store->getAccessType())) {
@@ -156,7 +154,6 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
             case Opcode::Cast:
             case Opcode::Select:
             case Opcode::GEP: {
-                //fold when every operand is constant (for select, the condition is enough)
                 std::vector<const Constant *> constants;
                 for (Value *operand : inst->getOperands()) constants.push_back(asConstant(operand));
                 if (inst->getOpcode() != Opcode::GEP) {
@@ -186,7 +183,6 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
         }
     }
 
-    //uses in other blocks follow the replacements too
     for (BasicBlock *block : fn.getBlocks()) {
         for (std::unique_ptr<Instruction> &inst : block->instructions) {
             if (dead.count(inst.get())) continue;
@@ -201,4 +197,4 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
     return changed;
 }
 
-} // namespace passes
+}

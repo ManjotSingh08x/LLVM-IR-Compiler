@@ -19,14 +19,13 @@ void addOnce(std::vector<ir::Function *> &list, ir::Function *fn) {
     if (std::find(list.begin(), list.end(), fn) == list.end()) list.push_back(fn);
 }
 
-} // namespace
+}
 
 CallGraph::CallGraph(const ir::Module &module) : module(module) {
     std::map<const ir::Function *, bool> taken;
     for (const std::unique_ptr<ir::GlobalVariable> &global : module.getGlobals()) {
         markAddresses(global->initializer, taken);
     }
-    //the global constructor is called from outside the module
     if (module.globalInit != nullptr) taken[module.globalInit] = true;
 
     for (const std::unique_ptr<ir::Function> &owned : module.getFunctions()) {
@@ -57,7 +56,7 @@ CallGraph::CallGraph(const ir::Module &module) : module(module) {
                         addOnce(target.callers, fn);
                         target.callSiteCount++;
                     }
-                    first = 1;  //the callee operand is a call, not a use of the address
+                    first = 1;
                 }
                 for (size_t i = first; i < operands.size(); i++) {
                     if (operands[i] != nullptr && operands[i]->getKind() == ir::ValueKind::Function) {
@@ -71,7 +70,6 @@ CallGraph::CallGraph(const ir::Module &module) : module(module) {
         entry.second.addressTaken = taken.count(entry.first) != 0;
     }
 
-    //tarjan emits callees before callers
     for (const std::unique_ptr<ir::Function> &owned : module.getFunctions()) {
         if (indexOf.count(owned.get()) == 0) strongConnect(owned.get());
     }
@@ -158,4 +156,4 @@ void CallGraph::dump(std::ostream &out) const {
     }
 }
 
-} // namespace passes
+}

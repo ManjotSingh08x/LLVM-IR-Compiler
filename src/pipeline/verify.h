@@ -1,4 +1,3 @@
-//checks the ir, then that every definition dominates its uses
 #ifndef PIPELINE_VERIFY_H
 #define PIPELINE_VERIFY_H
 
@@ -9,8 +8,9 @@
 
 namespace passes {
 
+//verifies the function including dominance of definitions
 bool verifyWithDominance(const ir::Function &fn, AnalysisManager &am, std::string &error);
 
-} // namespace passes
+}
 
 #endif

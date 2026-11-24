@@ -1,4 +1,3 @@
-//puts every loop in canonical form: a preheader, one latch and dedicated exits
 #ifndef PASSES_LOOP_SIMPLIFY_H
 #define PASSES_LOOP_SIMPLIFY_H
 
@@ -6,6 +5,7 @@
 
 namespace passes {
 
+//puts loops into canonical form only
 class LoopSimplify : public LoopPass {
 public:
     const char *name() const override { return "loop_simplify"; }
@@ -15,6 +15,6 @@ protected:
     LoopResult runOnLoop(Loop &, LoopContext &) override { return LoopResult::Unchanged; }
 };
 
-} // namespace passes
+}
 
 #endif

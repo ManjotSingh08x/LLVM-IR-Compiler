@@ -34,7 +34,6 @@ LoopInfo::LoopInfo(const ir::Function &fn, const Dominators &doms) : fn(fn) {
                 loop->blocks.insert(head);
             }
             loop->latches.push_back(tail);
-            //the loop body: every block that reaches the tail without passing the header
             std::vector<ir::BasicBlock *> work;
             if (loop->blocks.insert(tail).second) work.push_back(tail);
             while (!work.empty()) {
@@ -65,7 +64,6 @@ LoopInfo::LoopInfo(const ir::Function &fn, const Dominators &doms) : fn(fn) {
         }
     }
 
-    //the parent is the smallest other loop that contains the header
     for (std::unique_ptr<Loop> &loop : loops) {
         Loop *best = nullptr;
         for (std::unique_ptr<Loop> &other : loops) {
@@ -126,4 +124,4 @@ void LoopInfo::dump(std::ostream &out) const {
     }
 }
 
-} // namespace passes
+}

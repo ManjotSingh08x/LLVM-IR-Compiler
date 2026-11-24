@@ -12,7 +12,6 @@ DefUse::DefUse(const ir::Function &fn) : fn(fn) {
         for (const std::unique_ptr<ir::Instruction> &inst : block->instructions) {
             for (ir::Value *operand : inst->getOperands()) {
                 std::vector<ir::Instruction *> &list = userMap[operand];
-                //add %x, %x reads %x twice but is one user
                 if (list.empty() || list.back() != inst.get()) list.push_back(inst.get());
             }
         }
@@ -36,7 +35,7 @@ std::string describe(const ir::Instruction *inst) {
     return "<store" + where + ">";
 }
 
-} // namespace
+}
 
 void DefUse::dump(std::ostream &os) const {
     os << "def-use @" << fn.getName() << "\n";
@@ -57,4 +56,4 @@ void DefUse::dump(std::ostream &os) const {
     }
 }
 
-} // namespace passes
+}

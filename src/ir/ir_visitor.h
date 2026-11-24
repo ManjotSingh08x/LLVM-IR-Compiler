@@ -17,43 +17,37 @@
 
 namespace ir {
 
-//where a variable lives, for references the slot holds the object's address
 struct VariableBinding {
     Value *slot = nullptr;
     bool   slotHoldsAddress = false;
 };
 
-//an object whose destructor must run when its scope ends
 struct LocalCleanup {
     Value            *address;
-    const sema::Type *type;   //a record, or an array of records
+    const sema::Type *type;
 };
 
-//one { } block with the objects declared in it so far
 struct CleanupScope {
     const ast::Stmt          *owner = nullptr;
     std::vector<LocalCleanup> objects;
-    size_t                    constructedCount = 0;  //objects with a constructor or destructor
+    size_t                    constructedCount = 0;
 };
 
-//where break or continue jumps, and how many cleanup scopes are still open there
 struct JumpTarget {
     BasicBlock *block;
     size_t      cleanupDepth;
 };
 
 struct SwitchContext {
-    SwitchInst *inst;      //null when the switch itself is unreachable
+    SwitchInst *inst;
 };
 
-//the scopes around a label, so a goto knows which destructors to run
 struct LabelInfo {
     std::vector<const ast::Stmt *> owners;
-    std::vector<size_t>            objectCounts;       //objects to destroy, per scope, before the label
-    std::vector<size_t>            constructedCounts;  //objects constructed, per scope, before the label
+    std::vector<size_t>            objectCounts;
+    std::vector<size_t>            constructedCounts;
 };
 
-//per-function lowering state, stacked because lambdas are lowered mid-function
 struct FunctionContext {
     Function                                       *function = nullptr;
     const sema::Type                               *returnType = nullptr;
@@ -61,27 +55,26 @@ struct FunctionContext {
     const sema::RecordSymbol                       *thisRecord = nullptr;
     Value                                          *retvalSlot = nullptr;
     Value                                          *resultAddress = nullptr;
-    BasicBlock                                     *returnBlock = nullptr;  //where return jumps when destructors must run
+    BasicBlock                                     *returnBlock = nullptr;
     std::map<const sema::Symbol *, VariableBinding> locals;
     std::map<const ast::LabelStmt *, BasicBlock *>  labelBlocks;
     std::map<const ast::LabelStmt *, LabelInfo>     labels;
-    std::vector<JumpTarget>                         breakTargets;     //loops and switches
-    std::vector<JumpTarget>                         continueTargets;  //loops only
+    std::vector<JumpTarget>                         breakTargets;
+    std::vector<JumpTarget>                         continueTargets;
     std::vector<SwitchContext>                      switches;
     std::vector<CleanupScope>                       cleanupScopes;
 };
 
 struct FunctionInfo {
     Function                 *function = nullptr;
-    const sema::FunctionType *signature = nullptr;  //the parameters callers see, without this
-    const sema::RecordSymbol *record = nullptr;     //for methods, constructors and destructors
+    const sema::FunctionType *signature = nullptr;
+    const sema::RecordSymbol *record = nullptr;
     bool                      hasThis = false;
     bool                      isConstructor = false;
     bool                      isDestructor = false;
-    ast::FunctionDecl        *definition = nullptr; //null for a body the compiler makes up
+    ast::FunctionDecl        *definition = nullptr;
 };
 
-//a constructor or destructor the compiler writes because the source has none
 struct PendingStructor {
     Function                 *function;
     const sema::RecordSymbol *record;
@@ -96,7 +89,6 @@ struct IncDecResult {
     Value *newValue = nullptr;
 };
 
-//lowers the checked syntax tree to an ir Module
 class IRVisitor : public ast::ASTVisitor<IRVisitor, Value *> {
 public:
     IRVisitor(Module &module, sema::SymbolTable &symTab, sema::Diagnostics &diags);
@@ -138,18 +130,24 @@ private:
     void error(int line, int col, const std::string &message);
 
     void emitLocalVariable(ast::VarDecl *decl);
+    //declares static locals with one-time initialization
     void emitStaticLocal(ast::VarDecl *decl);
     void pushScope(const ast::Stmt *owner);
     void popScope();
+    //runs pending destructors down to given depth
     void emitCleanupsDownTo(size_t depth);
     void emitScopeCleanups(const CleanupScope &scope, size_t keep);
     bool hasActiveCleanups() const;
+    //pre-scans labels so gotos can find cleanup scopes
     void collectLabels(ast::Stmt *stmt, std::vector<CleanupScope> &chain);
     BasicBlock *labelBlock(const ast::LabelStmt *label);
     void emitJump(const JumpTarget &target);
 
+    //computes the address of an lvalue
     Value *emitLValue(ast::Expr *expr);
+    //computes the value of an expression
     Value *emitRValue(ast::Expr *expr);
+    //branches straight to targets for && and || conditions
     void   emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFalse);
     void   emitIgnored(ast::Expr *expr);
     Value *emitAddressOf(ast::Expr *expr);
@@ -159,15 +157,19 @@ private:
     Value *emitMemberAddress(ast::MemberExpr *node);
     Value *emitSubscriptAddress(ast::ArraySubscriptExpr *node);
     Value *emitUnary(ast::UnaryExpr *node);
+    //applies ++ or -- giving old and new values
     IncDecResult emitIncDec(ast::UnaryExpr *node);
     Value *emitBinary(ast::BinaryExpr *node);
     Value *emitPointerArithmetic(ast::BinaryExpr *node, Value *lhs, Value *rhs);
     Value *emitPointerDifference(ast::BinaryExpr *node, Value *lhs, Value *rhs);
     Value *emitCompare(ast::BinaryOp op, const sema::Type *operandType, Value *lhs, Value *rhs);
     Value *emitArithmetic(ast::BinaryOp op, const sema::Type *type, Value *lhs, Value *rhs);
+    //evaluates && and || with short-circuit control flow
     Value *emitShortCircuit(ast::BinaryExpr *node);
     Value *emitAssign(ast::AssignExpr *node);
+    //evaluates ?: using branches or a phi
     Value *emitConditional(ast::ConditionalExpr *node, bool wantAddress);
+    //converts values for implicit and explicit casts
     Value *emitCast(ast::ImplicitCastExpr *node);
     Value *emitArithmeticConversion(Value *value, const sema::Type *from, const sema::Type *to);
     Value *sizeOf(const sema::Type *type, Value *count);
@@ -180,8 +182,10 @@ private:
     void      emitLambdaBody(ast::LambdaExpr *lambda);
     void      emitLambdaInto(Value *address, ast::LambdaExpr *lambda);
 
+    //initializes an object from its declaration
     void   emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl);
     void   emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr);
+    //initializes arrays and records from braced lists
     void   emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list);
     void   emitFieldDefaultInit(Value *object, const sema::RecordSymbol *record, const sema::Symbol *field);
     void   emitDefaultConstruct(Value *address, const sema::Type *type, const sema::FunctionSymbol *chosen);
@@ -193,12 +197,15 @@ private:
                            ElementAction action, const sema::FunctionSymbol *ctor);
     void   emitElementAction(Value *element, const sema::Type *elementType, ElementAction action,
                              const sema::FunctionSymbol *ctor);
+    //builds compiler-generated constructor or destructor
     Function *implicitStructor(const sema::RecordSymbol *record, bool isConstructor);
     Function *destructorFunction(const sema::RecordSymbol *record);
     Value *fieldAddress(Value *object, const sema::RecordSymbol *objectRecord, const sema::Symbol *field);
     Value *adjustToBase(Value *address, const sema::RecordSymbol *from, const sema::RecordSymbol *to,
                         bool keepNull);
+    //allocates and constructs object for new
     Value *emitNew(ast::NewExpr *node);
+    //destroys and frees object for delete
     Value *emitDelete(ast::DeleteExpr *node);
     Value *callMalloc(Value *bytes);
     void   callFree(Value *pointer);
@@ -211,16 +218,16 @@ private:
     ConstantFolder     folder;
 
     std::vector<std::unique_ptr<FunctionContext>>    contexts;
-    std::map<const sema::Symbol *, VariableBinding>  globals;  //globals, static members, static locals
+    std::map<const sema::Symbol *, VariableBinding>  globals;
     std::vector<const sema::RecordSymbol *>          records;
-    std::vector<ast::VarDecl *>                      dynamicGlobals;   //initialised by @__global_init
-    std::vector<ast::VarDecl *>                      destroyedGlobals; //destroyed by @__global_fini
+    std::vector<ast::VarDecl *>                      dynamicGlobals;
+    std::vector<ast::VarDecl *>                      destroyedGlobals;
     std::vector<PendingStructor>                     pendingStructors;
     std::set<const ast::LambdaExpr *>                emittedLambdas;
-    std::vector<ast::RecordDecl *>                   localRecords;     //emitted after the bodies they are in
+    std::vector<ast::RecordDecl *>                   localRecords;
     unsigned                                         staticLocalCounter = 0;
 };
 
-} // namespace ir
+}
 
 #endif

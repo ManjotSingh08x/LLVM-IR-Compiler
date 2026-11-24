@@ -10,18 +10,17 @@
 
 namespace codegen {
 
-//next-use information: where each name is read next after an instruction
-const long kDead = -1;          //never read again: not later in the block and not live on exit
-const long kLiveOut = LONG_MAX; //not read again in the block but live on exit
+const long kDead = -1;
+const long kLiveOut = LONG_MAX;
 
 using NextUseMap = std::map<const ir::Value *, long>;
 
 struct InstNextUse {
     NextUseMap operands;
-    long       result = kDead;  //the next use of the value the instruction defines
+    long       result = kDead;
 };
 
-//one backward scan of a block, starting from its live-out set
+//records where each value is used next
 class NextUse {
 public:
     NextUse(const ir::BasicBlock &block, const passes::ValueSet &liveOut);
@@ -32,6 +31,6 @@ private:
     std::vector<InstNextUse> table;
 };
 
-} // namespace codegen
+}
 
 #endif

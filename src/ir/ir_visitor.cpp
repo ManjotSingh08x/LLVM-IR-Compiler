@@ -1,4 +1,4 @@
-//the passes over the program, function bodies and globals
+
 #include "ir/ir_visitor.h"
 
 namespace ir {
@@ -10,7 +10,6 @@ void IRVisitor::error(int line, int col, const std::string &message) {
     diags.error(line, col, "cannot generate code: " + message);
 }
 
-//pass 1 declares types and functions, pass 2 globals, pass 3 bodies and implicit structors
 void IRVisitor::generate(ast::Program *program) {
     collectScope(symTab.global());
 
@@ -18,7 +17,7 @@ void IRVisitor::generate(ast::Program *program) {
     emitGlobalInitializers();
 
     for (const std::unique_ptr<ast::Decl> &decl : program->decls) emitDefinitions(decl.get());
-    //methods of records declared in function bodies, found while those bodies were emitted
+
     for (size_t i = 0; i < localRecords.size(); i++) emitDefinitions(localRecords[i]);
     emitSynthesizedStructors();
 }
@@ -36,7 +35,7 @@ void IRVisitor::collectScope(sema::Scope *scope) {
             declareFunction(static_cast<sema::FunctionSymbol *>(symbol.get()));
             break;
         case sema::SymbolKind::Variable:
-            //a static member: zero-initialised storage until defined
+
             if (scope->kind == sema::ScopeKind::Record) {
                 GlobalVariable *global = module.createGlobal(symbol->mangledName, symbol->type,
                                                              module.getZero(symbol->type), Linkage::External, false);
@@ -55,7 +54,7 @@ void IRVisitor::collectScope(sema::Scope *scope) {
 
 void IRVisitor::declareFunction(sema::FunctionSymbol *fn) {
     if (module.findFunction(fn->mangledName)) return;
-    //static means internal for free functions, no this for members
+
     Linkage linkage = (fn->isStatic && fn->parentRecord == nullptr) ? Linkage::Internal : Linkage::External;
     module.createFunction(fn->mangledName, fn->loweredType, linkage);
 }
@@ -80,7 +79,6 @@ void IRVisitor::emitGlobalVariables(const ast::NodeList<ast::Decl> &decls) {
     }
 }
 
-//static const int SIZE = 4; written inside the class gives the static member its value
 void IRVisitor::emitStaticMemberValues(ast::RecordDecl *record) {
     for (const std::unique_ptr<ast::Decl> &member : record->members) {
         if (member->getKind() == ast::ASTKind::RecordDecl) {
@@ -100,7 +98,7 @@ void IRVisitor::emitGlobalVariable(ast::VarDecl *decl) {
 
     GlobalVariable *global = nullptr;
     if (symbol->parentRecord) {
-        //defines a static member made earlier, without a value it keeps the in-class one or zero
+
         if (decl->initStyle == ast::InitStyle::None && !sema::asRecord(type)) return;
         global = module.findGlobal(symbol->mangledName);
     } else {
@@ -122,7 +120,6 @@ void IRVisitor::emitGlobalVariable(ast::VarDecl *decl) {
     if (layout.needsDestruction(type)) destroyedGlobals.push_back(decl);
 }
 
-//non-constant initializers run in @__global_init, destructors in @__global_fini via atexit
 void IRVisitor::emitGlobalInitializers() {
     if (dynamicGlobals.empty() && destroyedGlobals.empty()) return;
     const sema::FunctionType *voidFn = symTab.functionType(sema::voidType(), std::vector<const sema::Type *>(), false);
@@ -152,7 +149,6 @@ void IRVisitor::emitGlobalInitializers() {
     finishFunction();
 }
 
-//only the defining declaration gets a body, in-class methods are found via the record
 void IRVisitor::emitDefinitions(ast::Decl *decl) {
     switch (decl->getKind()) {
     case ast::ASTKind::RecordDecl: {
@@ -188,7 +184,6 @@ void IRVisitor::emitDefinitions(ast::Decl *decl) {
     }
 }
 
-//bodies for declared-but-undefined and implicit constructors and destructors
 void IRVisitor::emitSynthesizedStructors() {
     for (const sema::RecordSymbol *record : records) {
         std::vector<sema::FunctionSymbol *> structors = record->constructors;
@@ -206,7 +201,6 @@ void IRVisitor::emitSynthesizedStructors() {
         }
     }
 
-    //emitting one may ask for another, so the list can grow while it is read
     for (size_t i = 0; i < pendingStructors.size(); i++) {
         PendingStructor pending = pendingStructors[i];
         FunctionInfo info;
@@ -224,7 +218,7 @@ void IRVisitor::startFunction(Function *fn, const sema::Type *returnType) {
     contexts.push_back(std::unique_ptr<FunctionContext>(new FunctionContext()));
     ctx().function = fn;
     ctx().returnType = returnType;
-    //name entry first so no parameter can claim it
+
     BasicBlock *entry = fn->createBlock("entry");
     builder.setInsertPoint(fn, entry);
     if (isPassedByAddress(returnType)) ctx().resultAddress = fn->addArgument(module.pointerType(), "agg.result");
@@ -235,13 +229,12 @@ void IRVisitor::finishFunction() {
     contexts.pop_back();
 }
 
-//entry allocas, bases and members, the body, then member and base destruction
 void IRVisitor::emitFunction(const FunctionInfo &info) {
     Function *fn = info.function;
     startFunction(fn, info.signature->returnType);
 
     if (info.hasThis) {
-        //this lives in a slot and is loaded once in entry
+
         const sema::Type *thisType = fn->fnType->params[0];
         Argument *thisArg = fn->addArgument(thisType, "this");
         AllocaInst *slot = builder.createEntryAlloca(thisType, "this.addr");
@@ -270,7 +263,6 @@ void IRVisitor::emitFunction(const FunctionInfo &info) {
     finishFunction();
 }
 
-//each parameter gets a stack slot, as clang -O0 does
 void IRVisitor::bindParameters(const sema::FunctionType *signature, ast::NodeList<ast::ParamDecl> *params) {
     Function *fn = ctx().function;
     bool named = params != nullptr && params->size() == signature->params.size();
@@ -296,4 +288,4 @@ void IRVisitor::bindParameters(const sema::FunctionType *signature, ast::NodeLis
     }
 }
 
-} // namespace ir
+}

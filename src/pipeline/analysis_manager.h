@@ -1,4 +1,3 @@
-//computes analyses on demand and caches them until a pass changes the function
 #ifndef PIPELINE_ANALYSIS_MANAGER_H
 #define PIPELINE_ANALYSIS_MANAGER_H
 
@@ -14,6 +13,7 @@
 
 namespace passes {
 
+//caches analyses until the function changes
 class AnalysisManager {
 public:
     const Liveness   &getLiveness(const ir::Function &fn);
@@ -36,6 +36,6 @@ private:
     const ir::Module                                         *callGraphModule = nullptr;
 };
 
-} // namespace passes
+}
 
 #endif

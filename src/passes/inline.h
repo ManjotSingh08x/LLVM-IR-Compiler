@@ -1,4 +1,3 @@
-//inlines small or single-use callees, visiting the call graph bottom-up
 #ifndef PASSES_INLINE_H
 #define PASSES_INLINE_H
 
@@ -6,6 +5,7 @@
 
 namespace passes {
 
+//replaces calls with the body of the callee
 class Inliner : public GlobalPass {
 public:
     const char *name() const override { return "inline"; }
@@ -16,6 +16,6 @@ public:
     static const size_t kCallerLimit = 4000;
 };
 
-} // namespace passes
+}
 
 #endif

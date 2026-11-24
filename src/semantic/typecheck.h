@@ -12,14 +12,12 @@
 
 namespace sema {
 
-//second semantic pass: types every expression, resolves names and inserts implicit casts
 class TypeChecker : public ast::ASTVisitor<TypeChecker, const Type *> {
 public:
     TypeChecker(SymbolTable &table, Diagnostics &diags) : table(table), diags(diags), layout(table) {}
 
     void check(ast::Program *program);
 
-    //statements return null
     const Type *visitCompoundStmt(ast::CompoundStmt *node);
     const Type *visitDeclStmt(ast::DeclStmt *node);
     const Type *visitExprStmt(ast::ExprStmt *node);
@@ -36,7 +34,6 @@ public:
     const Type *visitCaseStmt(ast::CaseStmt *node);
     const Type *visitDefaultStmt(ast::DefaultStmt *node);
 
-    //expressions return their type
     const Type *visitIntLiteral(ast::IntLiteral *node);
     const Type *visitFloatLiteral(ast::FloatLiteral *node);
     const Type *visitCharLiteral(ast::CharLiteral *node);
@@ -66,60 +63,71 @@ private:
     struct SwitchInfo {
         std::set<long long> values;
         bool                hasDefault = false;
-        const Type         *condType = nullptr;  //the promoted condition, every case value converts to it
+        const Type         *condType = nullptr;
     };
 
-    //what the statements of the function or lambda being checked may do
     struct FunctionContext {
-        FunctionSymbol             *function = nullptr;  //for a lambda, the function it is written in
+        FunctionSymbol             *function = nullptr;
         ast::LambdaExpr            *lambda = nullptr;
-        const Type                 *returnType = nullptr;  //for a lambda, null until its first return
+        const Type                 *returnType = nullptr;
         int                         loops = 0;
-        int                         breakables = 0;  //loops and switches
+        int                         breakables = 0;
         std::vector<SwitchInfo *>   switches;
         std::vector<ast::GotoStmt *> gotos;
     };
 
     struct Lookup {
-        std::vector<Symbol *>  symbols;               //empty when not found, more than one for overloads
-        RecordSymbol          *namingRecord = nullptr;  //when found as a member: the record searched
+        std::vector<Symbol *>  symbols;
+        RecordSymbol          *namingRecord = nullptr;
         std::vector<BaseClass> path;
         bool                   ambiguous = false;
-        bool                   reported = false;      //not found, and the error is already given
+        bool                   reported = false;
     };
 
     void checkTopLevel(ast::Decl *decl);
     void checkRecord(ast::RecordDecl *node);
     void checkFunction(ast::FunctionDecl *node);
     void checkVarDecl(ast::VarDecl *node);
+    //matches goto statements with their labels
     void resolveGotos(Scope *functionScope);
 
+    //converts a single value to the initialized type
     void initFromValue(std::unique_ptr<ast::Expr> &value, const Type *type);
+    //checks brace initializers against the target type
     void initFromList(ast::InitListExpr *list, const Type *type);
+    //picks the matching constructor for a call
     FunctionSymbol *construct(RecordSymbol *record, ast::NodeList<ast::Expr> &args, int line, int col);
 
+    //finds a name through enclosing scopes
     Lookup lookupName(const std::string &name, int line, int col);
     Lookup lookupRef(ast::DeclRefExpr *node);
     const Type *sizeofOperand(std::unique_ptr<ast::Expr> &expr);
     bool   lookupMember(RecordSymbol *record, const std::string &name, Lookup &result);
+    //records variables a lambda captures
     void   captureVariable(Symbol *symbol, const std::vector<Scope *> &lambdas, int line, int col);
     RecordSymbol *thisRecord(int line, int col);
     bool   memberOfThis(Symbol *member, int line, int col);
+    //reports use of private or protected members
     void   checkAccess(Symbol *member, const Lookup &lookup, int line, int col);
     void   checkBaseConversion(const Type *from, const Type *to, int line, int col, const std::string &what);
     const Type *finishDeclRef(ast::DeclRefExpr *node, const Lookup &lookup);
     bool   findMember(ast::MemberExpr *node, Lookup &result);
     const Type *finishMember(ast::MemberExpr *node, const Lookup &lookup);
 
+    //picks the best overload by argument conversions
     FunctionSymbol *chooseOverload(const std::vector<FunctionSymbol *> &candidates,
                                    ast::NodeList<ast::Expr> &args, const std::string &name, int line, int col);
+    //converts call arguments to parameter types
     void applyArguments(const FunctionType *signature, ast::NodeList<ast::Expr> &args,
                         const std::string &name, int line, int col);
     const Type *callResult(ast::CallExpr *node, const FunctionType *signature);
 
     const Type *check(std::unique_ptr<ast::Expr> &expr);
+    //turns arrays and functions into pointers
     const Type *decayValue(std::unique_ptr<ast::Expr> &expr);
+    //finds the implicit conversion for an expression
     Conversion  conversionOf(ast::Expr *expr, const Type *to);
+    //applies an implicit conversion or reports error
     bool        convert(std::unique_ptr<ast::Expr> &expr, const Type *to, const std::string &what);
     void        wrap(std::unique_ptr<ast::Expr> &expr, ast::CastKind kind, const Type *type);
     void        checkCondition(std::unique_ptr<ast::Expr> &cond, const std::string &what);
@@ -134,6 +142,6 @@ private:
     FunctionContext context;
 };
 
-} // namespace sema
+}
 
 #endif

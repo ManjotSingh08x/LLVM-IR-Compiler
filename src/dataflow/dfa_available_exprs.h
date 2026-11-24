@@ -1,4 +1,3 @@
-//available expressions: what is already computed on every path to a point
 #ifndef DATAFLOW_DFA_AVAILABLE_EXPRS_H
 #define DATAFLOW_DFA_AVAILABLE_EXPRS_H
 
@@ -10,6 +9,7 @@
 
 namespace passes {
 
+//finds expressions already computed on every path
 class AvailableExpressions {
 public:
     explicit AvailableExpressions(const ir::Function &fn);
@@ -22,9 +22,8 @@ private:
     std::map<const ir::BasicBlock *, std::set<std::string>> outs;
 };
 
-//pure instructions the analysis tracks: arithmetic, compare, cast, select, getelementptr
 bool isExpression(const ir::Instruction &inst);
 
-} // namespace passes
+}
 
 #endif

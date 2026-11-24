@@ -22,7 +22,6 @@ std::string formatType(const sema::Type *type) {
     case sema::TypeKind::Float:  return "float";
     case sema::TypeKind::Double: return "double";
 
-    //every pointer is the opaque ptr, the pointee is kept in the sema type
     case sema::TypeKind::Null:
     case sema::TypeKind::Pointer:
     case sema::TypeKind::Reference:
@@ -50,7 +49,6 @@ std::string formatType(const sema::Type *type) {
     case sema::TypeKind::Closure:
         return closureTypeName(sema::asClosure(type)->lambda);
 
-    //the semantic phase reports these, the ir is only built without errors
     case sema::TypeKind::Auto:
     case sema::TypeKind::Error:
         break;
@@ -80,7 +78,6 @@ std::string closureTypeName(const ast::LambdaExpr *lambda) {
     return "%closure." + std::to_string(lambda->line) + "." + std::to_string(lambda->col);
 }
 
-//must match sema::toLLVMType: copies are stored by value, everything else as ptr
 std::string formatClosureBody(const ast::LambdaExpr *lambda) {
     std::string elements;
     for (const ast::LambdaCapture &capture : lambda->usedCaptures) {
@@ -144,4 +141,4 @@ long long normalizeInt(long long value, const sema::Type *type) {
     }
 }
 
-} // namespace ir
+}

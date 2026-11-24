@@ -16,13 +16,12 @@
 
 namespace codegen {
 
-//turns one ir function into x86-64 machine ir (system v calling convention, %rbp frame)
+//turns one IR function into machine code
 class FunctionEmitter {
 public:
     FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, sema::TypeLayout &layout, ConstantPool &pool,
                     int id, int optLevel);
 
-    //writes the whole function; false on ir it cannot lower
     bool emit(AsmLines &out);
 
     const std::string &error() const { return errorText; }
@@ -30,12 +29,14 @@ public:
 
 private:
     void        layoutFrame();
+    //moves incoming argument registers into their homes
     void        storeIncomingArguments(MCode &code);
     void        emitBlock(ir::BasicBlock *block, ir::BasicBlock *next);
     void        emitInstruction(ir::Instruction *inst, const InstNextUse &info);
     void        emitTerminator(ir::Instruction *inst, const InstNextUse &info, const passes::ValueSet &liveOut,
                                ir::BasicBlock *next);
     std::string label(const ir::BasicBlock *block) const;
+    //true when a compare merges into its branch
     bool        isFusedCompare(const ir::BasicBlock *block, size_t index) const;
 
     void     loadInt(const ir::Value *value, Reg dst, Width width);
@@ -45,21 +46,21 @@ private:
     Mem      addressOf(const ir::Value *pointer, Reg scratch);
     bool     isRegisterValue(const ir::Value *value) const;
 
-    //the register holding value: a cached register at -O0 to -O2, its virtual register at -O3
     bool held(const ir::Value *value, Reg &reg);
     Reg  vregFor(const ir::Value *value);
     Reg  newVreg(bool isFloat);
 
-    //after an instruction: frees the registers of dead operands and places the result
     void finishOperands(const InstNextUse &info);
     void defineResult(const ir::Instruction *inst, const InstNextUse &info, Reg src);
 
     void emitLoad(ir::LoadInst *inst, const InstNextUse &info);
     void emitStore(ir::StoreInst *inst, const InstNextUse &info);
     void storeConstant(const ir::Constant *constant, const sema::Type *type, const Mem &mem);
+    //copies a memory block between two addresses
     void copyBytes(const Mem &from, const Mem &to, uint64_t size);
     void emitGEP(ir::GEPInst *inst, const InstNextUse &info);
     void emitBinary(ir::BinaryInst *inst, const InstNextUse &info);
+    //divides by a power of two using shifts
     Reg  divideByPowerOfTwo(bool remainder, Width width, unsigned shift);
     void widen(Reg reg, Width width, bool isSigned);
     void emitIntCompare(ir::BinaryInst *inst);
@@ -67,18 +68,18 @@ private:
     void emitUnary(ir::UnaryInst *inst, const InstNextUse &info);
     void emitCast(ir::CastInst *inst, const InstNextUse &info);
     void emitSelect(ir::SelectInst *inst, const InstNextUse &info);
+    //sets up arguments per the System V ABI
     void emitCall(ir::CallInst *inst, const InstNextUse &info);
 
-    //phis at -O0 to -O2: each predecessor stores into the phi's frame slot, the phi loads it
     void emitPhi(ir::PhiInst *phi, const InstNextUse &info);
+    //writes phi inputs into slots before leaving a block
     void storePhiCopies(ir::BasicBlock *block, const ir::BasicBlock *succ);
     bool hasPhiFrom(const ir::BasicBlock *block, const ir::BasicBlock *succ) const;
-    //the loop-exit edge whose phi copies go after the jump so the loop does not pay for them, or null
+    //finds an edge whose phi copies must be split
     ir::BasicBlock *deferredEdge(ir::BasicBlock *block, ir::BranchInst *br);
     void branchWithCopies(const std::string &condCode, ir::BasicBlock *block, ir::BasicBlock *ifTrue,
                           ir::BasicBlock *ifFalse, ir::BasicBlock *deferred, const ir::BasicBlock *next);
 
-    //phis at -O3: parallel copies placed on the edge itself, splitting critical edges
     void copyPhis(ir::BasicBlock *block, const ir::BasicBlock *succ);
     void branchSplit(const std::string &condCode, ir::BasicBlock *block, ir::BasicBlock *ifTrue,
                      ir::BasicBlock *ifFalse, const ir::BasicBlock *next);
@@ -98,13 +99,13 @@ private:
     sema::TypeLayout            &layout;
     ConstantPool            &pool;
     int                      id;
-    bool                     global;  //-O3: virtual registers and graph colouring
+    bool                     global;
 
     Frame             frame;
     MCode             body;
     RegisterAllocator ra;
-    NextUseMap        nextUse;  //the current next use of every value held in a register
-    std::set<const ir::Instruction *> fused;  //compares emitted as part of their branch
+    NextUseMap        nextUse;
+    std::set<const ir::Instruction *> fused;
     unsigned          localCount = 0;
     std::string       errorText;
 
@@ -114,6 +115,6 @@ private:
     ColorStats                       stats;
 };
 
-} // namespace codegen
+}
 
 #endif

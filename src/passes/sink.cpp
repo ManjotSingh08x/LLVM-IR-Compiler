@@ -13,7 +13,7 @@ BasicBlock *commonDominator(const Dominators &doms, BasicBlock *a, BasicBlock *b
     return a;
 }
 
-} // namespace
+}
 
 bool Sink::run(Function &fn, Module &module, AnalysisManager &am) {
     (void)module;
@@ -22,7 +22,6 @@ bool Sink::run(Function &fn, Module &module, AnalysisManager &am) {
     const DefUse &defUse = am.getDefUse(fn);
     bool changed = false;
 
-    //bottom-up, so users move before what they use
     std::vector<BasicBlock *> order(doms.preorder().rbegin(), doms.preorder().rend());
     for (BasicBlock *block : order) {
         std::vector<Instruction *> candidates;
@@ -48,8 +47,7 @@ bool Sink::run(Function &fn, Module &module, AnalysisManager &am) {
                 }
             }
             if (usedHere || target == nullptr || target == block || !doms.strictlyDominates(block, target)) continue;
-            if (loops.depth(target) > loops.depth(block)) continue;  //never into a loop
-            //after the target's phis; the users there come later in the block
+            if (loops.depth(target) > loops.depth(block)) continue;
             Instruction *at = nullptr;
             for (std::unique_ptr<Instruction> &other : target->instructions) {
                 if (other->getOpcode() != Opcode::Phi) {
@@ -64,4 +62,4 @@ bool Sink::run(Function &fn, Module &module, AnalysisManager &am) {
     return changed;
 }
 
-} // namespace passes
+}

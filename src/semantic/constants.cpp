@@ -18,7 +18,6 @@ int digitValue(char c) {
     return 99;
 }
 
-//reads one possibly escaped character at i and advances i
 long long readChar(const std::string &text, size_t &i) {
     if (text[i] != '\\') return (unsigned char)text[i++];
 
@@ -40,11 +39,11 @@ long long readChar(const std::string &text, size_t &i) {
         }
         return value;
     }
-    default:   return (unsigned char)c;  //\\ \' \" \?
+    default:   return (unsigned char)c;
     }
 }
 
-} // namespace
+}
 
 bool intLiteral(const std::string &spelling, long long &value, const Type *&type) {
     size_t end = spelling.size();
@@ -151,7 +150,6 @@ namespace {
 
 bool evaluate(const ast::Expr *expr, long long &value);
 
-//a const variable with a constant initializer is a constant, the depth bound stops self-reference
 bool constVariableValue(const Symbol *symbol, long long &value) {
     static int depth = 0;
     if (symbol == nullptr || symbol->kind != SymbolKind::Variable || !symbol->type->isConst()
@@ -173,10 +171,9 @@ bool constVariableValue(const Symbol *symbol, long long &value) {
     return known;
 }
 
-//an operand's type decides signed or unsigned arithmetic, the types are null before type checking
 bool unsignedOperands(const ast::Expr *operand) { return operand->type && isUnsigned(operand->type); }
 
-} // namespace
+}
 
 bool evaluateConstant(const ast::Expr *expr, long long &value) {
     if (!evaluate(expr, value)) return false;
@@ -273,6 +270,6 @@ bool evaluate(const ast::Expr *expr, long long &value) {
     }
 }
 
-} // namespace
+}
 
-} // namespace sema
+}

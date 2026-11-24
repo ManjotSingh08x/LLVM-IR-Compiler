@@ -37,7 +37,6 @@ bool GlobalPassManager::run(ir::Module &module, AnalysisManager &am) {
             continue;
         }
         if (!stage.global->run(module, am)) continue;
-        //a global pass may have changed any function, so every analysis is dropped
         for (const std::unique_ptr<ir::Function> &fn : module.getFunctions()) {
             if (!fn->isDefinition()) continue;
             fn->recomputeCFG();
@@ -56,4 +55,4 @@ bool GlobalPassManager::run(ir::Module &module, AnalysisManager &am) {
     return true;
 }
 
-} // namespace passes
+}

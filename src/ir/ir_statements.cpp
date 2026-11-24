@@ -1,4 +1,4 @@
-//statements, local variables, scopes with destructors to run, and jumps
+
 #include "ir/ir_visitor.h"
 
 namespace ir {
@@ -11,7 +11,6 @@ void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
         return;
     }
 
-    //the slot is made at the top of entry, the initialization happens here
     const sema::Type *type = symbol->type;
     AllocaInst *slot = builder.createEntryAlloca(type, symbol->name);
     VariableBinding binding;
@@ -21,7 +20,6 @@ void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
 
     emitObjectInit(slot, type, decl);
 
-    //a reference does not own its object, so it is never destroyed
     if (binding.slotHoldsAddress || ctx().cleanupScopes.empty()) return;
     CleanupScope &scope = ctx().cleanupScopes.back();
     if (layout.needsConstruction(type) || layout.needsDestruction(type)) scope.constructedCount++;
@@ -33,7 +31,6 @@ void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
     }
 }
 
-//a static local lives in a global, initialised once behind a guard flag
 void IRVisitor::emitStaticLocal(ast::VarDecl *decl) {
     sema::Symbol *symbol = decl->symbol;
     const sema::Type *type = symbol->type;
@@ -72,20 +69,17 @@ void IRVisitor::pushScope(const ast::Stmt *owner) {
     ctx().cleanupScopes.push_back(scope);
 }
 
-//at the closing brace the objects of the scope are destroyed, newest first
 void IRVisitor::popScope() {
     if (builder.isReachable()) emitScopeCleanups(ctx().cleanupScopes.back(), 0);
     ctx().cleanupScopes.pop_back();
 }
 
-//destroys the objects of one scope, newest first, keeping the first keep of them
 void IRVisitor::emitScopeCleanups(const CleanupScope &scope, size_t keep) {
     for (size_t i = scope.objects.size(); i > keep; i--) {
         emitDestroy(scope.objects[i - 1].address, scope.objects[i - 1].type);
     }
 }
 
-//runs destructors for the scopes a jump leaves, without closing them
 void IRVisitor::emitCleanupsDownTo(size_t depth) {
     std::vector<CleanupScope> &scopes = ctx().cleanupScopes;
     for (size_t i = scopes.size(); i > depth; i--) emitScopeCleanups(scopes[i - 1], 0);
@@ -99,7 +93,6 @@ bool IRVisitor::hasActiveCleanups() const {
     return false;
 }
 
-//records, for every label, the enclosing scopes and their object counts
 void IRVisitor::collectLabels(ast::Stmt *stmt, std::vector<CleanupScope> &chain) {
     if (stmt == nullptr) return;
 
@@ -228,7 +221,6 @@ Value *IRVisitor::visitIfStmt(ast::IfStmt *node) {
     return nullptr;
 }
 
-//continue goes to cond, break to end, until swaps the branch targets
 Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
     std::string loop = node->isUntil ? "until" : "while";
     BasicBlock *condBlock = builder.createBlock(loop + ".cond");
@@ -257,7 +249,6 @@ Value *IRVisitor::visitWhileStmt(ast::WhileStmt *node) {
     return nullptr;
 }
 
-//do-while and do-until: the body runs before the condition
 Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     BasicBlock *bodyBlock = builder.createBlock("do.body");
     BasicBlock *condBlock = builder.createBlock("do.cond");
@@ -285,7 +276,6 @@ Value *IRVisitor::visitDoStmt(ast::DoStmt *node) {
     return nullptr;
 }
 
-//init declarations are scoped to the loop, continue goes to for.inc
 Value *IRVisitor::visitForStmt(ast::ForStmt *node) {
     pushScope(node);
     visit(node->init.get());
@@ -322,13 +312,12 @@ Value *IRVisitor::visitForStmt(ast::ForStmt *node) {
     return nullptr;
 }
 
-//the return value is computed before destructors run, via %retval when needed
 Value *IRVisitor::visitReturnStmt(ast::ReturnStmt *node) {
     const sema::Type *returnType = ctx().returnType;
     Value *value = nullptr;
     if (node->value) {
         if (returnType->is(sema::TypeKind::Void)) {
-            emitIgnored(node->value.get());  //return f(); in a void function
+            emitIgnored(node->value.get());
         } else {
             value = emitRValue(node->value.get());
         }
@@ -348,7 +337,7 @@ Value *IRVisitor::visitReturnStmt(ast::ReturnStmt *node) {
     }
 
     if (ctx().returnBlock) {
-        builder.createBr(ctx().returnBlock);  //a destructor still destroys its members
+        builder.createBr(ctx().returnBlock);
     } else if (value) {
         builder.createRet(returnType, value);
     } else {
@@ -367,7 +356,6 @@ Value *IRVisitor::visitContinueStmt(ast::ContinueStmt *) {
     return nullptr;
 }
 
-//destroys the objects a goto leaves, jumping past a construction is an error
 Value *IRVisitor::visitGotoStmt(ast::GotoStmt *node) {
     if (node->target == nullptr) return nullptr;
     BasicBlock *target = labelBlock(node->target);
@@ -400,7 +388,6 @@ Value *IRVisitor::visitGotoStmt(ast::GotoStmt *node) {
     return nullptr;
 }
 
-//a label starts a new block, because a goto may jump to it from anywhere
 Value *IRVisitor::visitLabelStmt(ast::LabelStmt *node) {
     BasicBlock *block = labelBlock(node);
     builder.createBr(block);
@@ -409,7 +396,6 @@ Value *IRVisitor::visitLabelStmt(ast::LabelStmt *node) {
     return nullptr;
 }
 
-//switch: each case label starts a block, falling through with a plain br
 Value *IRVisitor::visitSwitchStmt(ast::SwitchStmt *node) {
     Value *cond = emitRValue(node->cond.get());
     BasicBlock *endBlock = builder.createBlock("sw.end");
@@ -421,7 +407,6 @@ Value *IRVisitor::visitSwitchStmt(ast::SwitchStmt *node) {
     JumpTarget breakTarget = { endBlock, ctx().cleanupScopes.size() };
     ctx().breakTargets.push_back(breakTarget);
 
-    //statements before the first case are unreachable and dropped
     visit(node->body.get());
 
     ctx().breakTargets.pop_back();
@@ -433,7 +418,7 @@ Value *IRVisitor::visitSwitchStmt(ast::SwitchStmt *node) {
 
 Value *IRVisitor::visitCaseStmt(ast::CaseStmt *node) {
     BasicBlock *block = builder.createBlock("sw.case");
-    builder.createBr(block);  //fall through from the case above
+    builder.createBr(block);
     builder.setInsertBlock(block);
     if (!ctx().switches.empty()) {
         SwitchInst *sw = ctx().switches.back().inst;
@@ -452,4 +437,4 @@ Value *IRVisitor::visitDefaultStmt(ast::DefaultStmt *node) {
     return nullptr;
 }
 
-} // namespace ir
+}

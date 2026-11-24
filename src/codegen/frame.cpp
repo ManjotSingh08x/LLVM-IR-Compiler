@@ -11,7 +11,6 @@ long long Frame::allocate(uint64_t size, uint64_t align) {
 }
 
 void Frame::addAlloca(const ir::Value *alloca, uint64_t size, uint64_t align) {
-    //an empty record still gets its own address
     allocas[alloca] = allocate(size == 0 ? 1 : size, align);
 }
 
@@ -54,4 +53,4 @@ long long Frame::saveSlot(Reg reg) {
 
 uint64_t Frame::size() const { return sema::alignTo(used, 16); }
 
-} // namespace codegen
+}

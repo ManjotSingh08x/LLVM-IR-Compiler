@@ -68,7 +68,6 @@ bool foldConstantBranches(Function &fn) {
     return changed;
 }
 
-//not done when a predecessor already jumps to L: its phi entries could not tell the paths apart
 bool bypassEmptyBlocks(Function &fn) {
     for (BasicBlock *block : fn.getBlocks()) {
         if (block == fn.getEntryBlock() || block->instructions.size() != 1) continue;
@@ -103,7 +102,7 @@ bool bypassEmptyBlocks(Function &fn) {
             }
         }
         for (BasicBlock *pred : preds) pred->getTerminator()->replaceSuccessor(block, target);
-        return true;  //edges moved: recompute before looking at more blocks
+        return true;
     }
     return false;
 }
@@ -134,7 +133,6 @@ bool removeUnreachableBlocks(Function &fn) {
     return !dead.empty();
 }
 
-//b -> s with s entered only from b: s is merged into b
 bool mergeStraightLines(Function &fn) {
     for (BasicBlock *block : fn.getBlocks()) {
         Instruction *term = block->getTerminator();
@@ -147,7 +145,7 @@ bool mergeStraightLines(Function &fn) {
 
         for (PhiInst *phi : phisOf(next)) {
             Value *value = phi->incoming.empty() ? nullptr : phi->incoming.front().second == block ? phi->incoming.front().first : nullptr;
-            if (value == nullptr || value == phi) return false;  //malformed, leave it
+            if (value == nullptr || value == phi) return false;
             for (BasicBlock *b : fn.getBlocks()) {
                 for (std::unique_ptr<Instruction> &inst : b->instructions) inst->replaceOperand(phi, value);
             }
@@ -165,12 +163,12 @@ bool mergeStraightLines(Function &fn) {
         }
         next->instructions.clear();
         fn.removeBlock(next);
-        return true;  //the edge lists are stale now
+        return true;
     }
     return false;
 }
 
-} // namespace
+}
 
 void branchTo(BasicBlock *block, BasicBlock *target) {
     std::vector<BasicBlock *> old = block->getTerminator()->getSuccessors();
@@ -209,4 +207,4 @@ bool SimplifyCFG::run(Function &fn, Module &module, AnalysisManager &am) {
     }
 }
 
-} // namespace passes
+}

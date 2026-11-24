@@ -10,7 +10,6 @@ const Reg kIntArgRegs[] = {Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg:
 const size_t kIntArgCount = 6;
 const size_t kFloatArgCount = 8;
 
-//registers a call overwrites (system v): all but rbx, rbp, rsp and r12-r15
 const std::vector<Reg> kCallClobbers = {
     Reg::RAX, Reg::RCX, Reg::RDX, Reg::RSI, Reg::RDI, Reg::R8, Reg::R9, Reg::R10, Reg::R11,
     Reg::XMM0, Reg::XMM1, Reg::XMM2, Reg::XMM3, Reg::XMM4, Reg::XMM5, Reg::XMM6, Reg::XMM7,
@@ -20,10 +19,8 @@ Reg floatArgReg(size_t index) { return (Reg)((int)Reg::XMM0 + (int)index); }
 
 std::string imm(long long value) { return "$" + std::to_string(value); }
 
-//integer ops on bytes and words are done 32 bits wide, the low bits come out the same
 Width aluWidth(Width width) { return width == Width::Byte || width == Width::Word ? Width::Long : width; }
 
-//the width a register is loaded with: bytes and words are loaded 32 bits wide
 Width loadWidth(Width width) { return width == Width::Quad ? Width::Quad : Width::Long; }
 
 bool isIntCompare(ir::BinaryOpKind op) {
@@ -97,7 +94,7 @@ unsigned powerOfTwoShift(const ir::Value *value) {
     return shift;
 }
 
-} // namespace
+}
 
 FunctionEmitter::FunctionEmitter(ir::Function &fn, passes::AnalysisManager &am, sema::TypeLayout &layout,
                                  ConstantPool &pool, int id, int optLevel)
@@ -166,7 +163,6 @@ bool FunctionEmitter::emit(AsmLines &out) {
 
     std::set<Reg> calleeSaved;
     if (global) {
-        //-O3: the whole function, entry included, is coloured at once
         MCode all = entry;
         all.insert(all.end(), body.begin(), body.end());
         std::map<std::string, unsigned> depths;
@@ -184,7 +180,6 @@ bool FunctionEmitter::emit(AsmLines &out) {
         calleeSaved = ra.usedCalleeSaved();
     }
 
-    //the frame is complete only now, so the save slots go last
     for (Reg reg : calleeSaved) frame.saveSlot(reg);
     uint64_t size = frame.size();
     std::string name = symbolName(&fn);
@@ -228,7 +223,6 @@ void FunctionEmitter::layoutFrame() {
     }
 }
 
-//stores arguments to their homes, or at -O3 copies them into their virtual registers
 void FunctionEmitter::storeIncomingArguments(MCode &code) {
     size_t    intUsed = 0;
     size_t    floatUsed = 0;
@@ -286,7 +280,6 @@ bool FunctionEmitter::isFusedCompare(const ir::BasicBlock *block, size_t index) 
     if (term->getOpcode() != ir::Opcode::Br) return false;
     const ir::BranchInst *br = static_cast<const ir::BranchInst *>(term);
     if (br->condition != inst) return false;
-    //the branch must be its only reader, then the i1 never needs to exist
     return am.getDefUse(fn).users(inst).size() == 1;
 }
 
@@ -312,7 +305,7 @@ void FunctionEmitter::emitBlock(ir::BasicBlock *block, ir::BasicBlock *next) {
 void FunctionEmitter::emitInstruction(ir::Instruction *inst, const InstNextUse &info) {
     switch (inst->getOpcode()) {
     case ir::Opcode::Alloca:
-        return;  //its address is fixed in the frame
+        return;
     case ir::Opcode::Load:
         return emitLoad(static_cast<ir::LoadInst *>(inst), info);
     case ir::Opcode::Store:
@@ -339,7 +332,6 @@ void FunctionEmitter::emitInstruction(ir::Instruction *inst, const InstNextUse &
     }
 }
 
-//loads any integer or pointer value into dst
 void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
     const Width w = loadWidth(width);
     switch (value->getKind()) {
@@ -348,7 +340,7 @@ void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
         if (c->constKind == ir::ConstantKind::Address) return loadInt(c->target, dst, width);
         long long v = c->constKind == ir::ConstantKind::Int ? c->intValue : 0;
         if (v == 0) {
-            op("xorl", { def(dst, Width::Long), def(dst, Width::Long) });  //only writes: the old value is not read
+            op("xorl", { def(dst, Width::Long), def(dst, Width::Long) });
         } else if (width != Width::Quad) {
             op("movl", { immOp(v), def(dst, Width::Long) });
         } else if (fitsInt32(v)) {
@@ -392,7 +384,6 @@ void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
     }
 }
 
-//an operand an alu instruction can read directly: $imm, a register or a home slot
 MOperand FunctionEmitter::intSource(const ir::Value *value, Width width, Reg scratch) {
     const ir::Constant *c = asConstant(value);
     if (c && c->constKind == ir::ConstantKind::Int && fitsInt32(c->intValue)) return immOp(c->intValue);
@@ -436,7 +427,6 @@ MOperand FunctionEmitter::floatSource(const ir::Value *value, Reg scratch) {
     return use(scratch);
 }
 
-//the memory a pointer points at: allocas and globals directly, anything else through a register
 Mem FunctionEmitter::addressOf(const ir::Value *pointer, Reg scratch) {
     if (frame.isAlloca(pointer)) return Mem::frame(frame.allocaOffset(pointer));
     if (pointer->getKind() == ir::ValueKind::GlobalVariable) return Mem::global(symbolName(pointer));
@@ -447,7 +437,7 @@ Mem FunctionEmitter::addressOf(const ir::Value *pointer, Reg scratch) {
 }
 
 void FunctionEmitter::finishOperands(const InstNextUse &info) {
-    if (global) return;  //virtual registers are never released by hand
+    if (global) return;
     for (const std::pair<const ir::Value *const, long> &entry : info.operands) {
         if (entry.second == kDead) {
             ra.release(entry.first);
@@ -460,7 +450,7 @@ void FunctionEmitter::finishOperands(const InstNextUse &info) {
 
 void FunctionEmitter::defineResult(const ir::Instruction *inst, const InstNextUse &info, Reg src) {
     finishOperands(info);
-    if (info.result == kDead) return;  //never read: no register, no home
+    if (info.result == kDead) return;
     Reg reg;
     if (global) {
         reg = vregFor(inst);
@@ -479,7 +469,6 @@ void FunctionEmitter::emitLoad(ir::LoadInst *inst, const InstNextUse &info) {
         return defineResult(inst, info, Reg::XMM0);
     }
     if (!isIntegerLike(type)) {
-        //a record or array value: its bytes are copied to a frame slot of their own, as the load's snapshot
         uint64_t size = layout.sizeOf(type);
         copyBytes(mem, Mem::frame(frame.aggregateSlot(inst, size, layout.alignOf(type))), size);
         return finishOperands(info);
@@ -588,7 +577,6 @@ void FunctionEmitter::storeConstant(const ir::Constant *constant, const sema::Ty
     }
 }
 
-//a block copy through %rax, 8 bytes at a time, then 4, then 1
 void FunctionEmitter::copyBytes(const Mem &from, const Mem &to, uint64_t size) {
     uint64_t done = 0;
     for (; done + 8 <= size; done += 8) {
@@ -605,7 +593,6 @@ void FunctionEmitter::copyBytes(const Mem &from, const Mem &to, uint64_t size) {
     }
 }
 
-//base + constant offsets folded into one displacement, + index * size for each variable index
 void FunctionEmitter::emitGEP(ir::GEPInst *inst, const InstNextUse &info) {
     loadInt(inst->base, Reg::RAX, Width::Quad);
     const sema::Type *current = inst->getAccessType();
@@ -623,7 +610,6 @@ void FunctionEmitter::emitGEP(ir::GEPInst *inst, const InstNextUse &info) {
             next = sema::asArray(current)->element;
             step = (long long)layout.sizeOf(next);
         } else {
-            //a record or closure field: the index is always a constant
             if (!c) return fail("variable index into a record");
             disp += (long long)layout.elementOffset(current, (unsigned)c->intValue);
             current = layout.elementType(current, (unsigned)c->intValue);
@@ -696,7 +682,6 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         }
         loadInt(inst->rhs, Reg::RCX, aw);
         widen(Reg::RCX, w, true);
-        //cltd/cqto sign-extends rax into rdx; idiv divides rdx:rax, quotient to rax, remainder to rdx
         op(aw == Width::Quad ? "cqto" : "cltd", {}, { Reg::RAX }, { Reg::RDX });
         op(std::string("idiv") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
         if (remainder) result = Reg::RDX;
@@ -723,7 +708,6 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         }
         loadInt(inst->rhs, Reg::RCX, aw);
         widen(Reg::RCX, w, false);
-        //div divides rdx:rax, so rdx is cleared first; quotient to rax, remainder to rdx
         op("xorl", { def(Reg::RDX, Width::Long), def(Reg::RDX, Width::Long) });
         op(std::string("div") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
         if (remainder) result = Reg::RDX;
@@ -738,7 +722,7 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         if (inst->op != ir::BinaryOpKind::Shl) widen(Reg::RAX, w, inst->op == ir::BinaryOpKind::AShr);
         const ir::Constant *count = asConstant(inst->rhs);
         if (count && count->constKind == ir::ConstantKind::Int) {
-            long long masked = count->intValue & (aw == Width::Quad ? 63 : 31);  //as the cpu masks %cl
+            long long masked = count->intValue & (aw == Width::Quad ? 63 : 31);
             if (masked != 0) op(name, { immOp(masked), useDef(Reg::RAX, aw) });
             break;
         }
@@ -752,13 +736,11 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
     defineResult(inst, info, result);
 }
 
-//a byte or word in reg extended to its 32-bit register, so the bits above it are its sign or zero
 void FunctionEmitter::widen(Reg reg, Width width, bool isSigned) {
     if (width == Width::Byte) op(isSigned ? "movsbl" : "movzbl", { use(reg, Width::Byte), def(reg, Width::Long) });
     if (width == Width::Word) op(isSigned ? "movswl" : "movzwl", { use(reg, Width::Word), def(reg, Width::Long) });
 }
 
-//signed division of rax by 2^shift, biasing a negative dividend so it rounds toward zero
 Reg FunctionEmitter::divideByPowerOfTwo(bool remainder, Width w, unsigned shift) {
     const std::string s(1, suffix(w));
     const long long bits = w == Width::Quad ? 64 : 32;
@@ -788,7 +770,6 @@ void FunctionEmitter::emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &i
         return defineResult(inst, info, Reg::XMM0);
     }
 
-    //ucomis a, b sets the flags as an unsigned compare of b with a, unordered sets ZF, PF and CF
     std::string ucomi = "ucomi" + sfx;
     loadFloat(inst->lhs, Reg::XMM0);
     loadFloat(inst->rhs, Reg::XMM1);
@@ -817,7 +798,6 @@ void FunctionEmitter::emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &i
     defineResult(inst, info, Reg::RAX);
 }
 
-//fneg flips the sign bit through an integer register
 void FunctionEmitter::emitUnary(ir::UnaryInst *inst, const InstNextUse &info) {
     loadFloat(inst->operand, Reg::XMM0);
     if (isDoubleType(inst->getType())) {
@@ -863,7 +843,7 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
     case ir::CastOpKind::ZExt: {
         Width wf = widthOf(from);
         loadInt(inst->operand, Reg::RAX, wf);
-        widen(Reg::RAX, wf, false);  //a 32-bit write clears the upper half too
+        widen(Reg::RAX, wf, false);
         if (wf == Width::Long) op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
         break;
     }
@@ -882,7 +862,6 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         } else if (wf == Width::Byte || wf == Width::Word) {
             widen(Reg::RAX, wf, isSigned);
         } else if (wf == Width::Long && !isSigned) {
-            //an unsigned 32-bit value fits a signed 64-bit one
             op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
             convert = Width::Quad;
         } else if (wf == Width::Quad) {
@@ -890,7 +869,6 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         }
         const std::string cvt = std::string(isDoubleType(to) ? "cvtsi2sd" : "cvtsi2ss") + suffix(convert);
         if (wf == Width::Quad && !isSigned) {
-            //above 2^63: halve keeping the low bit, convert, then double
             std::string big = localLabel(), done = localLabel();
             op("testq", { use(Reg::RAX), use(Reg::RAX) });
             op("js", { textOp(big) });
@@ -920,11 +898,9 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         const std::string cvt = dbl ? "cvttsd2siq" : "cvttss2siq";
         loadFloat(inst->operand, Reg::XMM0);
         if (widthOf(to) != Width::Quad) {
-            //every unsigned 32-bit value fits the signed 64-bit conversion
             op(cvt, { use(Reg::XMM0), def(Reg::RAX) });
             break;
         }
-        //from 2^63 up: subtract 2^63, convert, and put the top bit back
         std::string big = localLabel(), done = localLabel();
         op(dbl ? "movsd" : "movss", { memOp(Mem::global(pool.label(9223372036854775808.0, dbl))), def(Reg::XMM1) });
         op(dbl ? "ucomisd" : "ucomiss", { use(Reg::XMM1), use(Reg::XMM0) });
@@ -980,16 +956,15 @@ void FunctionEmitter::emitSelect(ir::SelectInst *inst, const InstNextUse &info) 
         if (cond.value != 0) op("movq", { use(Reg::RCX), def(Reg::RAX) });
     } else {
         op("testb", { immOp(1), cond });
-        op("cmovneq", { use(Reg::RCX), useDef(Reg::RAX) });  //keeps rax when the condition is false
+        op("cmovneq", { use(Reg::RCX), useDef(Reg::RAX) });
     }
     defineResult(inst, info, Reg::RAX);
 }
 
-//system v calling convention: integer and float argument registers, the rest on the stack
 void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
     const sema::FunctionType *type = inst->calleeType;
     std::vector<std::pair<const ir::Value *, Reg>> inRegs;
-    std::vector<const sema::Type *>                 inRegTypes;  //the parameter type, which says how a byte widens
+    std::vector<const sema::Type *>                 inRegTypes;
     std::vector<const ir::Value *>                 onStack;
     size_t intUsed = 0;
     size_t floatUsed = 0;
@@ -1015,7 +990,6 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         }
     }
 
-    //stack arguments first: rax and xmm0 are free to use only before the argument registers are filled
     long long stackBytes = (long long)sema::alignTo(onStack.size() * 8, 16);
     if (stackBytes != 0) op("subq", { immOp(stackBytes), useDef(Reg::RSP) });
     for (size_t i = 0; i < onStack.size(); i++) {
@@ -1038,7 +1012,6 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         }
         Width w = widthOf(entry.first->getType());
         loadInt(entry.first, entry.second, w);
-        //small signed ints are passed sign-extended, bools and unsigned ones zero-extended
         const sema::Type *paramType = inRegTypes[r];
         widen(entry.second, w, !(ir::integerBits(paramType) == 1 || sema::isUnsigned(paramType)));
     }
@@ -1050,7 +1023,6 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         argumentRegs.push_back(Reg::RAX);
     }
 
-    //what the call clobbers: values still needed leave the caller-saved registers
     finishOperands(info);
     if (!global) ra.spillCallerSaved(nextUse);
 
@@ -1077,7 +1049,7 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
 }
 
 void FunctionEmitter::emitPhi(ir::PhiInst *phi, const InstNextUse &info) {
-    if (global) return;  //defined by the copies on the edges into this block
+    if (global) return;
     const sema::Type *type = phi->getType();
     MOperand slot = memOp(Mem::frame(frame.phiSlot(phi)));
     if (isFloatType(type)) {
@@ -1155,7 +1127,7 @@ void FunctionEmitter::storePhiCopies(ir::BasicBlock *block, const ir::BasicBlock
 }
 
 void FunctionEmitter::copyPhis(ir::BasicBlock *block, const ir::BasicBlock *succ) {
-    std::vector<std::pair<Reg, Reg>> finals;  //temporary -> phi
+    std::vector<std::pair<Reg, Reg>> finals;
     for (const std::unique_ptr<ir::Instruction> &inst : succ->instructions) {
         if (inst->getOpcode() != ir::Opcode::Phi) break;
         ir::PhiInst *phi = static_cast<ir::PhiInst *>(inst.get());
@@ -1222,14 +1194,12 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
     ir::BasicBlock *block = inst->getParent();
     ir::BasicBlock *deferred = nullptr;
     if (!global) {
-        //the successors' phi copies come first; only a loop exit may wait until after the jump
         if (inst->getOpcode() == ir::Opcode::Br) deferred = deferredEdge(block, static_cast<ir::BranchInst *>(inst));
         std::set<const ir::BasicBlock *> done;
         if (deferred) done.insert(deferred);
         for (ir::BasicBlock *succ : inst->getSuccessors()) {
             if (done.insert(succ).second) storePhiCopies(block, succ);
         }
-        //end of block: values live on exit go back to memory. movs leave the flags alone
         ra.flush(liveOut);
     }
 
@@ -1249,7 +1219,6 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
                 return fail("returning an aggregate value is not supported");
             }
         }
-        //the epilogue reads the return value: the jump to it (or a marker when it falls through) says so
         if (next != nullptr) {
             op("jmp", { textOp(".Lret" + std::to_string(id)) }, returned);
         } else {
@@ -1294,7 +1263,6 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
         ir::SwitchInst *sw = static_cast<ir::SwitchInst *>(inst);
         Width w = widthOf(sw->condition->getType());
         loadInt(sw->condition, Reg::RAX, w);
-        //-O3: a case whose block has phis goes through a local label that does that edge's copies
         std::vector<std::pair<const ir::BasicBlock *, std::string>> edgeLabels;
         for (const std::pair<long long, ir::BasicBlock *> &c : sw->cases) {
             std::string target = label(c.second);
@@ -1336,4 +1304,4 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
     }
 }
 
-} // namespace codegen
+}

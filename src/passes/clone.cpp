@@ -103,4 +103,4 @@ void remapInstruction(Instruction &inst, const ValueMap &map) {
     }
 }
 
-} // namespace passes
+}

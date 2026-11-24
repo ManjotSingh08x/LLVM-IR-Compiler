@@ -33,7 +33,6 @@ BasicBlock *redirectPredecessors(Function &fn, BasicBlock *target, const std::ve
         fn.placeBlockAfter(middle, last);
     }
 
-    //phi entries from preds now arrive through middle, merged when they differ
     for (std::unique_ptr<Instruction> &inst : target->instructions) {
         if (inst->getOpcode() != Opcode::Phi) break;
         PhiInst *phi = static_cast<PhiInst *>(inst.get());
@@ -64,7 +63,6 @@ BasicBlock *redirectPredecessors(Function &fn, BasicBlock *target, const std::ve
 
 namespace {
 
-//a phi reads each entry at the end of that entry's block
 std::vector<std::pair<Instruction *, BasicBlock *>> usesOf(const Instruction *def, const DefUse &defUse) {
     std::vector<std::pair<Instruction *, BasicBlock *>> uses;
     for (Instruction *user : defUse.users(def)) {
@@ -79,7 +77,7 @@ std::vector<std::pair<Instruction *, BasicBlock *>> usesOf(const Instruction *de
     return uses;
 }
 
-} // namespace
+}
 
 bool isLCSSA(const Loop &loop, const DefUse &defUse) {
     for (BasicBlock *block : loop.blocks) {
@@ -160,7 +158,6 @@ bool LoopPass::isUsable(const Loop &loop, const Function &fn) {
 
 bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
     bool changedAny = false;
-    //each fix changes the cfg, so the loops are found again
     for (;;) {
         bool changed = false;
         const LoopInfo &info = am.getLoops(fn);
@@ -180,7 +177,6 @@ bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
                 break;
             }
 
-            //dedicated exits: an exit also entered from outside gets its own block
             for (BasicBlock *exit : loop->exits) {
                 std::vector<BasicBlock *> inside;
                 bool outside = false;
@@ -206,7 +202,6 @@ bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
 }
 
 bool LoopPass::closeLoops(Function &fn, AnalysisManager &am) {
-    //new phis invalidate the analyses, so loops are looked up by header each time
     std::vector<BasicBlock *> headers;
     for (Loop *loop : am.getLoops(fn).innermostFirst()) {
         if (isUsable(*loop, fn)) headers.push_back(loop->header);
@@ -256,4 +251,4 @@ bool LoopPass::run(Function &fn, Module &module, AnalysisManager &am) {
     }
 }
 
-} // namespace passes
+}

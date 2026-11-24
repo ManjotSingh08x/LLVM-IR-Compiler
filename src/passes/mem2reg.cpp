@@ -12,7 +12,6 @@ using namespace ir;
 
 namespace {
 
-//x.addr -> x, so phis read like the source variable
 std::string variableName(const std::string &slot) {
     const std::string suffix = ".addr";
     if (slot.size() > suffix.size() && slot.compare(slot.size() - suffix.size(), suffix.size(), suffix) == 0) {
@@ -79,8 +78,8 @@ private:
 
     void placePhis(const Instruction *slot) {
         std::set<BasicBlock *> defs;
-        std::set<BasicBlock *> upwardLoad;  //a load comes before any store in the block
-        std::set<BasicBlock *> killed;      //a store in the block
+        std::set<BasicBlock *> upwardLoad;
+        std::set<BasicBlock *> killed;
         for (BasicBlock *block : fn.getBlocks()) {
             if (!doms.isReachable(block)) continue;
             bool stored = false;
@@ -108,7 +107,6 @@ private:
             }
         }
 
-        //iterated dominance frontier, walked in layout order so phis are named the same every run
         std::set<BasicBlock *> placed;
         std::vector<BasicBlock *> frontierWork = inLayoutOrder(defs);
         while (!frontierWork.empty()) {
@@ -130,11 +128,9 @@ private:
     Value *valueOf(const Instruction *slot, std::map<const Instruction *, Value *> &current) {
         std::map<const Instruction *, Value *>::iterator it = current.find(slot);
         if (it != current.end()) return it->second;
-        //read before any store: zero stands in for the garbage
         return module.getZero(static_cast<const AllocaInst *>(slot)->getAccessType());
     }
 
-    //current is copied per call, so the call stack holds the value stack
     void rename(BasicBlock *block, std::map<const Instruction *, Value *> current) {
         for (std::unique_ptr<Instruction> &owned : block->instructions) {
             Instruction *inst = owned.get();
@@ -154,7 +150,6 @@ private:
                 doomed.push_back(inst);
             }
         }
-        //the successors' phis get this block's values, one entry per edge
         if (Instruction *term = block->getTerminator()) {
             for (BasicBlock *succ : term->getSuccessors()) {
                 for (std::unique_ptr<Instruction> &inst : succ->instructions) {
@@ -178,7 +173,7 @@ private:
     std::vector<Instruction *>                doomed;
 };
 
-} // namespace
+}
 
 bool Mem2Reg::run(Function &fn, Module &module, AnalysisManager &am) {
     bool changed = removeUnreachable(fn);
@@ -203,4 +198,4 @@ bool Mem2Reg::run(Function &fn, Module &module, AnalysisManager &am) {
     return changed;
 }
 
-} // namespace passes
+}

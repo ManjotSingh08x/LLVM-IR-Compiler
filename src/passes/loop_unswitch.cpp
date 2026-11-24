@@ -23,17 +23,15 @@ void branchPreheader(BasicBlock *pre, Value *cond, BasicBlock *onTrue, BasicBloc
     pre->append(std::unique_ptr<Instruction>(new BranchInst(cond, onTrue, onFalse)));
 }
 
-//if (cond) leave; at the top of the loop: decide it in the preheader instead
 bool unswitchTrivially(Loop &loop, BasicBlock *pre, BranchInst *br, LoopContext &ctx) {
     BasicBlock *header = loop.header;
     for (std::unique_ptr<Instruction> &inst : header->instructions) {
-        if (inst.get() != br && inst->hasSideEffects()) return false;  //would be skipped on the way out
+        if (inst.get() != br && inst->hasSideEffects()) return false;
     }
     bool trueLeaves = !loop.contains(br->target);
     BasicBlock *exit = trueLeaves ? br->target : br->falseTarget;
     BasicBlock *stay = trueLeaves ? br->falseTarget : br->target;
 
-    //the values the exit's phis get when leaving from the header
     std::vector<std::pair<PhiInst *, Value *>> entries;
     for (PhiInst *phi : phisOf(exit)) {
         Value *value = phi->getIncomingValueFor(header);
@@ -52,7 +50,6 @@ bool unswitchTrivially(Loop &loop, BasicBlock *pre, BranchInst *br, LoopContext 
     return true;
 }
 
-//the original loop runs when cond is true, the copy when it is false
 bool unswitchByCopy(Loop &loop, BasicBlock *pre, BasicBlock *block, BranchInst *br, LoopContext &ctx) {
     size_t size = 0;
     for (BasicBlock *b : loop.blocks) size += b->instructions.size();
@@ -87,7 +84,6 @@ bool unswitchByCopy(Loop &loop, BasicBlock *pre, BasicBlock *block, BranchInst *
     }
     for (Instruction *inst : copies) remapInstruction(*inst, map);
 
-    //the copy's exiting blocks add entries to the exits' loop-closed phis
     for (BasicBlock *exit : loop.exits) {
         for (PhiInst *phi : phisOf(exit)) {
             std::vector<std::pair<Value *, BasicBlock *>> added;
@@ -112,7 +108,7 @@ bool unswitchByCopy(Loop &loop, BasicBlock *pre, BasicBlock *block, BranchInst *
     return true;
 }
 
-} // namespace
+}
 
 LoopResult LoopUnswitch::runOnLoop(Loop &loop, LoopContext &ctx) {
     BasicBlock *pre = loop.preheader();
@@ -132,9 +128,9 @@ LoopResult LoopUnswitch::runOnLoop(Loop &loop, LoopContext &ctx) {
             continue;
         }
         if (unswitchByCopy(loop, pre, block, br, ctx)) return LoopResult::CFGChanged;
-        return LoopResult::Unchanged;  //one condition per loop
+        return LoopResult::Unchanged;
     }
     return LoopResult::Unchanged;
 }
 
-} // namespace passes
+}

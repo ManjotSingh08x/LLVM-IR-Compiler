@@ -11,14 +11,13 @@ namespace ir {
 
 class BasicBlock;
 
-//instruction families, each with its own base class
 enum class InstCategory {
     Return,
-    Branch,      //br, switch, unreachable
-    Memory,      //alloca, load, store, getelementptr
+    Branch,
+    Memory,
     Call,
-    Expression,  //arithmetic, compares, casts, select: pure register values
-    Phi          //phi, only made by the optimization passes
+    Expression,
+    Phi
 };
 
 enum class Opcode {
@@ -29,7 +28,6 @@ enum class Opcode {
     Phi
 };
 
-//one instruction in a basic block, a value-producing instruction is its own %name
 class Instruction : public Value {
 public:
     Instruction(InstCategory category, const sema::Type *type, const std::string &name)
@@ -42,15 +40,12 @@ public:
 
     virtual bool isTerminator() const { return false; }
 
-    //true when removing the instruction could change what the program does
     virtual bool hasSideEffects() const { return isTerminator(); }
 
-    //the values the instruction reads, in order, blocks are not operands
     std::vector<Value *> getOperands() const;
 
     void replaceOperand(Value *from, Value *to);
 
-    //the blocks a terminator can jump to, in order, with repeats
     std::vector<BasicBlock *> getSuccessors() const;
 
     void replaceSuccessor(BasicBlock *from, BasicBlock *to);
@@ -60,7 +55,7 @@ public:
     std::string getOperand() const override { return "%" + name; }
 
 protected:
-    //the operand fields of the subclass, so the base can read and rewrite them
+
     virtual std::vector<Value **> operandSlots() { return {}; }
     virtual std::vector<BasicBlock **> successorSlots() { return {}; }
 
@@ -80,7 +75,7 @@ public:
     void dump(std::ostream &out) const override;
 
     const sema::Type *returnType;
-    Value            *returnValue;  //null for ret void
+    Value            *returnValue;
 
 protected:
     std::vector<Value **> operandSlots() override;
@@ -193,7 +188,6 @@ protected:
     std::vector<Value **> operandSlots() override { return { &value, &address }; }
 };
 
-//getelementptr, accessType is the type the first index steps over
 class GEPInst : public MemoryInst {
 public:
     Opcode getOpcode() const override { return Opcode::GEP; }
@@ -212,7 +206,6 @@ protected:
     std::vector<Value **> operandSlots() override;
 };
 
-//variadic callees are written with their full type
 class CallInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Call; }
@@ -243,13 +236,12 @@ enum class BinaryOpKind {
     Add, FAdd, Sub, FSub, Mul, FMul, SDiv, UDiv, FDiv, SRem, URem,
     Shl, AShr, LShr, And, Or, Xor,
     ICmpEQ, ICmpNE, ICmpSLT, ICmpSGT, ICmpSLE, ICmpSGE,
-    ICmpULT, ICmpUGT, ICmpULE, ICmpUGE,   //pointer ordering, as clang does
+    ICmpULT, ICmpUGT, ICmpULE, ICmpUGE,
     FCmpOEQ, FCmpUNE, FCmpOLT, FCmpOGT, FCmpOLE, FCmpOGE
 };
 
 bool isCompare(BinaryOpKind op);
 
-//binary op or compare, operandType is the type of both operands
 class BinaryInst : public ExprInst {
 public:
     Opcode getOpcode() const override { return Opcode::Binary; }
@@ -264,7 +256,7 @@ public:
     const sema::Type *operandType;
     Value            *lhs;
     Value            *rhs;
-    bool              isExact = false;  //sdiv exact, for the distance between two pointers
+    bool              isExact = false;
 
 protected:
     std::vector<Value **> operandSlots() override { return { &lhs, &rhs }; }
@@ -314,7 +306,6 @@ protected:
     std::vector<Value **> operandSlots() override { return { &operand }; }
 };
 
-//select, only to keep a null pointer null across a base class conversion
 class SelectInst : public ExprInst {
 public:
     Opcode getOpcode() const override { return Opcode::Select; }
@@ -332,7 +323,6 @@ protected:
     std::vector<Value **> operandSlots() override { return { &condition, &ifTrue, &ifFalse }; }
 };
 
-//one incoming value per predecessor block
 class PhiInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Phi; }
@@ -340,7 +330,7 @@ public:
     PhiInst(const sema::Type *type, const std::string &name) : Instruction(InstCategory::Phi, type, name) {}
 
     void   addIncoming(Value *value, BasicBlock *block) { incoming.push_back(std::make_pair(value, block)); }
-    //null when block is not listed
+
     Value *getIncomingValueFor(const BasicBlock *block) const;
     void   removeIncomingBlock(const BasicBlock *block);
     void   replaceIncomingBlock(BasicBlock *from, BasicBlock *to);
@@ -353,6 +343,6 @@ protected:
     std::vector<Value **> operandSlots() override;
 };
 
-} // namespace ir
+}
 
 #endif

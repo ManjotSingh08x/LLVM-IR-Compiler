@@ -8,14 +8,12 @@ using namespace ir;
 
 namespace {
 
-//the header is copied into the preheader, so it must stay small
 const size_t kMaxHeaderInstructions = 16;
 
 bool hasPhi(const BasicBlock *block) {
     return !block->instructions.empty() && block->instructions.front()->getOpcode() == Opcode::Phi;
 }
 
-//instructions that can run once more before the loop without changing anything
 bool isCopyable(const Instruction &inst) {
     switch (inst.getOpcode()) {
     case Opcode::Load:
@@ -30,14 +28,14 @@ bool isCopyable(const Instruction &inst) {
     }
 }
 
-} // namespace
+}
 
 LoopResult LoopRotate::runOnLoop(Loop &loop, LoopContext &ctx) {
     BasicBlock *header = loop.header;
     BasicBlock *pre = loop.preheader();
     if (pre == nullptr || loop.latches.size() != 1) return LoopResult::Unchanged;
     BasicBlock *latch = loop.latches.front();
-    if (latch == header) return LoopResult::Unchanged;  //the test is already at the bottom
+    if (latch == header) return LoopResult::Unchanged;
 
     Instruction *term = header->getTerminator();
     if (term == nullptr || term->getOpcode() != Opcode::Br) return LoopResult::Unchanged;
@@ -59,7 +57,6 @@ LoopResult LoopRotate::runOnLoop(Loop &loop, LoopContext &ctx) {
         }
     }
 
-    //the guard: a copy of the header's work at the end of the preheader
     ValueMap copies;
     Instruction *preTerm = pre->getTerminator();
     for (size_t i = 0; i + 1 < header->instructions.size(); i++) {
@@ -76,13 +73,11 @@ LoopResult LoopRotate::runOnLoop(Loop &loop, LoopContext &ctx) {
     BranchInst *guard = trueStays ? new BranchInst(condition, body, exit) : new BranchInst(condition, exit, body);
     pre->append(std::unique_ptr<Instruction>(guard));
 
-    //place the old header after the latch so the latch falls into it
     ctx.fn.removeBlock(header);
     ctx.fn.placeBlockAfter(header, latch);
 
-    //the loop now starts at body, do not rotate it again
     ctx.markDone(body);
     return LoopResult::CFGChanged;
 }
 
-} // namespace passes
+}

@@ -47,4 +47,4 @@ void AnalysisManager::invalidateModule() {
     callGraphModule = nullptr;
 }
 
-} // namespace passes
+}

@@ -38,7 +38,6 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
         copies.push_back(copy);
     }
 
-    //operands are mapped once every copy exists, since a phi may name a later value
     std::vector<Instruction *> cloned;
     std::vector<std::pair<ReturnInst *, BasicBlock *>> returns;
     const std::vector<BasicBlock *> &blocks = callee.getBlocks();
@@ -58,7 +57,6 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
     }
     for (Instruction *inst : cloned) remapInstruction(*inst, map);
 
-    //the result: the single returned value, or a slot every ret stores to
     Value *result = nullptr;
     const sema::Type *returnType = callee.fnType->returnType;
     bool hasValue = !returnType->is(sema::TypeKind::Void);
@@ -83,7 +81,6 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
         result = load;
     }
 
-    //code after a call that never returns is unreachable, so its uses get a zero
     if (hasValue && result == nullptr) result = module.getZero(returnType);
     if (hasValue) replaceUses(caller, call, result);
     after->erase(call);
@@ -91,14 +88,13 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
     caller.recomputeCFG();
 }
 
-} // namespace
+}
 
 bool Inliner::run(Module &module, AnalysisManager &am) {
     std::vector<Function *> order = am.getCallGraph(module).bottomUp();
     bool changed = false;
     for (Function *caller : order) {
         if (!caller->isDefinition()) continue;
-        //rebuilt after each caller, since inlining changes call counts and sizes
         const CallGraph &graph = am.getCallGraph(module);
         std::vector<CallGraph::CallSite> sites = graph.node(caller).calls;
         bool callerChanged = false;
@@ -125,4 +121,4 @@ bool Inliner::run(Module &module, AnalysisManager &am) {
     return changed;
 }
 
-} // namespace passes
+}

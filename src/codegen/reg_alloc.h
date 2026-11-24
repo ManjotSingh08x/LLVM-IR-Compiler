@@ -12,7 +12,7 @@
 
 namespace codegen {
 
-//per-block register allocation with register and address descriptors
+//local per-block register allocator
 class RegisterAllocator {
 public:
     RegisterAllocator(Frame &frame, MCode &out) : frame(frame), out(out) {}
@@ -21,15 +21,15 @@ public:
 
     bool registerOf(const ir::Value *value, Reg &reg) const;
 
-    //getReg: a free register, else the one whose value is needed furthest away, saved home first if needed
+    //picks a free register, spilling the farthest-used value
     Reg allocate(const ir::Value *value, bool isFloat, const NextUseMap &nextUse);
 
     void release(const ir::Value *value);
 
-    //before a call: values still needed in caller-saved registers are stored home
+    //saves live values held in call-clobbered registers
     void spillCallerSaved(const NextUseMap &nextUse);
 
-    //at a block's end: live values held only in a register are stored home
+    //stores live-out values and frees all registers
     void flush(const passes::ValueSet &liveOut);
 
     const std::set<Reg> &usedCalleeSaved() const { return calleeSavedUsed; }
@@ -40,14 +40,14 @@ private:
 
     Frame                          &frame;
     MCode                          &out;
-    std::map<Reg, const ir::Value *> holds;         //register descriptor
-    std::map<const ir::Value *, Reg> where;         //address descriptor: register part
-    std::set<const ir::Value *>      registerOnly;  //address descriptor: not in memory
+    std::map<Reg, const ir::Value *> holds;
+    std::map<const ir::Value *, Reg> where;
+    std::set<const ir::Value *>      registerOnly;
     std::set<Reg>                    calleeSavedUsed;
 };
 
 bool isCallerSaved(Reg reg);
 
-} // namespace codegen
+}
 
 #endif

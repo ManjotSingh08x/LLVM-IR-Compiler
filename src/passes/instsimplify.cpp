@@ -18,12 +18,10 @@ bool isAssociative(BinaryOpKind op) {
            op == BinaryOpKind::Or || op == BinaryOpKind::Xor;
 }
 
-//(x op c1) op c2 -> x op (c1 op c2), rewriting inst in place
 bool reassociate(Module &module, Instruction &inst) {
     if (inst.getOpcode() != Opcode::Binary) return false;
     BinaryInst &outer = static_cast<BinaryInst &>(inst);
     if (integerBits(outer.operandType) < 8) return false;
-    //(x << a) << b -> x << (a + b) while a + b stays below the width
     if (outer.op == BinaryOpKind::Shl && outer.lhs->getKind() == ValueKind::Instruction) {
         const Constant *b = asConstant(outer.rhs);
         Instruction *lhs = static_cast<Instruction *>(outer.lhs);
@@ -54,7 +52,6 @@ bool reassociate(Module &module, Instruction &inst) {
     return true;
 }
 
-//the one value every entry of phi carries, ignoring the phi itself, or null
 Value *sameIncoming(PhiInst *phi) {
     Value *value = nullptr;
     for (const std::pair<Value *, BasicBlock *> &in : phi->incoming) {
@@ -70,7 +67,7 @@ Value *sameIncoming(PhiInst *phi) {
     return value;
 }
 
-} // namespace
+}
 
 bool InstSimplify::run(Function &fn, Module &module, AnalysisManager &am) {
     (void)am;
@@ -124,7 +121,6 @@ bool InstSimplify::run(Function &fn, Module &module, AnalysisManager &am) {
                 if (rewritten || reassociate(module, *inst)) changed = true;
             }
         }
-        //back edges: phis read values defined later in the walk
         for (BasicBlock *block : fn.getBlocks()) {
             for (std::unique_ptr<Instruction> &inst : block->instructions) {
                 for (Value *operand : inst->getOperands()) {
@@ -140,4 +136,4 @@ bool InstSimplify::run(Function &fn, Module &module, AnalysisManager &am) {
     return changedAny;
 }
 
-} // namespace passes
+}

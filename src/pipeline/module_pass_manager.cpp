@@ -28,4 +28,4 @@ bool ModulePassManager::run(ir::Module &module, AnalysisManager &am, const PassO
     return true;
 }
 
-} // namespace passes
+}

@@ -49,4 +49,4 @@ const std::set<std::string> &AvailableExpressions::out(const BasicBlock *block) 
     return it == outs.end() ? none : it->second;
 }
 
-} // namespace passes
+}

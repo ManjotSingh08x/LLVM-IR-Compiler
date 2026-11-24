@@ -1,9 +1,7 @@
 UNAME    := $(shell uname -s)
 
-# llvm-config is looked up in Homebrew on macOS, override with make CXX=... LLVM_CONFIG=...
 ifeq ($(UNAME),Darwin)
 LLVM_CONFIG ?= $(shell brew --prefix llvm 2>/dev/null)/bin/llvm-config
-# homebrew llvm is built against libc++, so its headers are compiled with clang
 CXX         ?= clang++
 else
 LLVM_CONFIG ?= llvm-config
@@ -46,7 +44,6 @@ test: $(TARGET)
 clean:
 	rm -rf $(BUILD) outputs
 
-# README architecture diagram: needs tectonic and pdftocairo (poppler)
 diagram: docs/architecture.svg
 
 docs/architecture.svg: docs/architecture.tex

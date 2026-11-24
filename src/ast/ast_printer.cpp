@@ -143,7 +143,6 @@ std::string paramList(const TypeSpec *fn) {
     return out + ")";
 }
 
-//spells a written type in C style, such as int (*)(int)
 std::string typeString(const TypeSpec *type, const std::string &inside) {
     if (type == nullptr) return "?" + inside;
     switch (type->specKind) {
@@ -222,7 +221,7 @@ const char *castKindName(CastKind kind) {
 
 std::string quoted(const std::string &text) { return "'" + text + "'"; }
 
-} // namespace
+}
 
 void ASTPrinter::line(const ASTNode &node, const std::string &attrs) {
     out << std::string(depth * 2, ' ');
@@ -537,4 +536,4 @@ void ASTPrinter::visitImplicitCastExpr(ImplicitCastExpr *node) {
     child(nullptr, node->sub.get());
 }
 
-} // namespace ast
+}

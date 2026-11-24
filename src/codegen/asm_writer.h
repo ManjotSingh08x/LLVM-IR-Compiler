@@ -10,12 +10,10 @@
 
 namespace codegen {
 
-//writes a module as x86-64 gnu assembly (at&t syntax)
 class AsmWriter {
 public:
     AsmWriter(ir::Module &module, passes::AnalysisManager &am, int optLevel);
 
-    //false when the module uses ir the backend cannot lower, see error()
     bool write(std::ostream &out);
 
     const std::string &error() const { return errorText; }
@@ -32,6 +30,6 @@ private:
     std::string              errorText;
 };
 
-} // namespace codegen
+}
 
 #endif

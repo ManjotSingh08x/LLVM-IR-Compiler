@@ -40,7 +40,6 @@ Instruction *IRBuilder::insert(Instruction *inst) {
     return inst;
 }
 
-//allocas go at the top of entry so they run once per call and dominate every use
 AllocaInst *IRBuilder::createEntryAlloca(const sema::Type *type, const std::string &baseName) {
     AllocaInst *inst = new AllocaInst(type, module.pointerType(), function->uniqueName(baseName));
     function->getEntryBlock()->insertAlloca(std::unique_ptr<Instruction>(inst));
@@ -124,8 +123,6 @@ Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *sourceType
     return call;
 }
 
-//edges are recorded only for branches actually written
-
 void IRBuilder::createRet(const sema::Type *returnType, Value *value) {
     insert(new ReturnInst(returnType, value));
 }
@@ -161,7 +158,6 @@ void IRBuilder::addSwitchCase(SwitchInst *inst, long long value, BasicBlock *tar
     BasicBlock::addEdge(inst->getParent(), target);
 }
 
-//the default starts as the switch end and moves to the default label once seen
 void IRBuilder::setSwitchDefault(SwitchInst *inst, BasicBlock *target) {
     if (inst == nullptr) return;
     BasicBlock *from = inst->getParent();
@@ -182,4 +178,4 @@ void IRBuilder::setSwitchDefault(SwitchInst *inst, BasicBlock *target) {
     BasicBlock::addEdge(from, target);
 }
 
-} // namespace ir
+}

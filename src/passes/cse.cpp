@@ -16,7 +16,6 @@ class Eliminator {
 public:
     Eliminator(const Dominators &doms, const AvailableExpressions &available) : doms(doms), available(available) {}
 
-    //table is copied per call, so it holds only expressions from dominating blocks
     void walk(BasicBlock *block, std::map<std::string, Instruction *> table) {
         const std::set<std::string> &availableIn = available.in(block);
         std::set<std::string> local;
@@ -46,18 +45,16 @@ private:
     const AvailableExpressions  &available;
 };
 
-} // namespace
+}
 
 bool CSE::run(Function &fn, Module &module, AnalysisManager &am) {
     (void)module;
-    //repeat until nothing changes, since one replacement can expose another
     bool changed = false;
     for (int round = 0; round < 8; round++) {
         AvailableExpressions available(fn);
         Eliminator eliminator(am.getDominators(fn), available);
         eliminator.walk(fn.getEntryBlock(), std::map<std::string, Instruction *>());
         if (eliminator.replaced.empty()) break;
-        //uses the walk had not reached yet (phis on back edges)
         for (BasicBlock *block : fn.getBlocks()) {
             for (std::unique_ptr<Instruction> &inst : block->instructions) {
                 for (Value *operand : inst->getOperands()) {
@@ -72,4 +69,4 @@ bool CSE::run(Function &fn, Module &module, AnalysisManager &am) {
     return changed;
 }
 
-} // namespace passes
+}

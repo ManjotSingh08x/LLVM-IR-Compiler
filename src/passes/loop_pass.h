@@ -1,4 +1,3 @@
-//base class for loop passes and the loop forms they rely on
 #ifndef PASSES_LOOP_PASS_H
 #define PASSES_LOOP_PASS_H
 
@@ -12,8 +11,8 @@ namespace passes {
 
 enum class LoopResult {
     Unchanged,
-    Changed,     //instructions moved or rewritten, same cfg
-    CFGChanged   //blocks or edges changed, loops are found again
+    Changed,
+    CFGChanged
 };
 
 struct LoopContext {
@@ -27,13 +26,12 @@ struct LoopContext {
 
     bool dominatesAllExits(const ir::BasicBlock *block, const Loop &loop) const;
 
-    //the loop with this header is not given to the pass again in this run
     void markDone(ir::BasicBlock *header) { done.insert(header); }
 
     std::set<ir::BasicBlock *> &done;
 };
 
-//canonicalizes every loop, then runs runOnLoop on each, innermost first
+//base for passes that transform one loop
 class LoopPass : public FunctionPass {
 public:
     bool run(ir::Function &fn, ir::Module &module, AnalysisManager &am) final;
@@ -43,26 +41,26 @@ protected:
 
     virtual bool needsLCSSA() const { return false; }
 
-    //a loop headed by the entry block cannot get a preheader, so it is skipped
     static bool isUsable(const Loop &loop, const ir::Function &fn);
 
 private:
+    //gives loops a preheader and single latch
     static bool canonicalize(ir::Function &fn, AnalysisManager &am);
 
-    //forms lcssa for every usable loop
+    //puts loops into loop-closed form
     static bool closeLoops(ir::Function &fn, AnalysisManager &am);
 };
 
-//routes each outside use of a loop value through an exit-block phi; false when no single exit dominates a use
+//routes outside uses of loop values through phis
 bool formLCSSA(ir::Function &fn, const Loop &loop, const Dominators &doms, bool &changed);
 
 bool isLCSSA(const Loop &loop, const DefUse &defUse);
 
-//inserts a block named label between preds and target, merging target's phis into it
+//sends the given predecessors to a new block
 ir::BasicBlock *redirectPredecessors(ir::Function &fn, ir::BasicBlock *target,
                                      const std::vector<ir::BasicBlock *> &preds, const std::string &label,
                                      ir::BasicBlock *placeBefore);
 
-} // namespace passes
+}
 
 #endif

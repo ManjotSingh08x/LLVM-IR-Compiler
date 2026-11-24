@@ -23,7 +23,7 @@ bool verifyWithDominance(const ir::Function &fn, AnalysisManager &am, std::strin
             for (const std::pair<ir::Value *, const ir::BasicBlock *> &use : uses) {
                 if (use.first->getKind() != ir::ValueKind::Instruction) continue;
                 const ir::Instruction *def = static_cast<const ir::Instruction *>(use.first);
-                if (isPhi && !doms.isReachable(use.second)) continue;  //an edge that never runs
+                if (isPhi && !doms.isReachable(use.second)) continue;
                 if (!doms.dominatesUse(def, inst.get(), use.second)) {
                     error = "in block %" + block->getName() + ": %" + def->getName() +
                             " (defined in %" + def->getParent()->getName() + ") does not dominate a use in '" +
@@ -37,4 +37,4 @@ bool verifyWithDominance(const ir::Function &fn, AnalysisManager &am, std::strin
     return true;
 }
 
-} // namespace passes
+}

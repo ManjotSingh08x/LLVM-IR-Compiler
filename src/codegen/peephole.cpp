@@ -8,12 +8,11 @@ namespace codegen {
 
 namespace {
 
-//one line split into mnemonic and operands
 struct Line {
     enum Kind { Instruction, Label, Other } kind = Other;
     std::string              mnemonic;
     std::vector<std::string> operands;
-    std::string              label;  //for Label, without the colon
+    std::string              label;
 };
 
 Line parse(const std::string &text) {
@@ -28,7 +27,6 @@ Line parse(const std::string &text) {
     size_t tab = text.find('\t', 1);
     line.mnemonic = text.substr(1, tab == std::string::npos ? std::string::npos : tab - 1);
     if (tab == std::string::npos) return line;
-    //operands are separated by ", "; a memory operand has no space inside
     std::string rest = text.substr(tab + 1);
     size_t start = 0;
     while (true) {
@@ -54,7 +52,6 @@ bool isMove(const std::string &m) {
     return m == "movq" || m == "movl" || m == "movw" || m == "movb" || m == "movss" || m == "movsd" || m == "movaps";
 }
 
-//moves where the destination gets all of the source, so moving back is a no-op
 bool isFullCopy(const std::string &m) { return m == "movq" || m == "movaps"; }
 
 bool isUnconditionalExit(const std::string &m) { return m == "jmp" || m == "ret" || m == "ud2"; }
@@ -68,15 +65,12 @@ Flags flagEffect(const std::string &m) {
         startsWith(m, "sbb")) {
         return Flags::Reads;
     }
-    //the flags are never live across a block boundary or a call in this backend
     if (isUnconditionalExit(m) || startsWith(m, "call") || m == "leave") return Flags::Writes;
     static const char *writers[] = { "cmp", "test", "add", "sub", "and", "or", "xor", "neg", "imul",
                                      "ucomis", "comis", "idiv", "div" };
     for (const char *w : writers) {
         if (startsWith(m, w)) {
-            //sse logic ops leave the flags alone
             if ((startsWith(m, "xorp") || startsWith(m, "andp") || startsWith(m, "orp")) ) return Flags::Neutral;
-            //sse add and sub leave the flags alone
             if ((startsWith(m, "adds") || startsWith(m, "subs") || startsWith(m, "addp") || startsWith(m, "subp")) &&
                 m.size() > 4) {
                 return Flags::Neutral;
@@ -84,7 +78,6 @@ Flags flagEffect(const std::string &m) {
             return Flags::Writes;
         }
     }
-    //shifts by %cl keep the flags when the count is 0, inc/dec keep the carry, bt sets only the carry
     if (startsWith(m, "sh") || startsWith(m, "sa") || startsWith(m, "ro") || startsWith(m, "inc") ||
         startsWith(m, "dec") || startsWith(m, "bt")) {
         return Flags::Unknown;
@@ -92,10 +85,10 @@ Flags flagEffect(const std::string &m) {
     return Flags::Neutral;
 }
 
-//true when the flags after line i are overwritten before anything reads them
+//checks that no later instruction reads the flags
 bool flagsDeadAfter(const std::vector<Line> &lines, size_t i) {
     for (size_t j = i + 1; j < lines.size(); j++) {
-        if (lines[j].kind == Line::Label) return false;  //be safe at a local label
+        if (lines[j].kind == Line::Label) return false;
         if (lines[j].kind != Line::Instruction) continue;
         switch (flagEffect(lines[j].mnemonic)) {
         case Flags::Writes:  return true;
@@ -132,14 +125,13 @@ std::string invertJump(const std::string &m) {
     return it == opposite.end() ? "" : it->second;
 }
 
-//one sweep; true when anything changed
+//one pass of local rewrites over the lines
 bool sweep(AsmLines &text) {
     std::vector<Line> lines;
     for (const std::string &t : text) lines.push_back(parse(t));
     std::vector<bool> drop(text.size(), false);
     bool changed = false;
 
-    //the first instruction after each label, for jumps to jumps
     std::map<std::string, size_t> target;
     for (size_t i = 0; i < lines.size(); i++) {
         if (lines[i].kind != Line::Label) continue;
@@ -159,7 +151,6 @@ bool sweep(AsmLines &text) {
         if (l.kind != Line::Instruction || drop[i]) continue;
         const std::string &m = l.mnemonic;
 
-        //unreachable code: after jmp, ret or ud2 until the next label
         if (isUnconditionalExit(m)) {
             for (size_t j = i + 1; j < lines.size() && lines[j].kind != Line::Label; j++) {
                 if (lines[j].kind == Line::Instruction && !drop[j]) {
@@ -169,7 +160,6 @@ bool sweep(AsmLines &text) {
             }
         }
 
-        //jcc A; jmp B; A: -> j!cc B (a branch around a jump)
         if (isConditionalJump(m) && l.operands.size() == 1 && !invertJump(m).empty()) {
             size_t j = next(i);
             if (j < lines.size() && lines[j].kind == Line::Instruction && !drop[j] && lines[j].mnemonic == "jmp" &&
@@ -189,7 +179,6 @@ bool sweep(AsmLines &text) {
             }
         }
 
-        //jumps to jumps, and a jmp to the label right after it
         if ((m == "jmp" || isConditionalJump(m)) && l.operands.size() == 1) {
             std::map<std::string, size_t>::iterator t = target.find(l.operands[0]);
             if (t != target.end() && lines[t->second].mnemonic == "jmp" && lines[t->second].operands.size() == 1 &&
@@ -219,14 +208,11 @@ bool sweep(AsmLines &text) {
                 continue;
             }
 
-            //pairs with the instruction right after (no label in between)
             size_t j = next(i);
             if (isMove(m) && j < lines.size() && lines[j].kind == Line::Instruction && !drop[j] &&
                 lines[j].mnemonic == m && lines[j].operands.size() == 2 && lines[j].operands[0] == b &&
                 lines[j].operands[1] == a) {
-                //store then reload, load then store back: the second does nothing
                 bool memoryPair = (isRegister(a) && isMemory(b)) || (isMemory(a) && isRegister(b));
-                //register copy and copy back of the whole register
                 bool registerPair = isRegister(a) && isRegister(b) && isFullCopy(m);
                 if (memoryPair || registerPair) {
                     drop[j] = true;
@@ -234,14 +220,12 @@ bool sweep(AsmLines &text) {
                 }
             }
 
-            //cmp $0, R -> test R, R: the same flags for every condition
             if (startsWith(m, "cmp") && m.size() == 4 && a == "$0" && isRegister(b)) {
                 text[i] = format("test" + m.substr(3), { b, b });
                 changed = true;
                 continue;
             }
 
-            //the rest change the flags: only when nothing reads them before they are set again
             bool integerOp = m.size() == 4 && (m.back() == 'l' || m.back() == 'q');
             if (!integerOp || !isRegister(b) || !flagsDeadAfter(lines, i)) continue;
             std::string base = m.substr(0, 3);
@@ -274,11 +258,11 @@ bool sweep(AsmLines &text) {
     return true;
 }
 
-} // namespace
+}
 
 void peephole(AsmLines &lines) {
     for (int round = 0; round < 16 && sweep(lines); round++) {
     }
 }
 
-} // namespace codegen
+}

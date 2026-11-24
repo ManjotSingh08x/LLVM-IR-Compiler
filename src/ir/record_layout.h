@@ -10,32 +10,29 @@
 
 namespace ir {
 
-//layout and lifetime queries for records, laid out as bases then fields
 class RecordLayout {
 public:
-    //struct index of a field inside the record that declares it
+
+    //finds the index of a field in the record
     static unsigned fieldIndex(const sema::RecordSymbol *record, const sema::Symbol *field);
 
-    //struct indices from derived to its base subobject, false when not a base
     static bool findBasePath(const sema::RecordSymbol *derived, const sema::RecordSymbol *base,
                              std::vector<unsigned> &path);
 
-    //the user constructor taking no arguments, or null
     static sema::FunctionSymbol *defaultConstructor(const sema::RecordSymbol *record);
 
-    //the record an array of records is made of, the record itself, or null
     static sema::RecordSymbol *elementRecord(const sema::Type *type);
 
-    //the record's mangled path: Outer::Inner becomes 5Outer5Inner
     static std::string recordPath(const sema::RecordSymbol *record);
 
+    //tells if type needs constructor calls
     bool needsConstruction(const sema::Type *type);
     bool needsConstruction(const sema::RecordSymbol *record);
 
+    //tells if type needs destructor calls
     bool needsDestruction(const sema::Type *type);
     bool needsDestruction(const sema::RecordSymbol *record);
 
-    //the declaration holding a field's in-class initializer, or null
     static ast::VarDecl *fieldDeclaration(const sema::Symbol *field);
 
 private:
@@ -43,6 +40,6 @@ private:
     std::map<const sema::RecordSymbol *, bool> destructionCache;
 };
 
-} // namespace ir
+}
 
 #endif

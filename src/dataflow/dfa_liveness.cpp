@@ -35,7 +35,6 @@ Liveness::Liveness(const ir::Function &fn) : fn(fn) {
         problem.kill[block] = blockDef;
     }
 
-    //a phi reads its operand at the end of the incoming block
     problem.edge = [](const ir::BasicBlock *from, const ir::BasicBlock *to, ValueSet &value) {
         for (const std::unique_ptr<ir::Instruction> &inst : to->instructions) {
             if (inst->getCategory() != ir::InstCategory::Phi) break;
@@ -83,4 +82,4 @@ void Liveness::dump(std::ostream &os) const {
     }
 }
 
-} // namespace passes
+}

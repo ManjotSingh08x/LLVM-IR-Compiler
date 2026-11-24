@@ -31,7 +31,7 @@ bool isAllZero(const ir::Constant *constant) {
     return false;
 }
 
-} // namespace
+}
 
 AsmWriter::AsmWriter(ir::Module &module, passes::AnalysisManager &am, int optLevel)
     : module(module), am(am), layout(module.symTab), optLevel(optLevel) {}
@@ -55,14 +55,12 @@ bool AsmWriter::write(std::ostream &out) {
 
     pool.emit(out);
 
-    //the global constructor function runs before main
     if (module.globalInit) {
         out << "\n\t.section\t.init_array,\"aw\",@init_array\n";
         out << "\t.p2align\t3\n";
         out << "\t.quad\t" << symbolName(module.globalInit) << "\n";
     }
 
-    //no executable stack
     out << "\n\t.section\t.note.GNU-stack,\"\",@progbits\n";
     return true;
 }
@@ -137,4 +135,4 @@ void AsmWriter::writeConstant(std::ostream &out, const ir::Constant *constant, c
     }
 }
 
-} // namespace codegen
+}

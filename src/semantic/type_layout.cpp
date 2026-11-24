@@ -68,7 +68,6 @@ void TypeLayout::place(StructLayout &layout) {
 const TypeLayout::StructLayout &TypeLayout::structLayout(const Type *type) {
     static const StructLayout empty;
 
-    //must match the record layout written in ir/ir_types.cpp
     if (type->is(TypeKind::Record)) {
         RecordSymbol *record = asRecord(type);
         std::map<const void *, StructLayout>::iterator it = cache.find(record);
@@ -97,4 +96,4 @@ const TypeLayout::StructLayout &TypeLayout::structLayout(const Type *type) {
     return empty;
 }
 
-} // namespace sema
+}

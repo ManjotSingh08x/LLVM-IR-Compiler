@@ -9,7 +9,6 @@ namespace {
 
 std::string lengthPrefixed(const std::string &name) { return std::to_string(name.size()) + name; }
 
-//a record's mangled name: its namespaces and outer records first, a local record by its unique name
 std::string recordPath(const RecordSymbol *record) {
     if (record->outer) return recordPath(record->outer) + lengthPrefixed(record->name);
     if (record->scope->kind == ScopeKind::Namespace) return namespacePath(record->scope) + lengthPrefixed(record->name);
@@ -28,13 +27,12 @@ bool isVoidParamList(const ast::NodeList<ast::ParamDecl> &params) {
 
 void bindConstantNames(ast::Expr *expr, Scope *scope);
 
-//a parameter written as an array or a function is a pointer
 const Type *adjustParameter(const Type *type, SymbolTable &table) {
     if (type->is(TypeKind::Array) || type->is(TypeKind::Function)) return decay(type, table);
     return type;
 }
 
-} // namespace
+}
 
 void SymbolBuilder::build(ast::Program *program) {
     current = table.global();
@@ -45,7 +43,6 @@ void SymbolBuilder::build(ast::Program *program) {
     for (const std::unique_ptr<ast::Decl> &decl : program->decls) buildBodies(decl.get());
 }
 
-//a declaration at file scope or directly in a namespace, which current is
 void SymbolBuilder::declareTopLevel(ast::Decl *decl) {
     switch (decl->getKind()) {
     case ast::ASTKind::RecordDecl:
@@ -70,7 +67,6 @@ void SymbolBuilder::declareTopLevel(ast::Decl *decl) {
     }
 }
 
-//namespace N { ... } opened again adds to the same scope
 void SymbolBuilder::declareNamespace(ast::NamespaceDecl *node) {
     NamespaceSymbol *space = nullptr;
     if (const std::vector<Symbol *> *found = current->find(node->name)) {
@@ -106,7 +102,6 @@ void SymbolBuilder::declareBuiltins() {
 }
 
 void SymbolBuilder::declareRecord(ast::RecordDecl *node, Scope *scope, RecordSymbol *outer) {
-    //struct s; declares s once per scope, and the definition in that scope completes the same record
     RecordSymbol *record = nullptr;
     if (const std::vector<Symbol *> *found = scope->find(node->name)) {
         if ((*found)[0]->kind == SymbolKind::Record) {
@@ -124,7 +119,6 @@ void SymbolBuilder::declareRecord(ast::RecordDecl *node, Scope *scope, RecordSym
         record->decl = node;
         record->outer = outer;
         record->type = table.recordType(record);
-        //a record in a function body gets a name no other function's record can have
         bool isLocal = scope->kind == ScopeKind::Block || scope->kind == ScopeKind::Function;
         std::string spaces = namespacePrefix(scope);
         for (size_t at = spaces.find("::"); at != std::string::npos; at = spaces.find("::", at)) spaces.replace(at, 2, ".");
@@ -141,7 +135,6 @@ void SymbolBuilder::declareRecord(ast::RecordDecl *node, Scope *scope, RecordSym
     record->members->record = record;
     node->scope = record->members;
 
-    //a class inherits privately and a struct publicly when no access is written
     for (const ast::BaseSpecifier &spec : node->bases) {
         std::string error;
         const Type *named = spec.qualifier.empty() ? findTypeName(spec.name, scope, node->line, node->col)
@@ -243,7 +236,6 @@ void SymbolBuilder::declareMethod(ast::FunctionDecl *node, RecordSymbol *record,
         diags.error(node->line, node->col, "a destructor takes no parameters");
     }
 
-    //overloads share a list, constructors are compared against the record's
     std::vector<Symbol *> existing;
     if (isConstructor) {
         existing.assign(record->constructors.begin(), record->constructors.end());
@@ -271,7 +263,6 @@ void SymbolBuilder::declareMethod(ast::FunctionDecl *node, RecordSymbol *record,
     fn->isDestructor = isDestructor;
     if (node->isDefinition()) fn->definition = node;
 
-    //the method becomes a global function that takes the object as this
     if (fn->isMethod()) {
         std::vector<const Type *> params;
         params.push_back(table.pointerTo(record->type));
@@ -313,7 +304,6 @@ void SymbolBuilder::declareFunction(ast::FunctionDecl *node) {
         return;
     }
 
-    //a later declaration or the definition of a function already declared
     if (FunctionSymbol *earlier = sameSignature(existing, signature)) {
         if (earlier->isBuiltin) {
             diags.error(node->line, node->col, "'" + name + "' is a builtin and cannot be redeclared");
@@ -345,7 +335,6 @@ void SymbolBuilder::declareFunction(ast::FunctionDecl *node) {
     }
 }
 
-//N::f written outside N: the definition of a function declared in N
 void SymbolBuilder::defineNamespaceFunction(ast::FunctionDecl *node, const QualifierTarget &target) {
     std::string name = node->name.parts.back();
     std::string qualified = node->name.str();
@@ -372,7 +361,6 @@ void SymbolBuilder::defineNamespaceFunction(ast::FunctionDecl *node, const Quali
     node->symbol = declared;
 }
 
-//Class::method written outside the class: the definition of a declared member
 void SymbolBuilder::defineMethod(ast::FunctionDecl *node, RecordSymbol *record) {
     std::string name = node->name.parts.back();
     std::string qualified = node->name.str();
@@ -436,7 +424,6 @@ void SymbolBuilder::declareGlobal(ast::VarDecl *node) {
     if (symbol) setMangledName(symbol, "global_" + namespacePath(current) + lengthPrefixed(symbol->name));
 }
 
-//int Counter::total = 0; defines a static member declared in its class
 void SymbolBuilder::defineStaticMember(ast::VarDecl *node, RecordSymbol *record) {
     std::string name = node->name.parts.back();
     std::string qualified = node->name.str();
@@ -511,7 +498,6 @@ Symbol *SymbolBuilder::declareVariable(ast::VarDecl *node, Scope *scope, SymbolK
 
     if (!isFree(scope, name, node->line, node->col)) return nullptr;
 
-    //const int M = N * 2; can size an array before the type checker runs, so M's names are bound now
     if (type->isConst() && isIntegral(type)) {
         bindConstantNames(node->init.get(), scope);
         for (const std::unique_ptr<ast::Expr> &arg : node->ctorArgs) bindConstantNames(arg.get(), scope);
@@ -525,7 +511,6 @@ Symbol *SymbolBuilder::declareVariable(ast::VarDecl *node, Scope *scope, SymbolK
     return symbol;
 }
 
-//the aliased type is resolved once here, later passes never see the typedef
 Symbol *SymbolBuilder::declareTypedef(ast::TypedefDecl *node, Scope *scope) {
     const Type *type = resolveType(node->type.get(), scope, true);
     if (type->is(TypeKind::Auto)) {
@@ -581,7 +566,6 @@ void SymbolBuilder::buildFunction(ast::FunctionDecl *node) {
     FunctionSymbol *fn = node->symbol;
     if (fn == nullptr || !node->isDefinition() || fn->definition != node) return;
 
-    //a body sees its class, or the namespace (or file) its function is declared in
     Scope *parent = fn->parentRecord ? fn->parentRecord->members : fn->scope;
     Scope *scope = parent->addChild(ScopeKind::Function, node->line, node->col);
     scope->function = fn;
@@ -591,19 +575,17 @@ void SymbolBuilder::buildFunction(ast::FunctionDecl *node) {
     current = scope;
     declareParams(node->params, fn->signature());
 
-    //parameters and the outer block share one scope
     node->body->scope = scope;
     visit(node->body.get());
     current = saved;
 }
 
 void SymbolBuilder::declareParams(const ast::NodeList<ast::ParamDecl> &params, const FunctionType *signature) {
-    if (signature->params.size() != params.size()) return;  //f(void)
+    if (signature->params.size() != params.size()) return;
     for (size_t i = 0; i < params.size(); i++) {
         ast::ParamDecl *param = params[i].get();
         if (param->name.empty()) continue;
         if (!isFree(current, param->name, param->line, param->col)) continue;
-        //the parameter itself stays const inside the body
         const Type *type = signature->params[i];
         if (param->type->resolved && param->type->resolved->isConst()) type = table.constOf(type);
         Symbol *symbol = new Symbol(SymbolKind::Parameter, param->name, type, param->line, param->col);
@@ -642,7 +624,6 @@ void SymbolBuilder::visitDeclStmt(ast::DeclStmt *node) {
         }
         if (decl->getKind() != ast::ASTKind::VarDecl) continue;
         ast::VarDecl *var = static_cast<ast::VarDecl *>(decl.get());
-        //the name is in scope from its declarator on
         declareVariable(var, current, SymbolKind::Variable);
         buildInitializer(var, current);
     }
@@ -671,7 +652,6 @@ void SymbolBuilder::visitDoStmt(ast::DoStmt *node) {
     visit(node->cond.get());
 }
 
-//the init declarations get a scope of their own around the loop
 void SymbolBuilder::visitForStmt(ast::ForStmt *node) {
     node->scope = current->addChild(ScopeKind::Block, node->line, node->col);
     Scope *saved = current;
@@ -685,7 +665,6 @@ void SymbolBuilder::visitForStmt(ast::ForStmt *node) {
 
 void SymbolBuilder::visitReturnStmt(ast::ReturnStmt *node) { visit(node->value.get()); }
 
-//labels belong to the whole function, so a goto may jump forward to one
 void SymbolBuilder::visitLabelStmt(ast::LabelStmt *node) {
     Scope *scope = current->functionScope();
     if (scope && scope->labels.count(node->label)) {
@@ -873,7 +852,6 @@ const Type *SymbolBuilder::resolveType(ast::TypeSpec *spec, Scope *scope, bool a
     if (spec == nullptr) return errorType();
     const Type *result = errorType();
 
-    //the part a wrapping type is built from, checked for what may not be in it
     const Type *inner = nullptr;
     if (!spec->isName()) {
         inner = resolveType(spec->inner.get(), scope, false);
@@ -914,7 +892,6 @@ const Type *SymbolBuilder::resolveType(ast::TypeSpec *spec, Scope *scope, bool a
         break;
     }
 
-    //struct X names only a record, never a typedef
     case ast::TypeSpecKind::Struct:
         if (RecordSymbol *record = findRecord(spec->name, scope, spec->line, spec->col)) {
             result = record->type;
@@ -1017,11 +994,9 @@ const FunctionType *SymbolBuilder::signatureOf(ast::FunctionDecl *node, Scope *s
             params.push_back(unqualified(parameterType(param.get(), scope)));
         }
     }
-    //const on a parameter or a returned value is not part of the function's type
     return table.functionType(unqualified(returnType), params, false);
 }
 
-//int a[] = {1, 2, 3} and char s[] = "hi" take their size from the initializer
 const Type *SymbolBuilder::sizeFromInitializer(const Type *type, ast::VarDecl *node) {
     const ArrayType *array = asArray(type);
     if (array == nullptr || array->size != 0 || node->init == nullptr) return type;
@@ -1041,7 +1016,6 @@ const Type *SymbolBuilder::sizeFromInitializer(const Type *type, ast::VarDecl *n
 
 namespace {
 
-//bodies are built after every declaration, so outside a class a type name must come before its use
 Symbol *visibleTypeSymbol(const std::string &name, Scope *scope, int line, int col, bool recordsOnly) {
     for (; scope != nullptr; scope = scope->parent) {
         const std::vector<Symbol *> *found = scope->find(name);
@@ -1055,14 +1029,12 @@ Symbol *visibleTypeSymbol(const std::string &name, Scope *scope, int line, int c
     return nullptr;
 }
 
-//binds the names in an array size early, so a const declared before it can give its value
 void bindConstantNames(ast::Expr *expr, Scope *scope) {
     if (expr == nullptr) return;
     switch (expr->getKind()) {
     case ast::ASTKind::DeclRefExpr: {
         ast::DeclRefExpr *ref = static_cast<ast::DeclRefExpr *>(expr);
         if (!ref->qualifier.empty()) {
-            //N::SIZE or Box::SIZE: looked up only where the qualifier points
             QualifierTarget target = resolveQualifier(scope, ref->qualifier, ref->line, ref->col);
             const std::vector<Symbol *> *found = target.scope ? target.scope->find(ref->name) : nullptr;
             if (found && (*found)[0]->kind == SymbolKind::Variable) ref->symbol = (*found)[0];
@@ -1097,7 +1069,7 @@ void bindConstantNames(ast::Expr *expr, Scope *scope) {
     }
 }
 
-} // namespace
+}
 
 RecordSymbol *SymbolBuilder::findRecord(const std::string &name, Scope *scope, int line, int col) {
     return static_cast<RecordSymbol *>(visibleTypeSymbol(name, scope, line, col, true));
@@ -1108,7 +1080,6 @@ const Type *SymbolBuilder::findTypeName(const std::string &name, Scope *scope, i
     return symbol ? symbol->type : nullptr;
 }
 
-//N::Dog: a record or typedef inside the qualifier's namespace or class
 const Type *SymbolBuilder::findQualifiedType(const std::vector<std::string> &qualifier, const std::string &name,
                                              Scope *scope, int line, int col, std::string &error) {
     QualifierTarget target = resolveQualifier(scope, qualifier, line, col);
@@ -1166,4 +1137,4 @@ void SymbolBuilder::setMangledName(Symbol *symbol, const std::string &name) {
     mangledNames[name] = symbol;
 }
 
-} // namespace sema
+}

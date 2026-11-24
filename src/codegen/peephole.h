@@ -5,9 +5,9 @@
 
 namespace codegen {
 
-//peephole optimization over one function's emitted instructions, repeated until nothing changes
+//cleans up redundant instructions in emitted assembly
 void peephole(AsmLines &lines);
 
-} // namespace codegen
+}
 
 #endif

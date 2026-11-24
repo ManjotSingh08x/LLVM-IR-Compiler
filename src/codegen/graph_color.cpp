@@ -8,7 +8,6 @@ namespace codegen {
 
 namespace {
 
-//registers in order of preference: caller-saved first, rax, rcx and rdx last
 const std::vector<Reg> kIntColors = { Reg::RSI, Reg::RDI, Reg::R8,  Reg::R9,  Reg::R10, Reg::R11, Reg::RCX,
                                       Reg::RDX, Reg::RAX, Reg::RBX, Reg::R12, Reg::R13, Reg::R14, Reg::R15 };
 const std::vector<Reg> kFloatColors = {
@@ -73,12 +72,12 @@ private:
 
     void addEdge(Reg a, Reg b) {
         if (a == b || isXmm(a) != isXmm(b)) return;
-        if (!isVirtual(a) && !isVirtual(b)) return;  //two physical registers never share anyway
+        if (!isVirtual(a) && !isVirtual(b)) return;
         adj[a].insert(b);
         adj[b].insert(a);
     }
 
-    //machine cfg, liveness, interference, spill costs and copies
+    //builds the interference graph from liveness
     void build() {
         alias.clear();
         adj.clear();
@@ -113,7 +112,6 @@ private:
             if (falls && b + 1 < blocks) succs[b].push_back(b + 1);
         }
 
-        //loop depth of each instruction, from the ir block label before it
         std::vector<unsigned> depth(code.size(), 0);
         unsigned current = 0;
         for (size_t i = 0; i < code.size(); i++) {
@@ -167,7 +165,7 @@ private:
                 Reg from, to;
                 if (isRegisterCopy(code[i], from, to) && (isVirtual(from) || isVirtual(to))) {
                     copies.push_back(std::make_pair(from, to));
-                    live.erase(from);  //a copy's source and target may share a register
+                    live.erase(from);
                 }
                 for (Reg x : d) {
                     for (Reg y : live) addEdge(x, y);
@@ -183,7 +181,6 @@ private:
         return it == adj.end() ? 0 : it->second.size();
     }
 
-    //merges b into a
     void merge(Reg a, Reg b) {
         alias[b] = a;
         for (Reg n : adj[b]) {
@@ -198,12 +195,12 @@ private:
         stats.coalesced++;
     }
 
-    //all virtual pairs first, then virtual into physical
     void coalesce() {
         coalescePhase(false);
         coalescePhase(true);
     }
 
+    //merges copy-related registers when it is safe
     void coalescePhase(bool withPhysical) {
         bool merged = true;
         while (merged) {
@@ -215,7 +212,6 @@ private:
                 if (!isVirtual(a) && !isVirtual(b)) continue;
                 if ((!isVirtual(a) || !isVirtual(b)) != withPhysical) continue;
                 if (!isVirtual(a) || !isVirtual(b)) {
-                    //merge when every neighbour is pre-coloured, of low degree, or already next to the physical one
                     Reg phys = isVirtual(a) ? b : a;
                     Reg virt = isVirtual(a) ? a : b;
                     bool safe = true;
@@ -229,7 +225,6 @@ private:
                     merged = true;
                     continue;
                 }
-                //merge when fewer than k neighbours have significant degree afterwards
                 std::set<Reg> neighbours = adj[a];
                 neighbours.insert(adj[b].begin(), adj[b].end());
                 size_t significant = 0;
@@ -243,7 +238,7 @@ private:
         }
     }
 
-    //simplify and select; the virtual nodes that found no register
+    //simplifies and selects colours, returning uncolourable nodes
     std::vector<Reg> colour() {
         colours.clear();
         std::set<Reg> remaining;
@@ -312,7 +307,7 @@ private:
         return it == colours.end() ? root : it->second;
     }
 
-    //a stack slot per spilled node, with a load before each read and a store after each write
+    //sends nodes to stack slots with load/store code
     void spill(const std::vector<Reg> &nodes) {
         std::map<Reg, long long> slotOf;
         for (Reg n : nodes) {
@@ -323,7 +318,7 @@ private:
         std::vector<Reg> u, d;
         for (MInst inst : code) {
             readsAndWrites(inst, u, d);
-            std::map<Reg, Reg> temp;  //spilled register -> its temporary in this instruction
+            std::map<Reg, Reg> temp;
             for (Reg r : u) {
                 if (isVirtual(r) && slotOf.count(find(r)) && !temp.count(r)) temp[r] = fresh(isXmm(r));
             }
@@ -369,6 +364,7 @@ private:
         return r;
     }
 
+    //replaces virtual registers with their assigned colours
     void rewrite() {
         for (MInst &inst : code) {
             for (MOperand &o : inst.operands) {
@@ -395,11 +391,11 @@ private:
     std::vector<std::pair<Reg, Reg>> copies;
     std::map<Reg, Reg>               colours;
     std::set<Reg>                    noSpill;
-    unsigned                         nextInt = 500000;  //spill temporaries, far above isel's numbers
+    unsigned                         nextInt = 500000;
     unsigned                         nextFloat = 500000;
 };
 
-} // namespace
+}
 
 bool colorMachineCode(MCode &code, Frame &frame, const std::map<std::string, unsigned> &labelDepth,
                       ColorStats &stats, std::string &error) {
@@ -407,4 +403,4 @@ bool colorMachineCode(MCode &code, Frame &frame, const std::map<std::string, uns
     return colorer.run(error);
 }
 
-} // namespace codegen
+}

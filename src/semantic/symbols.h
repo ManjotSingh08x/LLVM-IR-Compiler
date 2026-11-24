@@ -16,9 +16,9 @@ namespace sema {
 class Scope;
 
 enum class SymbolKind {
-    Variable,   //a global, a local, or a static data member
+    Variable,
     Parameter,
-    Field,      //a non-static data member
+    Field,
     Function,
     Record,
     Typedef,
@@ -36,7 +36,6 @@ public:
 
     SymbolKind  kind;
     std::string name;
-    //the mangled name, empty for locals and fields
     std::string mangledName;
     const Type *type;
     Scope      *scope = nullptr;
@@ -44,11 +43,9 @@ public:
     int         line;
     int         col;
 
-    //set for members of a record
     RecordSymbol   *parentRecord = nullptr;
     ast::AccessKind access = ast::AccessKind::None;
 
-    //static storage: static globals, locals, members and functions
     bool isStatic = false;
 };
 
@@ -57,18 +54,15 @@ public:
     FunctionSymbol(std::string name, const FunctionType *type, int line, int col)
         : Symbol(SymbolKind::Function, std::move(name), type, line, col) {}
 
-    //the signature callers see, without this
     const FunctionType *signature() const { return static_cast<const FunctionType *>(type); }
 
-    //a method that is called on an object, so it receives this
     bool isMethod() const { return parentRecord != nullptr && !isStatic; }
 
-    //the lowered signature, with this in front for methods
     const FunctionType *loweredType = nullptr;
 
     bool                isConstructor = false;
     bool                isDestructor = false;
-    bool                isBuiltin = false;      //printf and scanf
+    bool                isBuiltin = false;
     ast::FunctionDecl  *definition = nullptr;
 };
 
@@ -89,12 +83,11 @@ public:
     Scope                        *members = nullptr;
     RecordSymbol                 *outer = nullptr;
     std::vector<BaseClass>        bases;
-    std::vector<Symbol *>         fields;  //non-static data members, in layout order
+    std::vector<Symbol *>         fields;
     std::vector<FunctionSymbol *> constructors;
     FunctionSymbol               *destructor = nullptr;
 };
 
-//namespace N: its members live in its scope, which every opening of N shares
 class NamespaceSymbol : public Symbol {
 public:
     NamespaceSymbol(std::string name, int line, int col)
@@ -117,13 +110,12 @@ public:
 
     Scope *addChild(ScopeKind childKind, int childLine, int childCol);
 
-    //takes ownership, non-findable symbols such as constructors are never looked up by name
     Symbol *add(std::unique_ptr<Symbol> symbol, bool findable = true);
 
-    //the symbols declared here under name, several for overloads, null when none
+    //looks up all symbols with a name
     const std::vector<Symbol *> *find(const std::string &name) const;
 
-    //the nearest enclosing function or lambda scope, the one labels belong to
+    //returns the nearest enclosing function scope
     Scope *functionScope();
 
     ScopeKind kind;
@@ -142,13 +134,10 @@ public:
     llvm::StringMap<ast::LabelStmt *>         labels;
 };
 
-//the mangled prefix of the namespaces scope sits in, such as 1N1M
 std::string namespacePath(const Scope *scope);
 
-//the same as written in source: N::M::, empty outside any namespace
 std::string namespacePrefix(const Scope *scope);
 
-//where A::B:: in A::B::name points: a namespace's scope, or a class (with its member scope)
 struct QualifierTarget {
     Scope        *scope = nullptr;
     RecordSymbol *record = nullptr;
@@ -156,10 +145,9 @@ struct QualifierTarget {
     std::string   spelling() const;
 };
 
-//resolves a qualifier like A::B:: as seen from scope at line:col
+//resolves a qualified name prefix to its scope
 QualifierTarget resolveQualifier(Scope *from, const std::vector<std::string> &qualifier, int line, int col);
 
-//root of the scope tree and owner of every compound type
 class SymbolTable {
 public:
     SymbolTable();
@@ -173,7 +161,6 @@ public:
                                      bool isVariadic);
     const Type         *recordType(RecordSymbol *record);
 
-    //the const form of a type: an array's elements become const, a reference or function is unchanged
     const Type         *constOf(const Type *type);
     ClosureType        *closureType(ast::LambdaExpr *lambda);
 
@@ -186,6 +173,6 @@ private:
     std::unique_ptr<Scope>             root;
 };
 
-} // namespace sema
+}
 
 #endif

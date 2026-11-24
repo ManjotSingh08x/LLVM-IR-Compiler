@@ -22,7 +22,7 @@ bool fail(std::string &error, const BasicBlock *block, const std::string &messag
     return false;
 }
 
-} // namespace
+}
 
 bool verifyFunction(const Function &fn, std::string &error) {
     const std::vector<BasicBlock *> &blocks = fn.getBlocks();
@@ -35,7 +35,6 @@ bool verifyFunction(const Function &fn, std::string &error) {
         }
     }
 
-    //edge count from each block to each other block, repeats counted
     std::map<const BasicBlock *, std::map<const BasicBlock *, size_t>> edgesInto;
     for (const BasicBlock *block : blocks) {
         const Instruction *term = block->getTerminator();
@@ -74,7 +73,6 @@ bool verifyFunction(const Function &fn, std::string &error) {
                 return fail(error, block, "the name %" + inst->getName() + " is defined twice");
             }
 
-            //phis must be at the top, one entry per incoming edge
             if (inst->getOpcode() == Opcode::Phi) {
                 if (pastPhis) return fail(error, block, "phi '" + describe(inst) + "' is not at the top");
                 const PhiInst *phi = static_cast<const PhiInst *>(inst);
@@ -110,7 +108,7 @@ bool verifyFunction(const Function &fn, std::string &error) {
                         return fail(error, block, "'" + describe(inst) + "' uses %" + def->getName() +
                                                       ", which is erased or not in this function");
                     }
-                    //phi operands are read at the end of their predecessor, others in order
+
                     if (inst->getOpcode() != Opcode::Phi && def->getParent() == block && position[def] >= i) {
                         return fail(error, block, "'" + describe(inst) + "' uses %" + def->getName() +
                                                       " before it is defined");
@@ -134,7 +132,6 @@ bool verifyFunction(const Function &fn, std::string &error) {
             }
         }
 
-        //the edge lists must be what recomputeCFG would build: no repeats, terminator order
         std::vector<const BasicBlock *> expectedSuccs;
         std::set<const BasicBlock *> seen;
         for (const BasicBlock *next : block->getTerminator()->getSuccessors()) {
@@ -156,4 +153,4 @@ bool verifyFunction(const Function &fn, std::string &error) {
     return true;
 }
 
-} // namespace ir
+}

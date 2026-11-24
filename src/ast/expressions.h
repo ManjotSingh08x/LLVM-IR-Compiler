@@ -20,7 +20,6 @@ enum class AssignOp {
     ShlAssign, ShrAssign, AndAssign, OrAssign, XorAssign
 };
 
-//literals keep their source spelling, the value is computed during semantic analysis
 class IntLiteral : public Expr {
 public:
     IntLiteral(std::string spelling, int line, int col)
@@ -152,7 +151,6 @@ public:
     std::unique_ptr<Expr> callee;
     NodeList<Expr>        args;
 
-    //null when the callee is not a named function
     sema::FunctionSymbol *function = nullptr;
 };
 class ArraySubscriptExpr : public Expr {
@@ -162,7 +160,7 @@ public:
 
     std::unique_ptr<Expr> base;
     std::unique_ptr<Expr> index;
-    bool                  reversed = false;  //written as index[base] and swapped by the type checker
+    bool                  reversed = false;
 };
 
 class MemberExpr : public Expr {
@@ -177,7 +175,6 @@ public:
     sema::Symbol         *symbol = nullptr;
 };
 
-//new T, new T(args), new T{...}, new T[n], new T[n]{...}
 enum class NewForm { Plain, Args, InitList, Array, ArrayInit };
 
 class NewExpr : public Expr {
@@ -192,7 +189,6 @@ public:
     sema::FunctionSymbol     *constructor = nullptr;
 };
 
-//(T) e, sub is converted to T with implicit casts under it
 class CastExpr : public Expr {
 public:
     CastExpr(std::unique_ptr<TypeSpec> target, std::unique_ptr<Expr> sub, int line, int col)
@@ -203,7 +199,6 @@ public:
     bool                      isStatic = false;
 };
 
-//sizeof e or sizeof(T), e is type checked but never evaluated
 class SizeofExpr : public Expr {
 public:
     SizeofExpr(std::unique_ptr<TypeSpec> typeOperand, std::unique_ptr<Expr> exprOperand, int line, int col)
@@ -230,7 +225,7 @@ public:
         : Expr(ASTKind::InitListExpr, line, col), inits(std::move(inits)) {}
 
     NodeList<Expr>        inits;
-    sema::FunctionSymbol *constructor = nullptr;  //set when the list is a class's constructor arguments
+    sema::FunctionSymbol *constructor = nullptr;
 };
 
 enum class CaptureDefault { None, ByCopy, ByRef };
@@ -239,7 +234,7 @@ struct LambdaCapture {
     enum class Kind { ByCopy, ByRef, This };
 
     Kind          kind = Kind::ByCopy;
-    std::string   name;  //empty for this
+    std::string   name;
     sema::Symbol *symbol = nullptr;
 };
 
@@ -256,7 +251,6 @@ public:
     std::unique_ptr<CompoundStmt> body;
 
     sema::Scope                  *scope = nullptr;
-    //variables the body uses from the enclosing function
     std::vector<LambdaCapture>    usedCaptures;
 };
 
@@ -273,7 +267,7 @@ enum class CastKind {
     DerivedToBase,
     BaseToDerived,
     PointerToVoid,
-    PointerCast,        //between unrelated pointer types, the address is unchanged
+    PointerCast,
     PointerToIntegral,
     IntegralToPointer
 };
@@ -290,6 +284,6 @@ public:
     std::unique_ptr<Expr> sub;
 };
 
-} // namespace ast
+}
 
 #endif

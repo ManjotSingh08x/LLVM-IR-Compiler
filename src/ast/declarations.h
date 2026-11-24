@@ -7,7 +7,6 @@ namespace ast {
 
 class ParamDecl;
 
-//a possibly qualified name such as Shape::area, lastTok is the token index of its last part
 struct QualifiedName {
     std::vector<std::string> parts;
     int lastTok = -1;
@@ -30,17 +29,14 @@ inline std::string qualifiedSpelling(const std::vector<std::string> &qualifier, 
     return out + name;
 }
 
-//a type as written, each pointer, reference, array or function wraps the type inside it
 enum class TypeSpecKind { Builtin, Named, Struct, Pointer, Reference, Array, Function };
 
 class TypeSpec : public ASTNode {
 public:
     TypeSpec(TypeSpecKind specKind, std::string name, int tokIndex, int line, int col);
 
-    //a pointer, reference, array or function around inner, null until the base type is known
     TypeSpec(TypeSpecKind specKind, std::unique_ptr<TypeSpec> inner, int line, int col);
 
-    //defined below ParamDecl, which the parameter list needs complete
     ~TypeSpec() override;
 
     bool isName() const {
@@ -48,7 +44,6 @@ public:
             || specKind == TypeSpecKind::Struct;
     }
 
-    //copies only the type name part, for each declarator that shares it
     std::unique_ptr<TypeSpec> clone() const {
         std::unique_ptr<TypeSpec> copy(new TypeSpec(specKind, name, tokIndex, line, col));
         copy->isConst = isConst;
@@ -68,7 +63,6 @@ public:
     const sema::Type         *resolved = nullptr;
 };
 
-//how a variable is initialised: int a = 1, int a{1}, Dog d(3)
 enum class InitStyle { None, Copy, Brace, CtorArgs };
 
 enum class AccessKind { None, Public, Private, Protected };
@@ -109,7 +103,6 @@ inline TypeSpec::TypeSpec(TypeSpecKind specKind, std::unique_ptr<TypeSpec> inner
 
 inline TypeSpec::~TypeSpec() = default;
 
-//a function declaration, or a definition when it has a body
 class FunctionDecl : public Decl {
 public:
     FunctionDecl(std::unique_ptr<TypeSpec> returnType, QualifiedName name,
@@ -198,7 +191,6 @@ public:
     sema::Symbol             *symbol = nullptr;
 };
 
-//reopening a namespace adds to the same scope
 class NamespaceDecl : public Decl {
 public:
     NamespaceDecl(std::string name, NodeList<Decl> decls, int line, int col)
@@ -210,6 +202,6 @@ public:
     sema::Scope   *scope = nullptr;
 };
 
-} // namespace ast
+}
 
 #endif

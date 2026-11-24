@@ -1,4 +1,3 @@
-//dominators, the dominator tree and dominance frontiers of a function
 #ifndef DATAFLOW_DFA_DOMINATORS_H
 #define DATAFLOW_DFA_DOMINATORS_H
 
@@ -11,6 +10,7 @@
 
 namespace passes {
 
+//computes dominators, dominator tree and dominance frontiers
 class Dominators {
 public:
     explicit Dominators(const ir::Function &fn);
@@ -22,7 +22,7 @@ public:
         return a != b && dominates(a, b);
     }
 
-    //true when def is available at user; a phi reads its operand at the end of phiBlock
+    //checks a definition dominates one of its uses
     bool dominatesUse(const ir::Instruction *def, const ir::Instruction *user, const ir::BasicBlock *phiBlock) const;
 
     ir::BasicBlock *idom(const ir::BasicBlock *block) const;
@@ -31,6 +31,7 @@ public:
 
     const std::vector<ir::BasicBlock *> &preorder() const { return order; }
 
+    //blocks where this block's dominance ends
     const std::set<ir::BasicBlock *> &frontier(const ir::BasicBlock *block) const;
 
     void dump(std::ostream &out) const;
@@ -44,6 +45,6 @@ private:
     std::vector<ir::BasicBlock *>                                        order;
 };
 
-} // namespace passes
+}
 
 #endif

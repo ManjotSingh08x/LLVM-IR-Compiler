@@ -1,4 +1,3 @@
-//builds the pass pipeline for -O0 to -O3
 #ifndef PIPELINE_PIPELINE_H
 #define PIPELINE_PIPELINE_H
 
@@ -6,8 +5,9 @@
 
 namespace passes {
 
+//builds the pass sequence for an optimization level
 GlobalPassManager buildPipeline(int optLevel);
 
-} // namespace passes
+}
 
 #endif

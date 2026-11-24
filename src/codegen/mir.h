@@ -8,8 +8,6 @@
 
 namespace codegen {
 
-//machine ir: x86-64 instructions that state every register they read and write
-
 enum class Role { Use, Def, UseDef };
 
 struct MOperand {
@@ -17,10 +15,10 @@ struct MOperand {
     Reg         reg = Reg::RAX;
     Width       width = Width::Quad;
     Role        role = Role::Use;
-    bool        indirect = false;  //*%r11 of an indirect call
+    bool        indirect = false;
     long long   value = 0;
     Mem         mem;
-    std::string text;              //Text: a label, a symbol, a hex immediate
+    std::string text;
 
     std::string str() const;
 };
@@ -32,32 +30,32 @@ MOperand immOp(long long value);
 MOperand memOp(const Mem &mem);
 MOperand textOp(const std::string &text);
 
+//one machine instruction with typed operands
 struct MInst {
     enum Kind {
         Op,
         Label,
-        Raw,     //a line of text with no register information (only allowed at -O0 to -O2)
-        Marker   //not printed: only implicit uses (the return value at the end of a function)
+        Raw,
+        Marker
     } kind = Op;
-    std::string           op;  //the mnemonic, or the label name, or the raw line
+    std::string           op;
     std::vector<MOperand> operands;
     std::vector<Reg>      implicitUses;
     std::vector<Reg>      implicitDefs;
     bool                  isCall = false;
 
-    std::string str() const;  //the line of assembly; empty for a marker
+    std::string str() const;
 };
 
 using MCode = std::vector<MInst>;
 
-//the registers an instruction reads and writes, explicit and implicit (never rbp or rsp)
+//lists registers an instruction reads and writes
 void readsAndWrites(const MInst &inst, std::vector<Reg> &uses, std::vector<Reg> &defs);
 
-//true for a whole-register copy between two registers of one class
 bool isRegisterCopy(const MInst &inst, Reg &from, Reg &to);
 
 void printCode(const MCode &code, AsmLines &out);
 
-} // namespace codegen
+}
 
 #endif

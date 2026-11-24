@@ -22,30 +22,25 @@ GlobalPassManager buildPipeline(int optLevel) {
 
     GlobalPassManager pipeline;
 
-    //-O0: clean up the cfg, then move each loop's test to the bottom
     std::unique_ptr<ModulePassManager> cleanup(new ModulePassManager());
     cleanup->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
     cleanup->add(std::unique_ptr<FunctionPass>(new LoopRotate()));
     pipeline.addModule(std::move(cleanup));
     if (optLevel == 0) return pipeline;
 
-    //-O1: inlining, callees first
     pipeline.addGlobal(std::unique_ptr<GlobalPass>(new Inliner()));
 
-    //-O1: local optimizations, then cfg cleanup
     std::unique_ptr<ModulePassManager> scalar(new ModulePassManager());
     scalar->add(std::unique_ptr<FunctionPass>(new LocalDAG()));
     scalar->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
     pipeline.addModule(std::move(scalar));
     if (optLevel == 1) return pipeline;
 
-    //-O2: ssa, loop optimizations and global cleanups; sink runs last so it cannot undo licm
     std::unique_ptr<ModulePassManager> ssa(new ModulePassManager());
     ssa->add(std::unique_ptr<FunctionPass>(new Mem2Reg()));
     ssa->add(std::unique_ptr<FunctionPass>(new InstSimplify()));
     ssa->add(std::unique_ptr<FunctionPass>(new LoopSimplify()));
     ssa->add(std::unique_ptr<FunctionPass>(new LICM()));
-    //-O3 only: strength reduction pays off only with graph-coloring register allocation
     if (optLevel >= 3) ssa->add(std::unique_ptr<FunctionPass>(new IVStrengthReduce()));
     ssa->add(std::unique_ptr<FunctionPass>(new LoopUnswitch()));
     ssa->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
@@ -55,8 +50,7 @@ GlobalPassManager buildPipeline(int optLevel) {
     ssa->add(std::unique_ptr<FunctionPass>(new Sink()));
     pipeline.addModule(std::move(ssa));
 
-    //-O3 runs the -O2 stages, only codegen differs
     return pipeline;
 }
 
-} // namespace passes
+}

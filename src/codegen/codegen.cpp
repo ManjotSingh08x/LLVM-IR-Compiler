@@ -12,4 +12,4 @@ bool emitAssembly(ir::Module &module, passes::AnalysisManager &am, int optLevel,
     return false;
 }
 
-} // namespace codegen
+}

@@ -8,7 +8,6 @@
 
 namespace ast {
 
-//debug printer: one line per node, indented by depth
 class ASTPrinter : public ASTVisitor<ASTPrinter> {
 public:
     explicit ASTPrinter(std::ostream &out) : out(out) {}
@@ -88,6 +87,6 @@ private:
     const char   *role = nullptr;
 };
 
-} // namespace ast
+}
 
 #endif

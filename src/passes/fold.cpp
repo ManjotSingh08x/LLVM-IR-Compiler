@@ -13,7 +13,6 @@ namespace {
 
 bool isFloatType(const sema::Type *type) { return type->is(sema::TypeKind::Float); }
 
-//an i1 true reads as -1 when signed
 long long signedValue(const Constant *c) {
     if (integerBits(c->getType()) == 1) return c->intValue ? -1 : 0;
     return c->intValue;
@@ -39,7 +38,7 @@ Constant *foldInt(Module &module, BinaryOpKind op, const sema::Type *type, const
     case BinaryOpKind::Mul: return module.getInt(type, (long long)(ux * uy));
     case BinaryOpKind::SDiv:
     case BinaryOpKind::SRem:
-        if (y == 0 || (x == minimumOf(bits) && y == -1)) return nullptr;  //traps on the machine
+        if (y == 0 || (x == minimumOf(bits) && y == -1)) return nullptr;
         return module.getInt(type, op == BinaryOpKind::SDiv ? x / y : x % y);
     case BinaryOpKind::UDiv:
     case BinaryOpKind::URem: {
@@ -48,7 +47,7 @@ Constant *foldInt(Module &module, BinaryOpKind op, const sema::Type *type, const
         return module.getInt(type, (long long)(op == BinaryOpKind::UDiv ? n / d : n % d));
     }
     case BinaryOpKind::Shl:
-        if (y < 0 || y >= (long long)bits) return nullptr;  //undefined in llvm
+        if (y < 0 || y >= (long long)bits) return nullptr;
         return module.getInt(type, (long long)(ux << y));
     case BinaryOpKind::AShr:
         if (y < 0 || y >= (long long)bits) return nullptr;
@@ -116,7 +115,7 @@ bool isCommutative(BinaryOpKind op) {
     }
 }
 
-} // namespace
+}
 
 const Constant *asConstant(const Value *value) {
     return value->getKind() == ValueKind::Constant ? static_cast<const Constant *>(value) : nullptr;
@@ -155,7 +154,6 @@ Constant *foldBinary(Module &module, BinaryOpKind op, const sema::Type *operandT
     }
     if (lhs->constKind == ConstantKind::Int) return foldInt(module, op, resultType, lhs, rhs);
 
-    //floating: computed in the precision of the type
     double x = lhs->floatValue, y = rhs->floatValue, r;
     bool single = isFloatType(operandType);
     switch (op) {
@@ -189,7 +187,6 @@ Constant *foldCast(Module &module, CastOpKind op, const Constant *operand, const
         return module.getInt(toType, (long long)unsignedValue(operand));
     case CastOpKind::SIToFP:
     case CastOpKind::UIToFP:
-        //an i64 through double then float could round twice
         if (integerBits(operand->getType()) == 64 && isFloatType(toType)) return nullptr;
         return module.getFloat(toType, op == CastOpKind::SIToFP ? (double)signedValue(operand)
                                                                 : (double)unsignedValue(operand));
@@ -198,7 +195,6 @@ Constant *foldCast(Module &module, CastOpKind op, const Constant *operand, const
         unsigned bits = integerBits(toType);
         if (std::isnan(v) || bits == 0) return nullptr;
         double t = std::trunc(v);
-        //out of range is undefined: leave it for run time
         double lo = bits == 1 ? -1.0 : -std::ldexp(1.0, bits - 1);
         double hi = bits == 1 ? 0.0 : std::ldexp(1.0, bits - 1) - 1.0;
         if (t < lo || t > hi) return nullptr;
@@ -265,7 +261,6 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
             if (isIntConst(y, 1)) return x;
             if (isIntConst(x, 1)) return y;
             if (isIntConst(y, 0) || isIntConst(x, 0)) return module.getInt(t, 0);
-            //a multiply by 2^k is a shift
             Value *other = x;
             const Constant *c = asConstant(y);
             if (!c || c->constKind != ConstantKind::Int) {
@@ -318,13 +313,12 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
         case BinaryOpKind::ICmpULT: case BinaryOpKind::ICmpUGT:
             if (x == y) return module.getBool(false);
             break;
-        //floating: only the identities that also hold for -0.0 and NaN
         case BinaryOpKind::FAdd:
-            if (isFloatConst(y, 0.0, true)) return x;   //x + -0.0
+            if (isFloatConst(y, 0.0, true)) return x;
             if (isFloatConst(x, 0.0, true)) return y;
             break;
         case BinaryOpKind::FSub:
-            if (isFloatConst(y, 0.0, false)) return x;  //x - +0.0
+            if (isFloatConst(y, 0.0, false)) return x;
             break;
         case BinaryOpKind::FMul:
             if (isFloatConst(y, 1.0, false)) return x;
@@ -342,7 +336,7 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
         UnaryInst &u = static_cast<UnaryInst &>(inst);
         if (u.operand->getKind() == ValueKind::Instruction &&
             static_cast<Instruction *>(u.operand)->getOpcode() == Opcode::Unary) {
-            return static_cast<UnaryInst *>(u.operand)->operand;  //-(-x)
+            return static_cast<UnaryInst *>(u.operand)->operand;
         }
         return nullptr;
     }
@@ -353,14 +347,12 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
             return nullptr;
         }
         CastInst &inner = *static_cast<CastInst *>(c.operand);
-        //sext(sext x) and zext(zext x) are one extension
         if ((c.op == CastOpKind::SExt || c.op == CastOpKind::ZExt) && inner.op == c.op) {
             c.operand = inner.operand;
             c.fromType = inner.fromType;
             rewritten = true;
             return nullptr;
         }
-        //trunc(ext x) back to x's own type is x
         if (c.op == CastOpKind::Trunc && (inner.op == CastOpKind::SExt || inner.op == CastOpKind::ZExt) &&
             formatType(inner.fromType) == formatType(c.toType)) {
             return inner.operand;
@@ -408,4 +400,4 @@ std::string expressionKey(const Instruction &inst) {
     return key;
 }
 
-} // namespace passes
+}

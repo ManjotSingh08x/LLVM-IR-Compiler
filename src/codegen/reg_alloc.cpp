@@ -13,7 +13,7 @@ long nextUseOf(const NextUseMap &nextUse, const ir::Value *value) {
     return it == nextUse.end() ? kDead : it->second;
 }
 
-} // namespace
+}
 
 bool isCallerSaved(Reg reg) {
     if (isXmm(reg)) return true;
@@ -64,20 +64,18 @@ Reg RegisterAllocator::allocate(const ir::Value *value, bool isFloat, const Next
 
     Reg  chosen = pool[0];
     bool found = false;
-    //an empty register first
     for (size_t i = 0; i < count && !found; i++) {
         if (!holds.count(pool[i])) {
             chosen = pool[i];
             found = true;
         }
     }
-    //otherwise the register whose value is needed furthest away (dead values first)
     if (!found) {
         long furthest = -2;
         for (size_t i = 0; i < count; i++) {
             long next = nextUseOf(nextUse, holds[pool[i]]);
-            if (next == kLiveOut) next = kLiveOut - 1;  //not read again here, but must be saved
-            if (next == kDead) next = kLiveOut;         //nothing to save, the best victim
+            if (next == kLiveOut) next = kLiveOut - 1;
+            if (next == kDead) next = kLiveOut;
             if (next > furthest) {
                 furthest = next;
                 chosen = pool[i];
@@ -126,4 +124,4 @@ void RegisterAllocator::flush(const passes::ValueSet &liveOut) {
     }
 }
 
-} // namespace codegen
+}

@@ -20,7 +20,7 @@ enum class ValueKind {
     Instruction
 };
 
-//anything an instruction can use as an operand
+//base of all operands
 class Value {
 public:
     Value(ValueKind kind, const sema::Type *type, const std::string &name)
@@ -35,7 +35,6 @@ public:
     const std::string &getName() const { return name; }
     void               setName(const std::string &newName) { name = newName; }
 
-    //how the value is written as an operand: %t0, @g, 42, null
     virtual std::string getOperand() const = 0;
 
     std::string getTypedOperand() const { return formatType(type) + " " + getOperand(); }
@@ -47,16 +46,16 @@ protected:
 };
 
 enum class ConstantKind {
-    Int,        //bool, char, int and long, the type gives the width
+    Int,
     Float,
     Null,
-    ZeroInit,   //zeroinitializer: an array or record of zeros
-    String,     //c"..." for a character array
+    ZeroInit,
+    String,
     Aggregate,
-    Address     //@name of a global or function, used inside initializers
+    Address
 };
 
-//a compile-time value, owned by the Module
+//compile-time value owned by module
 class Constant : public Value {
 public:
     Constant(ConstantKind constKind, const sema::Type *type)
@@ -65,9 +64,9 @@ public:
     std::string getOperand() const override;
 
     ConstantKind                  constKind;
-    long long                     intValue = 0;    //already wrapped to the width of the type
+    long long                     intValue = 0;
     double                        floatValue = 0.0;
-    std::string                   bytes;           //for String: every byte, closing \0 included
+    std::string                   bytes;
     std::vector<const Constant *> elements;
     const Value                  *target = nullptr;
 };
@@ -84,12 +83,12 @@ public:
 };
 
 enum class Linkage {
-    External,   //visible to other files: plain globals and functions
-    Internal,   //only this file: static globals, static functions, static locals
-    Private     //only this file and nameless: string literals
+    External,
+    Internal,
+    Private
 };
 
-//a global variable, as an operand it is its address and valueType is what it holds
+//global variable, operand is its address
 class GlobalVariable : public Value {
 public:
     GlobalVariable(const std::string &name, const sema::Type *valueType, const sema::Type *pointerType,
@@ -107,6 +106,6 @@ public:
     bool              isConstant;
 };
 
-} // namespace ir
+}
 
 #endif

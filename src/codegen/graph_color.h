@@ -10,6 +10,7 @@
 
 namespace codegen {
 
+//counters describing one colouring run
 struct ColorStats {
     std::set<Reg> calleeSavedUsed;
     unsigned      virtuals = 0;
@@ -18,10 +19,10 @@ struct ColorStats {
     unsigned      rounds = 0;
 };
 
-//register allocation by graph colouring with coalescing and spilling, used at -O3
+//assigns registers by graph colouring, spilling when needed
 bool colorMachineCode(MCode &code, Frame &frame, const std::map<std::string, unsigned> &labelDepth,
                       ColorStats &stats, std::string &error);
 
-} // namespace codegen
+}
 
 #endif

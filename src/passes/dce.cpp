@@ -35,4 +35,4 @@ bool DCE::run(Function &fn, Module &module, AnalysisManager &am) {
     return !dead.empty();
 }
 
-} // namespace passes
+}

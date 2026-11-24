@@ -7,9 +7,9 @@
 
 namespace ir {
 
-//checks a function is well formed after a pass, returning false with a message on the first problem
+//checks that the function's IR is well formed
 bool verifyFunction(const Function &fn, std::string &error);
 
-} // namespace ir
+}
 
 #endif

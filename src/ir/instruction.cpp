@@ -62,7 +62,7 @@ const char *castOpName(CastOpKind op) {
     return "";
 }
 
-} // namespace
+}
 
 bool isCompare(BinaryOpKind op) {
     switch (op) {
@@ -141,7 +141,6 @@ std::vector<Value **> GEPInst::operandSlots() {
     return slots;
 }
 
-//the callee comes first, it is a value too for calls through a pointer
 std::vector<Value **> CallInst::operandSlots() {
     std::vector<Value **> slots;
     slots.push_back(&callee);
@@ -236,7 +235,7 @@ void CallInst::dump(std::ostream &out) const {
     out << " " << callee->getOperand() << "(";
     for (size_t i = 0; i < args.size(); i++) {
         if (i > 0) out << ", ";
-        //fixed parameters use the declared type, variadic extras their own
+
         if (i < calleeType->params.size()) {
             out << formatType(calleeType->params[i]) << " " << args[i]->getOperand();
         } else {
@@ -274,4 +273,4 @@ void PhiInst::dump(std::ostream &out) const {
     out << "\n";
 }
 
-} // namespace ir
+}

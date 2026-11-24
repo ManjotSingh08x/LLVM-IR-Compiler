@@ -18,6 +18,9 @@ bool intLiteral(const std::string &spelling, long long &value, const Type *&type
 //a value converted to an integer type: wrapped to its width, sign- or zero-extended back to 64 bits
 long long wrapToType(long long value, const Type *type);
 
+//1.5, .5e3, 2e-1 as double, with an f suffix as float, rounded once to that type
+double floatLiteral(const std::string &spelling, const Type *&type);
+
 //'a', '\n', '\x41', '\0'
 long long charLiteralValue(const std::string &spelling);
 

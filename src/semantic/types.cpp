@@ -14,6 +14,8 @@ const Type theBool(TypeKind::Bool);
 const Type theChar(TypeKind::Char);
 const Type theSChar(TypeKind::SChar);
 const Type theUChar(TypeKind::UChar);
+const Type theShort(TypeKind::Short);
+const Type theUShort(TypeKind::UShort);
 const Type theInt(TypeKind::Int);
 const Type theUInt(TypeKind::UInt);
 const Type theLong(TypeKind::Long);
@@ -31,6 +33,8 @@ const Type *boolType() { return &theBool; }
 const Type *charType() { return &theChar; }
 const Type *scharType() { return &theSChar; }
 const Type *ucharType() { return &theUChar; }
+const Type *shortType() { return &theShort; }
+const Type *ushortType() { return &theUShort; }
 const Type *intType() { return &theInt; }
 const Type *uintType() { return &theUInt; }
 const Type *longType() { return &theLong; }
@@ -72,7 +76,8 @@ RecordSymbol *asRecord(const Type *type) {
 bool isIntegral(const Type *type) { return integerSize(type) != 0; }
 
 bool isUnsigned(const Type *type) {
-    return type->is(TypeKind::UChar) || type->is(TypeKind::UInt) || type->is(TypeKind::ULong);
+    return type->is(TypeKind::UChar) || type->is(TypeKind::UShort) || type->is(TypeKind::UInt)
+        || type->is(TypeKind::ULong);
 }
 
 unsigned integerSize(const Type *type) {
@@ -81,6 +86,8 @@ unsigned integerSize(const Type *type) {
     case TypeKind::Char:
     case TypeKind::SChar:
     case TypeKind::UChar: return 1;
+    case TypeKind::Short:
+    case TypeKind::UShort: return 2;
     case TypeKind::Int:
     case TypeKind::UInt:  return 4;
     case TypeKind::Long:
@@ -106,25 +113,37 @@ bool isObjectPointer(const Type *type) {
 
 bool isError(const Type *type) { return type == nullptr || type->is(TypeKind::Error); }
 
-bool isSameType(const Type *a, const Type *b) {
+bool isIncompleteRecord(const Type *type) { return asRecord(type) && !asRecord(type)->isComplete; }
+
+const Type *unqualified(const Type *type) {
+    return type && type->isConst() ? type->unqualifiedType : type;
+}
+
+namespace {
+
+bool sameType(const Type *a, const Type *b, bool withConst) {
     if (a == b) return true;
     if (a == nullptr || b == nullptr || a->getKind() != b->getKind()) return false;
+    if (withConst && a->isConst() != b->isConst()) return false;
+    a = unqualified(a);
+    b = unqualified(b);
+    if (a == b) return true;
 
     switch (a->getKind()) {
     case TypeKind::Pointer:
-        return isSameType(asPointer(a)->pointee, asPointer(b)->pointee);
+        return sameType(asPointer(a)->pointee, asPointer(b)->pointee, withConst);
     case TypeKind::Reference:
-        return isSameType(asReference(a)->referee, asReference(b)->referee);
+        return sameType(asReference(a)->referee, asReference(b)->referee, withConst);
     case TypeKind::Array:
         return asArray(a)->size == asArray(b)->size
-            && isSameType(asArray(a)->element, asArray(b)->element);
+            && sameType(asArray(a)->element, asArray(b)->element, withConst);
     case TypeKind::Function: {
         const FunctionType *fa = asFunction(a);
         const FunctionType *fb = asFunction(b);
         if (fa->isVariadic != fb->isVariadic || fa->params.size() != fb->params.size()) return false;
-        if (!isSameType(fa->returnType, fb->returnType)) return false;
+        if (!sameType(fa->returnType, fb->returnType, withConst)) return false;
         for (size_t i = 0; i < fa->params.size(); i++) {
-            if (!isSameType(fa->params[i], fb->params[i])) return false;
+            if (!sameType(fa->params[i], fb->params[i], withConst)) return false;
         }
         return true;
     }
@@ -137,6 +156,12 @@ bool isSameType(const Type *a, const Type *b) {
         return true;
     }
 }
+
+} // namespace
+
+bool isSameType(const Type *a, const Type *b) { return sameType(a, b, true); }
+
+bool isSameUnqualified(const Type *a, const Type *b) { return sameType(a, b, false); }
 
 bool isDerivedFrom(const RecordSymbol *derived, const RecordSymbol *base) {
     for (const BaseClass &parent : derived->bases) {
@@ -158,10 +183,12 @@ const Type *decay(const Type *type, SymbolTable &table) {
 
 const Type *promote(const Type *type) {
     if (isIntegral(type) && integerSize(type) < 4) return intType();
-    return type;
+    return unqualified(type);
 }
 
 const Type *commonArithmeticType(const Type *a, const Type *b) {
+    a = unqualified(a);
+    b = unqualified(b);
     if (a->is(TypeKind::Double) || b->is(TypeKind::Double)) return doubleType();
     if (a->is(TypeKind::Float) || b->is(TypeKind::Float)) return floatType();
     a = promote(a);
@@ -197,6 +224,49 @@ bool isPromotion(const Type *from, const Type *to) {
 
 } // namespace
 
+namespace {
+
+//a T lvalue binds to a T & or const T &, a Derived lvalue to a Base &, but const never goes away
+bool bindsDirectly(const Type *from, const Type *referee, Conversion &result) {
+    if (from->isConst() && !referee->isConst()) return false;
+    const Type *object = unqualified(from);
+    const Type *target = unqualified(referee);
+    result.addsConst = referee->isConst() && !from->isConst();
+    if (isSameType(object, target)) {
+        result.rank = ConversionRank::Exact;
+        return true;
+    }
+    if (asRecord(object) && asRecord(target) && isDerivedFrom(asRecord(object), asRecord(target))) {
+        result.rank = ConversionRank::Conversion;
+        result.steps.push_back({ ast::CastKind::DerivedToBase, referee });
+        return true;
+    }
+    return false;
+}
+
+//T * to const T *, T ** to const T *const *: const may be added at a level only when every level
+//above it in the target is const too, or a const T could be written through the result
+bool qualifiesTo(const PointerType *from, const PointerType *to, bool &addsConst) {
+    const Type *f = from->pointee;
+    const Type *t = to->pointee;
+    bool constAbove = true;
+    while (true) {
+        if (f->isConst() && !t->isConst()) return false;
+        if (t->isConst() && !f->isConst()) {
+            if (!constAbove) return false;
+            addsConst = true;
+        }
+        constAbove = constAbove && t->isConst();
+        const PointerType *fp = asPointer(unqualified(f));
+        const PointerType *tp = asPointer(unqualified(t));
+        if (fp == nullptr || tp == nullptr) return isSameType(unqualified(f), unqualified(t));
+        f = fp->pointee;
+        t = tp->pointee;
+    }
+}
+
+} // namespace
+
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table) {
     Conversion result;
 
@@ -206,18 +276,19 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
         return result;
     }
 
-    //a reference binds to an object of its type, or of a type derived from it
     if (const ReferenceType *reference = asReference(to)) {
-        if (!isLValue) return result;
-        if (isSameType(from, reference->referee)) {
-            result.rank = ConversionRank::Exact;
-        } else if (asRecord(from) && asRecord(reference->referee)
-                   && isDerivedFrom(asRecord(from), asRecord(reference->referee))) {
-            result.rank = ConversionRank::Conversion;
-            result.steps.push_back({ ast::CastKind::DerivedToBase, reference->referee });
-        }
+        if (isLValue && bindsDirectly(from, reference->referee, result)) return result;
+        result = Conversion();
+        //a const T & also binds to a temporary holding any value that converts to T
+        if (!reference->referee->isConst()) return result;
+        result = findConversion(from, isLValue, unqualified(reference->referee), table);
+        result.addsConst = true;
         return result;
     }
+
+    //a value is read out of its object, so the object's own const no longer applies
+    from = unqualified(from);
+    to = unqualified(to);
 
     if (isSameType(from, to)) {
         result.rank = ConversionRank::Exact;
@@ -258,14 +329,19 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
     const PointerType *fromPointer = asPointer(value);
     const PointerType *toPointer = asPointer(to);
     if (fromPointer && toPointer) {
-        if (toPointer->pointee->is(TypeKind::Void) && !fromPointer->pointee->is(TypeKind::Function)) {
+        //adding const changes no bits, so no cast is needed
+        if (qualifiesTo(fromPointer, toPointer, result.addsConst)) return result;
+        result.addsConst = false;
+        //void * and Base * keep whatever const the object had
+        bool keepsConst = !fromPointer->pointee->isConst() || toPointer->pointee->isConst();
+        if (keepsConst && toPointer->pointee->is(TypeKind::Void) && !fromPointer->pointee->is(TypeKind::Function)) {
             result.rank = ConversionRank::Conversion;
             result.steps.push_back({ ast::CastKind::PointerToVoid, to });
             return result;
         }
         RecordSymbol *fromRecord = asRecord(fromPointer->pointee);
         RecordSymbol *toRecord = asRecord(toPointer->pointee);
-        if (fromRecord && toRecord && isDerivedFrom(fromRecord, toRecord)) {
+        if (keepsConst && fromRecord && toRecord && isDerivedFrom(fromRecord, toRecord)) {
             result.rank = ConversionRank::Conversion;
             result.steps.push_back({ ast::CastKind::DerivedToBase, to });
             return result;
@@ -301,6 +377,8 @@ std::string builtinName(const Type *type) {
     case TypeKind::Char:   return "char";
     case TypeKind::SChar:  return "signed char";
     case TypeKind::UChar:  return "unsigned char";
+    case TypeKind::Short:  return "short";
+    case TypeKind::UShort: return "unsigned short";
     case TypeKind::Int:    return "int";
     case TypeKind::UInt:   return "unsigned int";
     case TypeKind::Long:   return "long";
@@ -332,6 +410,7 @@ std::string spell(const Type *type, const std::string &inside) {
         const Type *inner = type->is(TypeKind::Pointer) ? asPointer(type)->pointee
                                                         : asReference(type)->referee;
         std::string mark = type->is(TypeKind::Pointer) ? "*" : "&";
+        if (type->isConst()) mark += inside.empty() ? "const" : "const ";
         if (isArrayOrFunction(inner)) return spell(inner, "(" + mark + inside + ")");
         return spell(inner, mark + inside);
     }
@@ -354,6 +433,7 @@ std::string spell(const Type *type, const std::string &inside) {
         } else {
             name = builtinName(type);
         }
+        if (type->isConst()) name = "const " + name;
         if (inside.empty()) return name;
         if (inside[0] == '*' || inside[0] == '&') return name + inside;
         return name + " " + inside;
@@ -375,12 +455,15 @@ std::string typeToString(const Type *type) {
 }
 
 std::string mangleType(const Type *type) {
+    if (type->isConst()) return "K" + mangleType(unqualified(type));
     switch (type->getKind()) {
     case TypeKind::Void:      return "v";
     case TypeKind::Bool:      return "b";
     case TypeKind::Char:      return "c";
     case TypeKind::SChar:     return "a";
     case TypeKind::UChar:     return "h";
+    case TypeKind::Short:     return "s";
+    case TypeKind::UShort:    return "t";
     case TypeKind::Int:       return "i";
     case TypeKind::UInt:      return "j";
     case TypeKind::Long:      return "l";
@@ -399,9 +482,12 @@ std::string mangleType(const Type *type) {
         return out + "E";
     }
     case TypeKind::Record: {
-        //a nested record is wrapped in N..E so its parts are not read as parameters
+        //a nested record, or one in a namespace, is wrapped in N..E so its parts are not read as parameters
         const RecordSymbol *record = asRecord(type);
-        if (record->outer) return "N" + recordPath(record) + "E";
+        const RecordSymbol *outermost = record;
+        while (outermost->outer) outermost = outermost->outer;
+        std::string spaces = namespacePath(outermost->scope);
+        if (record->outer || !spaces.empty()) return "N" + spaces + recordPath(record) + "E";
         return lengthPrefixed(record->name);
     }
     default:
@@ -443,6 +529,8 @@ std::string toLLVMType(const Type *type) {
     case TypeKind::Char:
     case TypeKind::SChar:
     case TypeKind::UChar:  return "i8";
+    case TypeKind::Short:
+    case TypeKind::UShort: return "i16";
     case TypeKind::Int:
     case TypeKind::UInt:   return "i32";
     case TypeKind::Long:

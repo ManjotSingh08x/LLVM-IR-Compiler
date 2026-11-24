@@ -128,7 +128,9 @@ private:
     void collectScope(sema::Scope *scope);
     void declareFunction(sema::FunctionSymbol *fn);
     void emitGlobalVariables(ast::Program *program);
+    void emitGlobalVariables(const ast::NodeList<ast::Decl> &decls);
     void emitGlobalVariable(ast::VarDecl *decl);
+    void emitStaticMemberValues(ast::RecordDecl *record);
     void emitGlobalInitializers();
     void emitDefinitions(ast::Decl *decl);
     void emitSynthesizedStructors();

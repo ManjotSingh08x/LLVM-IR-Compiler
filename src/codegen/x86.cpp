@@ -12,14 +12,17 @@ namespace {
 struct RegNames {
     const char *q;
     const char *l;
+    const char *w;
     const char *b;
 };
 
 const RegNames kGprNames[] = {
-    {"rax", "eax", "al"},   {"rcx", "ecx", "cl"},   {"rdx", "edx", "dl"},   {"rbx", "ebx", "bl"},
-    {"rsi", "esi", "sil"},  {"rdi", "edi", "dil"},  {"rbp", "ebp", "bpl"},  {"rsp", "esp", "spl"},
-    {"r8", "r8d", "r8b"},   {"r9", "r9d", "r9b"},   {"r10", "r10d", "r10b"}, {"r11", "r11d", "r11b"},
-    {"r12", "r12d", "r12b"}, {"r13", "r13d", "r13b"}, {"r14", "r14d", "r14b"}, {"r15", "r15d", "r15b"},
+    {"rax", "eax", "ax", "al"},     {"rcx", "ecx", "cx", "cl"},     {"rdx", "edx", "dx", "dl"},
+    {"rbx", "ebx", "bx", "bl"},     {"rsi", "esi", "si", "sil"},    {"rdi", "edi", "di", "dil"},
+    {"rbp", "ebp", "bp", "bpl"},    {"rsp", "esp", "sp", "spl"},    {"r8", "r8d", "r8w", "r8b"},
+    {"r9", "r9d", "r9w", "r9b"},    {"r10", "r10d", "r10w", "r10b"}, {"r11", "r11d", "r11w", "r11b"},
+    {"r12", "r12d", "r12w", "r12b"}, {"r13", "r13d", "r13w", "r13b"}, {"r14", "r14d", "r14w", "r14b"},
+    {"r15", "r15d", "r15w", "r15b"},
 };
 
 } // namespace
@@ -47,6 +50,7 @@ std::string regName(Reg reg, Width width) {
     const RegNames &names = kGprNames[(int)reg];
     switch (width) {
     case Width::Byte: return std::string("%") + names.b;
+    case Width::Word: return std::string("%") + names.w;
     case Width::Long: return std::string("%") + names.l;
     case Width::Quad: return std::string("%") + names.q;
     }
@@ -56,6 +60,7 @@ std::string regName(Reg reg, Width width) {
 char suffix(Width width) {
     switch (width) {
     case Width::Byte: return 'b';
+    case Width::Word: return 'w';
     case Width::Long: return 'l';
     case Width::Quad: return 'q';
     }
@@ -66,6 +71,7 @@ Width widthOf(const sema::Type *type) {
     switch (ir::integerBits(type)) {
     case 1:
     case 8:  return Width::Byte;
+    case 16: return Width::Word;
     case 32: return Width::Long;
     default: return Width::Quad;  //i64 and every pointer
     }

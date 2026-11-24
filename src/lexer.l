@@ -94,6 +94,7 @@ HEXDIGIT    [0-9a-fA-F]
 LETTER      [a-zA-Z_]
 IDCHAR      [a-zA-Z0-9_]
 EXPONENT    [eE][+-]?{DIGIT}+
+FLOATNUM    ({DIGIT}+"."{DIGIT}*{EXPONENT}?|"."{DIGIT}+{EXPONENT}?|{DIGIT}+{EXPONENT})
 INTSUFFIX   ([uU]([lL]|ll|LL)?|([lL]|ll|LL)[uU]?)
 CHARBODY    ([^'\\\n]|\\.)
 
@@ -125,9 +126,9 @@ CHARBODY    ([^'\\\n]|\\.)
                           else                            return addToken(TOK_IDENTIFIER);
                         }                                         // letter or underscore followed by alphanumerics
 
-{DIGIT}+"."{DIGIT}*{EXPONENT}?   { return addToken(TOK_FLOAT_LITERAL); }  // digits, dot, optional digits and exponent
-"."{DIGIT}+{EXPONENT}?           { return addToken(TOK_FLOAT_LITERAL); }  // dot then digits, optional exponent
-{DIGIT}+{EXPONENT}               { return addToken(TOK_FLOAT_LITERAL); }  // digits with mandatory exponent
+{FLOATNUM}[fF]?          { return addToken(TOK_FLOAT_LITERAL); }  // a double, or a float with the f suffix
+{FLOATNUM}[lL]           { addError(std::string("long double is not supported: ") + yytext);
+                           return addToken(TOK_FLOAT_LITERAL); }
 
 0[xX]{HEXDIGIT}+{INTSUFFIX}?   { return addToken(TOK_INT_LITERAL); }  // hexadecimal integer
 0[bB][01]+{INTSUFFIX}?         { return addToken(TOK_INT_LITERAL); }  // binary integer

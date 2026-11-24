@@ -26,6 +26,7 @@ public:
     void visitRecordDecl(RecordDecl *node);
     void visitAccessSpecDecl(AccessSpecDecl *node);
     void visitTypedefDecl(TypedefDecl *node);
+    void visitNamespaceDecl(NamespaceDecl *node);
 
     void visitCompoundStmt(CompoundStmt *node);
     void visitDeclStmt(DeclStmt *node);

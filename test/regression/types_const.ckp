@@ -1,0 +1,81 @@
+// const: const globals, locals, parameters and members, pointers to const and const pointers,
+// const references bound to objects and to temporaries, overloads that differ only in const,
+// const auto, string literals as const char arrays, static const members with in-class values,
+// and const integers as constants in array sizes and case labels
+
+const int LIMIT = 10;
+const int TWICE = LIMIT * 2;
+int squares[TWICE];
+
+struct Point { int x; int y; };
+class Shape {
+public:
+    static const int SIDES = 4;
+    int sides() { return SIDES; }
+};
+
+int sum(const int *values, int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) total += values[i];
+    return total;
+}
+
+int length(const char *text) {
+    int n = 0;
+    while (text[n] != 0) n++;
+    return n;
+}
+
+int dist(const Point &p) { return p.x * p.x + p.y * p.y; }
+double twice(const double &d) { return d * 2; }
+int pick(int *p) { return 1; }
+int pick(const int *p) { return 2; }
+int which(int &r) { return 1; }
+int which(const int &r) { return 2; }
+int next(const int n) { return n + 1; }
+
+int classify(int v) {
+    const int ONE = 1;
+    switch (v) {
+    case ONE: return 10;
+    case LIMIT: return 100;
+    default: return 0;
+    }
+}
+
+int main() {
+    const int local = 5;
+    int values[3] = {1, 2, 3};
+    const int fixedValues[3] = {4, 5, 6};
+    int *const pinned = values;
+    pinned[1] = 20;
+    const int *walk = fixedValues;
+    walk++;
+    const Point origin = {3, 4};
+    Point moved = origin;
+    moved.x = 6;
+    const auto doubled = local * 2;
+    auto copy = local;
+    copy++;
+    char buffer[] = "abc";
+    char *legacy = "legacy";
+    const char *message = "hello";
+    int scratch[local + 1];
+    Shape square;
+    for (int i = 0; i < TWICE; i++) squares[i] = i * i;
+    printf("%d %d %d %d\n", LIMIT, local, sum(values, 3), sum(fixedValues, 3));
+    printf("%d %d %d %d %d\n", *walk, pinned[1], length(message), length(buffer), length(legacy));
+    printf("%d %d %f\n", dist(origin), dist(moved), twice(2.5));
+    printf("%d %d %d %d %d\n", pick(values), pick(fixedValues), which(copy), which(local), which(7));
+    printf("%d %d %d %d\n", next(doubled), classify(1), classify(10), square.sides());
+    const int &alias = copy;
+    copy = 100;
+    const long &converted = local;
+    printf("%d %ld %d %d %d\n", alias, converted, (int)(walk - fixedValues), (int)sizeof(scratch), squares[19]);
+    return 0;
+}
+
+// IR: @class_5Shape_5SIDES = global i32 4
+// IR: @global_5TWICE = global i32 20
+// IR: define i32 @global_4pick_PKi(ptr
+// IR: define i32 @global_5which_RKi(ptr

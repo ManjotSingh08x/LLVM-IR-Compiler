@@ -23,8 +23,7 @@ public:
     bool escapes(const ir::Value *alloca) const { return escaped.count(alloca) != 0; }
 
     //a scalar slot (integer, floating or pointer) used only as the address of whole loads and
-    //stores of its own type: it can live in a register (mem2reg) or be tracked as a variable
-    //(const_prop_dense)
+    //stores of its own type: it can live in a register (mem2reg)
     bool isPromotable(const ir::Instruction *alloca) const { return promotable.count(alloca) != 0; }
 
     //false only when the two addresses can be proven to name different memory

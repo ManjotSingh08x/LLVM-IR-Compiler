@@ -24,6 +24,7 @@ public:
         case ASTKind::RecordDecl:         return derived().visitRecordDecl(static_cast<RecordDecl *>(node));
         case ASTKind::AccessSpecDecl:     return derived().visitAccessSpecDecl(static_cast<AccessSpecDecl *>(node));
         case ASTKind::TypedefDecl:        return derived().visitTypedefDecl(static_cast<TypedefDecl *>(node));
+        case ASTKind::NamespaceDecl:      return derived().visitNamespaceDecl(static_cast<NamespaceDecl *>(node));
 
         case ASTKind::CompoundStmt:       return derived().visitCompoundStmt(static_cast<CompoundStmt *>(node));
         case ASTKind::DeclStmt:           return derived().visitDeclStmt(static_cast<DeclStmt *>(node));
@@ -84,6 +85,7 @@ public:
     RetTy visitRecordDecl(RecordDecl *node) { return derived().visitDecl(node); }
     RetTy visitAccessSpecDecl(AccessSpecDecl *node) { return derived().visitDecl(node); }
     RetTy visitTypedefDecl(TypedefDecl *node) { return derived().visitDecl(node); }
+    RetTy visitNamespaceDecl(NamespaceDecl *node) { return derived().visitDecl(node); }
 
     RetTy visitCompoundStmt(CompoundStmt *node) { return derived().visitStmt(node); }
     RetTy visitDeclStmt(DeclStmt *node) { return derived().visitStmt(node); }

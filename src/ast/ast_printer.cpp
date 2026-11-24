@@ -16,6 +16,7 @@ const char *kindName(ASTKind kind) {
     case ASTKind::RecordDecl:         return "RecordDecl";
     case ASTKind::AccessSpecDecl:     return "AccessSpecDecl";
     case ASTKind::TypedefDecl:        return "TypedefDecl";
+    case ASTKind::NamespaceDecl:      return "NamespaceDecl";
     case ASTKind::CompoundStmt:       return "CompoundStmt";
     case ASTKind::DeclStmt:           return "DeclStmt";
     case ASTKind::ExprStmt:           return "ExprStmt";
@@ -148,7 +149,8 @@ std::string typeString(const TypeSpec *type, const std::string &inside) {
     case TypeSpecKind::Builtin:
     case TypeSpecKind::Named:
     case TypeSpecKind::Struct: {
-        std::string name = type->specKind == TypeSpecKind::Struct ? "struct " + type->name : type->name;
+        std::string name = qualifiedSpelling(type->qualifier, type->name);
+        if (type->specKind == TypeSpecKind::Struct) name = "struct " + name;
         if (inside.empty()) return name;
         if (inside[0] == '*' || inside[0] == '&') return name + inside;
         return name + " " + inside;
@@ -315,7 +317,7 @@ void ASTPrinter::visitRecordDecl(RecordDecl *node) {
         if (node->bases[i].access != AccessKind::None) {
             attrs += std::string(accessName(node->bases[i].access)) + " ";
         }
-        attrs += node->bases[i].name;
+        attrs += qualifiedSpelling(node->bases[i].qualifier, node->bases[i].name);
     }
     line(*node, attrs);
     children("member", node->members);
@@ -323,6 +325,11 @@ void ASTPrinter::visitRecordDecl(RecordDecl *node) {
 
 void ASTPrinter::visitAccessSpecDecl(AccessSpecDecl *node) {
     line(*node, accessName(node->access));
+}
+
+void ASTPrinter::visitNamespaceDecl(NamespaceDecl *node) {
+    line(*node, node->name);
+    children(nullptr, node->decls);
 }
 
 void ASTPrinter::visitTypedefDecl(TypedefDecl *node) {
@@ -431,7 +438,7 @@ void ASTPrinter::visitNullLiteral(NullLiteral *node) { line(*node, ""); }
 
 void ASTPrinter::visitThisExpr(ThisExpr *node) { line(*node, ""); }
 
-void ASTPrinter::visitDeclRefExpr(DeclRefExpr *node) { line(*node, node->name); }
+void ASTPrinter::visitDeclRefExpr(DeclRefExpr *node) { line(*node, qualifiedSpelling(node->qualifier, node->name)); }
 
 void ASTPrinter::visitParenExpr(ParenExpr *node) {
     line(*node, "");

@@ -18,7 +18,7 @@ All section numbers refer to *Compilers: Principles, Techniques, and Tools*, 2nd
 
 ```
 -O0   simplify_cfg → loop_rotate → codegen
--O1   O0 → inline → local_dag → const_prop_dense → local_dag → simplify_cfg
+-O1   O0 → inline → local_dag → simplify_cfg
       → codegen + peephole                     (linear register allocation)
 -O2   O1 → mem2reg → instsimplify
       → loop_simplify → licm → loop_unswitch
@@ -35,7 +35,7 @@ The levels are **cumulative**: each one runs everything in the level below, then
 | Level | IR form | Analyses that must exist |
 |---|---|---|
 | O0 | alloca | dominators (§9.6.1), natural loops (§9.6.6), liveness (§9.2.5) |
-| O1 | alloca | + call graph, escape scan, §9.3 framework for dense constant propagation |
+| O1 | alloca | + call graph, escape scan |
 | O2 | SSA | + dominance frontiers, def-use chains, available expressions (§9.2.6), loop invariance, induction variables |
 | O3 | SSA, then machine IR | + interference graph |
 
@@ -110,7 +110,7 @@ There is no peephole pass at this level.
 ## 2. -O1: inlining and local optimizations (no SSA)
 
 ### 2.1 Inlining (§12.1; also §1.5.1)
-Inlining replaces a call with a copy of the callee's body. Removing the call overhead is a small gain. The bigger gain is that the callee's code can now see the caller's constants, so constant propagation, the DAG pass and simplify_cfg can work across what used to be a call.
+Inlining replaces a call with a copy of the callee's body. Removing the call overhead is a small gain. The bigger gain is that the callee's code can now see the caller's constants, so the DAG pass and simplify_cfg (and, from -O2, mem2reg and instsimplify) can work across what used to be a call.
 
 How to do it on the alloca form:
 1. **Choose call sites:**
@@ -128,7 +128,7 @@ How to do it on the alloca form:
 
 - **Order:** work bottom-up over the call graph, callees before callers, so that each body you copy is already optimized.
 - **Analyses needed:** a call graph and its strongly connected components (§12.1), and cloning with a map from old values to new ones.
-- **Afterwards:** inlining leaves `br` chains and new constant arguments behind. The local DAG pass, dense constant propagation and simplify_cfg that follow clean these up.
+- **Afterwards:** inlining leaves `br` chains and new constant arguments behind. The local DAG pass and simplify_cfg that follow clean these up.
 
 ### 2.2 local_dag: the DAG of a basic block (§8.5.1–8.5.7)
 One pass per block builds the DAG with **value numbering** (§6.1.2): before creating a node `op(L, R)`, look up `(op, vn(L), vn(R))` in a hash table. Several optimizations come out of the same structure:
@@ -165,12 +165,12 @@ store i32 %t1, ptr %i         →       store i32 %t1, ptr %i
   - Signed `x / 2^k` is **not** `x >> k` (for example `-7/2 = -3` but `-7>>1 = -4`).
   - The book's footnote on p. 536 says it directly: compile-time evaluation must match run time.
 - **Analyses needed:** none for the block itself, plus one scan of the function to find which allocas escape.
-- **Why it runs twice:**
-  - The first run tidies what inlining produced, so the dense constant propagation that follows has less to do.
-  - The second run folds the constants that propagation substituted.
+- It runs once at -O1, right after inlining. It used to run a second time to fold what dense constant propagation substituted; that pass is gone (§2.3).
 
-### 2.3 const_prop_dense (§9.4)
-Constant propagation on the alloca form, using the iterative framework (§9.3):
+### 2.3 const_prop_dense (removed)
+**Why it was removed:** measured over the 46 regression programs, without it -O1 is 2.2% larger in static instructions (+599 of 27742; 36 programs grow, none shrink) and -O2 and -O3 0.1% (+14 of 24084 and +14 of 17322, in 4 programs). At -O2 and above, mem2reg turns the variables it tracked into SSA values and instsimplify folds them, so the pass found almost nothing there; its gain was confined to -O1, which did not justify a third global analysis in that group. -O1 is now inline → local_dag → simplify_cfg, and local_dag still folds constants, forwards stored values to later loads and removes dead stores within each block. `cprop_edges` checks its constants from -O2.
+
+What it did, for reference: constant propagation on the alloca form, using the iterative framework (§9.3):
 - **Domain:** each block's IN and OUT map every *non-escaped* scalar alloca to a lattice value: ⊤ (no information yet), a constant c, or ⊥ (NAC, not a constant).
 - **Meet** at block entry (§9.4.2):
   - ⊤ ∧ c = c;
@@ -187,7 +187,7 @@ Constant propagation on the alloca form, using the iterative framework (§9.3):
 - **Analyses needed:** the §9.3 framework (`dfa_framework`), and the escape scan. mem2reg uses the same "can be promoted" test, so share it.
 
 ### 2.4 simplify_cfg (again)
-This run folds the branches that became constant after propagation, removes blocks that are now unreachable, and merges the blocks inlining left behind (§1.1).
+This run folds the branches local_dag made constant, removes blocks that are now unreachable, and merges the blocks inlining left behind (§1.1).
 
 ### 2.5 Codegen at -O1: linear register allocation and peephole
 - **Register allocation:** the book's "linear" allocator is the §8.6 simple code generator. It makes one forward pass over each block, keeps register and address descriptors, and picks registers with `getReg` (§8.6.3), guided by next-use information (§8.4.2). (The *linear-scan* allocator of Poletto and Sarkar is **not in the book**; see Suggestions.)
@@ -209,7 +209,7 @@ This run folds the branches that became constant after propagation, removes bloc
 ## 3. -O2: SSA, global data-flow and loop optimizations
 
 ### 3.1 mem2reg (SSA construction)
-- **Promotes** each scalar alloca whose only uses are loads and stores that use it as the address. This is the same escape test as in §2.3.
+- **Promotes** each scalar alloca whose only uses are loads and stores that use it as the address (the escape scan of §2.2).
 - **Places φ nodes** at the iterated dominance frontier of each variable's store blocks.
 - **Renames** by walking the dominator tree, keeping a stack of current values per variable.
 - **Analyses needed:** dominators (§9.6.1) and dominance frontiers (by the Cooper–Harvey–Kennedy "runner" walk; not in the book).
@@ -220,9 +220,9 @@ Sparse conditional constant propagation (Wegman & Zadeck, not in the book) ran h
 x = 1;  while (…) { if (x != 1) x = 2; … }     // x stays 1: the assignment never runs
 sumTo(1) after inlining                          // a loop that provably runs once
 ```
-Dense propagation (§2.3) assumes every edge can execute and gives ⊥ in both cases.
+Dense propagation (§2.3, also removed since) assumed every edge can execute and gave ⊥ in both cases.
 
-**Why it was removed:** measured over the regression programs, -O2 without it is 1.2% larger in static instructions (+268 of 22483) and -O3 1.1% (+171 of 16138), all in 9 programs whose loops run once or never after inlining; the other 43 compile to identical code. Common constant branches are already folded by const_prop_dense and simplify_cfg at -O1, and at -O2 mem2reg and instsimplify collapse a φ whose other entries came from paths simplify_cfg deleted. That gain did not justify the hardest analysis in the -O2 group, so the -O2 pipeline goes from mem2reg straight to instsimplify.
+**Why it was removed:** measured over the regression programs, -O2 without it is 1.2% larger in static instructions (+268 of 22483) and -O3 1.1% (+171 of 16138), all in 9 programs whose loops run once or never after inlining; the other 43 compile to identical code. Common constant branches are already folded by local_dag and simplify_cfg at -O1, and at -O2 mem2reg and instsimplify collapse a φ whose other entries came from paths simplify_cfg deleted. That gain did not justify the hardest analysis in the -O2 group, so the -O2 pipeline goes from mem2reg straight to instsimplify.
 
 ### 3.3 instsimplify: algebraic simplification on SSA (§8.5.4, §8.7.4)
 This applies the identities from §2.2, now one instruction at a time on SSA, using def-use chains to look at an operand's defining instruction:
@@ -469,7 +469,6 @@ Two fixes were needed before it paid off:
 | linear allocation (`getReg`) | O0–O2 | §8.4.2, §8.6 | local | next-use, liveness |
 | inline | O1+ | §12.1 | interprocedural | call graph, strongly connected components |
 | local_dag | O1+ | §8.5.1–8.5.7, §6.1.2 | local | escape scan |
-| const_prop_dense | O1+ | §9.4 | global (dense) | §9.3 framework, escape scan |
 | peephole | O1+ | §8.7 | machine | none |
 | mem2reg | O2+ | §6.2.4 (SSA) | global | dominators, dominance frontiers |
 | instsimplify (+ reassociation) | O2+ | §8.5.4, §8.7.4 | per instruction | def-use, reverse postorder |
@@ -512,11 +511,11 @@ Two fixes were needed before it paid off:
 
    I recommend (b) for -O2, keeping (a) at -O1.
 
-4. **There is no constant propagation on SSA.** const_prop_dense works on allocas, so after mem2reg only instsimplify folds constants, one instruction at a time. If a later pass (unrolling, see 7) creates constants that must flow across blocks, a sparse propagation over def-use chains without the conditional part is the simple way to add it back.
+4. **There is no global constant propagation.** After mem2reg only instsimplify folds constants, one instruction at a time, and at -O1 only local_dag, one block at a time. If a later pass (unrolling, see 7) creates constants that must flow across blocks, a sparse propagation over def-use chains without the conditional part is the simple way to add it back.
 
 5. **Share code between passes.**
-   - The escape test ("this alloca's address never leaves load/store") is needed by local_dag, const_prop_dense and mem2reg. Write it once.
-   - The constant folder is needed by local_dag, const_prop_dense and instsimplify, and must give exactly the same results in all of them. One `fold(op, type, a, b)` helper.
+   - The escape test ("this alloca's address never leaves load/store") is needed by local_dag and mem2reg. Write it once.
+   - The constant folder is needed by local_dag and instsimplify, and must give exactly the same results in both. One `fold(op, type, a, b)` helper.
    - Loop cloning (blocks plus a map from old values to new ones) is needed by inlining and unswitching. One utility.
 
 6. **The `LoopPass` contract has to change.** The plan says `runOnLoop` must not change the CFG. Rotation and unswitching do change it. Options:

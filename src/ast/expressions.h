@@ -83,8 +83,9 @@ public:
         : Expr(ASTKind::DeclRefExpr, line, col), name(std::move(name)) {}
 
 
-    std::string   name;
-    sema::Symbol *symbol = nullptr;  //what the name refers to, set by the type checker
+    std::string              name;
+    std::vector<std::string> qualifier;        //N::f, Counter::total: the parts before the name
+    sema::Symbol            *symbol = nullptr;  //what the name refers to, set by the type checker
 };
 
 class ParenExpr : public Expr {

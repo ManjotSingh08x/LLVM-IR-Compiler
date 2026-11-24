@@ -234,6 +234,13 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
 
 bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
     switch (expr->getKind()) {
+    case ast::ASTKind::DeclRefExpr: {
+        //a const integer variable with a constant value, const int M = N * 2
+        long long value = 0;
+        if (!sema::evaluateConstant(expr, value)) return false;
+        out = makeInt(value, expr->type);
+        return true;
+    }
     case ast::ASTKind::IntLiteral: {
         long long value = 0;
         const sema::Type *type = nullptr;
@@ -248,9 +255,12 @@ bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
         out = makeInt(static_cast<ast::BoolLiteral *>(expr)->value ? 1 : 0, sema::boolType());
         return true;
     case ast::ASTKind::FloatLiteral:
-        out = makeFloat(std::strtod(static_cast<ast::FloatLiteral *>(expr)->spelling.c_str(), nullptr),
-                        sema::doubleType());
+    {
+        const sema::Type *type = nullptr;
+        double value = sema::floatLiteral(static_cast<ast::FloatLiteral *>(expr)->spelling, type);
+        out = makeFloat(value, type);
         return true;
+    }
     case ast::ASTKind::ParenExpr:
         return foldNumber(static_cast<ast::ParenExpr *>(expr)->sub.get(), out);
 

@@ -98,6 +98,7 @@ void AsmWriter::writeConstant(std::ostream &out, const ir::Constant *constant, c
     case ir::ConstantKind::Int:
         switch (widthOf(type)) {
         case Width::Byte: out << "\t.byte\t" << (constant->intValue & 0xFF) << "\n"; break;
+        case Width::Word: out << "\t.short\t" << (constant->intValue & 0xFFFF) << "\n"; break;
         case Width::Long: out << "\t.long\t" << constant->intValue << "\n"; break;
         case Width::Quad: out << "\t.quad\t" << constant->intValue << "\n"; break;
         }

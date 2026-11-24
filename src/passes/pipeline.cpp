@@ -1,6 +1,5 @@
 #include "passes/pipeline.h"
 
-#include "passes/const_prop_dense.h"
 #include "passes/cse.h"
 #include "passes/dce.h"
 #include "passes/inline.h"
@@ -33,11 +32,9 @@ GlobalPassManager buildPipeline(int optLevel) {
     //stage 2, -O1 and up: inlining sees every function after stage 1, callees first
     pipeline.addGlobal(std::unique_ptr<GlobalPass>(new Inliner()));
 
-    //stage 3, -O1 and up: the local and dense optimizations of the alloca form. the second
-    //local_dag folds what constant propagation substituted, simplify_cfg the branches it decided
+    //stage 3, -O1 and up: the local optimizations of the alloca form, then simplify_cfg removes the
+    //branches local_dag decided
     std::unique_ptr<ModulePassManager> scalar(new ModulePassManager());
-    scalar->add(std::unique_ptr<FunctionPass>(new LocalDAG()));
-    scalar->add(std::unique_ptr<FunctionPass>(new ConstPropDense()));
     scalar->add(std::unique_ptr<FunctionPass>(new LocalDAG()));
     scalar->add(std::unique_ptr<FunctionPass>(new SimplifyCFG()));
     pipeline.addModule(std::move(scalar));

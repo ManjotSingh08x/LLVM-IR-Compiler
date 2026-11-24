@@ -20,10 +20,10 @@ Reg floatArgReg(size_t index) { return (Reg)((int)Reg::XMM0 + (int)index); }
 
 std::string imm(long long value) { return "$" + std::to_string(value); }
 
-//integer ops on bytes are done 32 bits wide, the low byte comes out the same
-Width aluWidth(Width width) { return width == Width::Byte ? Width::Long : width; }
+//integer ops on bytes and words are done 32 bits wide, the low bits come out the same
+Width aluWidth(Width width) { return width == Width::Byte || width == Width::Word ? Width::Long : width; }
 
-//the width a register is loaded with: bytes are loaded 32 bits wide
+//the width a register is loaded with: bytes and words are loaded 32 bits wide
 Width loadWidth(Width width) { return width == Width::Quad ? Width::Quad : Width::Long; }
 
 bool isIntCompare(ir::BinaryOpKind op) {
@@ -392,6 +392,7 @@ void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
     MOperand home = memOp(Mem::frame(frame.home(value)));
     switch (width) {
     case Width::Byte: op("movzbl", { home, def(dst, Width::Long) }); break;
+    case Width::Word: op("movzwl", { home, def(dst, Width::Long) }); break;
     case Width::Long: op("movl", { home, def(dst, Width::Long) }); break;
     case Width::Quad: op("movq", { home, def(dst) }); break;
     }
@@ -493,6 +494,7 @@ void FunctionEmitter::emitLoad(ir::LoadInst *inst, const InstNextUse &info) {
     }
     switch (widthOf(type)) {
     case Width::Byte: op("movzbl", { memOp(mem), def(Reg::RAX, Width::Long) }); break;
+    case Width::Word: op("movzwl", { memOp(mem), def(Reg::RAX, Width::Long) }); break;
     case Width::Long: op("movl", { memOp(mem), def(Reg::RAX, Width::Long) }); break;
     case Width::Quad: op("movq", { memOp(mem), def(Reg::RAX) }); break;
     }
@@ -644,6 +646,7 @@ void FunctionEmitter::emitGEP(ir::GEPInst *inst, const InstNextUse &info) {
             loadInt(index, Reg::RCX, w);
             if (w == Width::Long) op("movslq", { use(Reg::RCX, Width::Long), def(Reg::RCX) });
             if (w == Width::Byte) op("movsbq", { use(Reg::RCX, Width::Byte), def(Reg::RCX) });
+            if (w == Width::Word) op("movswq", { use(Reg::RCX, Width::Word), def(Reg::RCX) });
             if (step != 1) op("imulq", { immOp(step), useDef(Reg::RCX) });
             op("addq", { use(Reg::RCX), useDef(Reg::RAX) });
         }
@@ -696,14 +699,14 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
     case ir::BinaryOpKind::SRem: {
         bool remainder = inst->op == ir::BinaryOpKind::SRem;
         loadInt(inst->lhs, Reg::RAX, aw);
-        if (w == Width::Byte) op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        widen(Reg::RAX, w, true);
         unsigned shift = powerOfTwoShift(inst->rhs);
         if (shift != 0) {
             result = divideByPowerOfTwo(remainder, aw, shift);
             break;
         }
         loadInt(inst->rhs, Reg::RCX, aw);
-        if (w == Width::Byte) op("movsbl", { use(Reg::RCX, Width::Byte), def(Reg::RCX, Width::Long) });
+        widen(Reg::RCX, w, true);
         //cltd/cqto sign-extends rax into rdx; idiv divides rdx:rax, quotient to rax, remainder to rdx
         op(aw == Width::Quad ? "cqto" : "cltd", {}, { Reg::RAX }, { Reg::RDX });
         op(std::string("idiv") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
@@ -714,7 +717,7 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
     case ir::BinaryOpKind::URem: {
         bool remainder = inst->op == ir::BinaryOpKind::URem;
         loadInt(inst->lhs, Reg::RAX, aw);
-        if (w == Width::Byte) op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        widen(Reg::RAX, w, false);
         unsigned shift = powerOfTwoShift(inst->rhs);
         if (shift != 0) {
             const std::string s(1, suffix(aw));
@@ -730,7 +733,7 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
             break;
         }
         loadInt(inst->rhs, Reg::RCX, aw);
-        if (w == Width::Byte) op("movzbl", { use(Reg::RCX, Width::Byte), def(Reg::RCX, Width::Long) });
+        widen(Reg::RCX, w, false);
         //div divides rdx:rax, so rdx is cleared first; quotient to rax, remainder to rdx
         op("xorl", { def(Reg::RDX, Width::Long), def(Reg::RDX, Width::Long) });
         op(std::string("div") + suffix(aw), { use(Reg::RCX, aw) }, { Reg::RAX, Reg::RDX }, { Reg::RAX, Reg::RDX });
@@ -743,12 +746,7 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         const char *mnemonic = inst->op == ir::BinaryOpKind::Shl ? "shl" : inst->op == ir::BinaryOpKind::AShr ? "sar" : "shr";
         std::string name = std::string(mnemonic) + suffix(aw);
         loadInt(inst->lhs, Reg::RAX, aw);
-        if (w == Width::Byte && inst->op == ir::BinaryOpKind::AShr) {
-            op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
-        }
-        if (w == Width::Byte && inst->op == ir::BinaryOpKind::LShr) {
-            op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
-        }
+        if (inst->op != ir::BinaryOpKind::Shl) widen(Reg::RAX, w, inst->op == ir::BinaryOpKind::AShr);
         const ir::Constant *count = asConstant(inst->rhs);
         if (count && count->constKind == ir::ConstantKind::Int) {
             long long masked = count->intValue & (aw == Width::Quad ? 63 : 31);  //as the cpu masks %cl
@@ -763,6 +761,12 @@ void FunctionEmitter::emitBinary(ir::BinaryInst *inst, const InstNextUse &info) 
         return fail("unexpected integer operation");
     }
     defineResult(inst, info, result);
+}
+
+//a byte or word in reg extended to its 32-bit register, so the bits above it are its sign or zero
+void FunctionEmitter::widen(Reg reg, Width width, bool isSigned) {
+    if (width == Width::Byte) op(isSigned ? "movsbl" : "movzbl", { use(reg, Width::Byte), def(reg, Width::Long) });
+    if (width == Width::Word) op(isSigned ? "movswl" : "movzwl", { use(reg, Width::Word), def(reg, Width::Long) });
 }
 
 //the dividend in rax. division rounds toward zero, so a negative dividend gets a bias of 2^shift - 1
@@ -857,11 +861,11 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
             } else {
                 op("negl", { useDef(Reg::RAX, Width::Long) });
             }
-        } else if (wf == Width::Byte) {
+        } else if (wf == Width::Byte || wf == Width::Word) {
             if (wt == Width::Quad) {
-                op("movsbq", { use(Reg::RAX, Width::Byte), def(Reg::RAX) });
+                op(wf == Width::Byte ? "movsbq" : "movswq", { use(Reg::RAX, wf), def(Reg::RAX) });
             } else {
-                op("movsbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+                widen(Reg::RAX, wf, true);
             }
         } else if (wf == Width::Long && wt == Width::Quad) {
             op("movslq", { use(Reg::RAX, Width::Long), def(Reg::RAX) });
@@ -871,7 +875,7 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
     case ir::CastOpKind::ZExt: {
         Width wf = widthOf(from);
         loadInt(inst->operand, Reg::RAX, wf);
-        if (wf == Width::Byte) op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });  //clears the upper half too
+        widen(Reg::RAX, wf, false);  //a 32-bit write clears the upper half too
         if (wf == Width::Long) op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
         break;
     }
@@ -887,8 +891,8 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         Width convert = Width::Long;
         if (fromBool) {
             op("andl", { immOp(1), useDef(Reg::RAX, Width::Long) });
-        } else if (wf == Width::Byte) {
-            op(isSigned ? "movsbl" : "movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        } else if (wf == Width::Byte || wf == Width::Word) {
+            widen(Reg::RAX, wf, isSigned);
         } else if (wf == Width::Long && !isSigned) {
             //an unsigned 32-bit value fits a signed 64-bit one
             op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
@@ -961,7 +965,7 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
     case ir::CastOpKind::IntToPtr:
         loadInt(inst->operand, Reg::RAX, widthOf(from));
         if (widthOf(from) == Width::Long) op("movl", { use(Reg::RAX, Width::Long), def(Reg::RAX, Width::Long) });
-        if (widthOf(from) == Width::Byte) op("movzbl", { use(Reg::RAX, Width::Byte), def(Reg::RAX, Width::Long) });
+        widen(Reg::RAX, widthOf(from), false);
         break;
     }
     defineResult(inst, info, Reg::RAX);
@@ -1050,12 +1054,9 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         }
         Width w = widthOf(entry.first->getType());
         loadInt(entry.first, entry.second, w);
-        //signed chars are passed sign-extended, bools and unsigned chars zero-extended to 32 bits, as clang does
-        if (w == Width::Byte) {
-            const sema::Type *paramType = inRegTypes[r];
-            bool zeroExtend = ir::integerBits(paramType) == 1 || sema::isUnsigned(paramType);
-            op(zeroExtend ? "movzbl" : "movsbl", { use(entry.second, Width::Byte), def(entry.second, Width::Long) });
-        }
+        //signed chars and shorts are passed sign-extended, bools and unsigned ones zero-extended to 32 bits, as clang does
+        const sema::Type *paramType = inRegTypes[r];
+        widen(entry.second, w, !(ir::integerBits(paramType) == 1 || sema::isUnsigned(paramType)));
     }
 
     bool direct = inst->callee->getKind() == ir::ValueKind::Function;
@@ -1104,6 +1105,7 @@ void FunctionEmitter::emitPhi(ir::PhiInst *phi, const InstNextUse &info) {
     if (!isIntegerLike(type)) return fail("a phi of an aggregate value is not supported");
     switch (widthOf(type)) {
     case Width::Byte: op("movzbl", { slot, def(Reg::RAX, Width::Long) }); break;
+    case Width::Word: op("movzwl", { slot, def(Reg::RAX, Width::Long) }); break;
     case Width::Long: op("movl", { slot, def(Reg::RAX, Width::Long) }); break;
     case Width::Quad: op("movq", { slot, def(Reg::RAX) }); break;
     }

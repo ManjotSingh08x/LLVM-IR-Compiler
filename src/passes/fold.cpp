@@ -130,7 +130,7 @@ bool isNumber(const Value *value) {
 }
 
 bool sameNumber(const Constant *a, const Constant *b) {
-    if (a->constKind != b->constKind || !sema::isSameType(a->getType(), b->getType())) {
+    if (a->constKind != b->constKind || !sema::isSameUnqualified(a->getType(), b->getType())) {
         return false;
     }
     if (a->constKind == ConstantKind::Int) return a->intValue == b->intValue;

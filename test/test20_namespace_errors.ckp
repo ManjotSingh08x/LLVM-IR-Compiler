@@ -1,0 +1,32 @@
+// namespace errors: each function or declaration breaks one rule, every one is reported
+
+namespace shapes {
+    int sides = 4;
+    int area(int w, int h);
+    class Secret {
+        static int hidden;
+    };
+}
+int shapes::Secret::hidden = 1;
+
+int clash = 3;
+namespace clash { int inside; }
+
+namespace twice {
+    int x = 1;
+    int x = 2;
+}
+
+int shapes::volume(int w, int h, int d) { return w * h * d; }
+int shapes::sides = 5;
+
+int unknownNamespace() { return nowhere::x; }
+int missingMember() { return shapes::corners; }
+int namespaceAsValue() { int n = shapes; return n; }
+int memberAsType() { shapes::sides count; return 0; }
+int unqualified() { return sides; }
+int privateStatic() { return shapes::Secret::hidden; }
+int usedBeforeDeclared() { return shapes::later; }
+namespace shapes { int later = 1; }
+
+int main() { return 0; }

@@ -21,7 +21,8 @@ enum class SymbolKind {
     Field,      //a non-static data member
     Function,   //a free function, a method, a constructor or a destructor
     Record,
-    Typedef     //another name for its type
+    Typedef,    //another name for its type
+    Namespace
 };
 
 //one declared name
@@ -82,10 +83,8 @@ public:
     RecordSymbol(std::string name, bool isClass, int line, int col)
         : Symbol(SymbolKind::Record, std::move(name), nullptr, line, col), isClass(isClass) {}
 
-    //Outer::Inner
-    std::string qualifiedName() const {
-        return outer ? outer->qualifiedName() + "::" + name : name;
-    }
+    //N::Outer::Inner
+    std::string qualifiedName() const;
 
     bool                          isClass;
     bool                          isComplete = false;  //set once all members are declared
@@ -97,7 +96,19 @@ public:
     FunctionSymbol               *destructor = nullptr;
 };
 
-enum class ScopeKind { Global, Record, Function, Block, Lambda };
+//namespace N: its members live in its scope, which every opening of N shares
+class NamespaceSymbol : public Symbol {
+public:
+    NamespaceSymbol(std::string name, int line, int col)
+        : Symbol(SymbolKind::Namespace, std::move(name), nullptr, line, col) {}
+
+    //N::M
+    std::string qualifiedName() const;
+
+    Scope *members = nullptr;
+};
+
+enum class ScopeKind { Global, Namespace, Record, Function, Block, Lambda };
 
 //one node of the scope tree, kept for later passes to walk
 class Scope {
@@ -125,6 +136,7 @@ public:
     int       col;
 
     RecordSymbol    *record = nullptr;    //for a record scope
+    NamespaceSymbol *space = nullptr;     //for a namespace scope
     FunctionSymbol  *function = nullptr;  //for a function scope
     ast::LambdaExpr *lambda = nullptr;    //for a lambda scope
 
@@ -133,6 +145,25 @@ public:
     llvm::StringMap<std::vector<Symbol *>>    table;
     llvm::StringMap<ast::LabelStmt *>         labels;   //for function and lambda scopes
 };
+
+//the namespaces a declaration in scope sits in, for mangled names: 1N1M, empty outside any
+std::string namespacePath(const Scope *scope);
+
+//the same as written in source: N::M::, empty outside any namespace
+std::string namespacePrefix(const Scope *scope);
+
+//where A::B:: in A::B::name points: a namespace's scope, or a class (with its member scope)
+struct QualifierTarget {
+    Scope        *scope = nullptr;
+    RecordSymbol *record = nullptr;
+    std::string   error;  //set when the qualifier names nothing usable
+    std::string   spelling() const;  //namespace 'N' or class 'C', for messages
+};
+
+//resolves the qualifier seen from scope at line:col. the first part is the nearest namespace or class
+//of that name declared before the use (or anywhere in an enclosing class), each later part a
+//namespace or class inside the one before
+QualifierTarget resolveQualifier(Scope *from, const std::vector<std::string> &qualifier, int line, int col);
 
 //root of the scope tree and owner of every compound type
 class SymbolTable {
@@ -147,6 +178,9 @@ public:
     const FunctionType *functionType(const Type *returnType, std::vector<const Type *> params,
                                      bool isVariadic);
     const Type         *recordType(RecordSymbol *record);
+
+    //the const form of a type: an array's elements become const, a reference or function is unchanged
+    const Type         *constOf(const Type *type);
     ClosureType        *closureType(ast::LambdaExpr *lambda);
 
     //writes the scope tree with every symbol, its type and its mangled name

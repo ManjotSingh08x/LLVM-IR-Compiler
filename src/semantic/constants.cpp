@@ -1,8 +1,11 @@
 #include "semantic/constants.h"
 
 #include <climits>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
+
+#include "semantic/symbols.h"
 
 namespace sema {
 
@@ -110,6 +113,16 @@ long long wrapToType(long long value, const Type *type) {
     return (long long)((low ^ sign) - sign);
 }
 
+double floatLiteral(const std::string &spelling, const Type *&type) {
+    char last = spelling.empty() ? 0 : spelling.back();
+    if (last == 'f' || last == 'F') {
+        type = floatType();
+        return std::strtof(spelling.c_str(), nullptr);
+    }
+    type = doubleType();
+    return std::strtod(spelling.c_str(), nullptr);
+}
+
 long long charLiteralValue(const std::string &spelling) {
     size_t i = 1;  //past the opening quote
     return readChar(spelling, i);
@@ -137,6 +150,29 @@ std::string decodeStringLiteral(const std::string &spelling) {
 namespace {
 
 bool evaluate(const ast::Expr *expr, long long &value);
+
+//const int N = 4; makes N a constant wherever it is used, as in C++. const int x = x + 1 names
+//itself, so the depth is bounded
+bool constVariableValue(const Symbol *symbol, long long &value) {
+    static int depth = 0;
+    if (symbol == nullptr || symbol->kind != SymbolKind::Variable || !symbol->type->isConst()
+        || !isIntegral(symbol->type) || symbol->decl == nullptr
+        || symbol->decl->getKind() != ast::ASTKind::VarDecl || depth > 32) {
+        return false;
+    }
+    const ast::VarDecl *var = static_cast<const ast::VarDecl *>(symbol->decl);
+    const ast::Expr *init = var->init.get();
+    if (init && init->getKind() == ast::ASTKind::InitListExpr) {
+        const ast::InitListExpr *list = static_cast<const ast::InitListExpr *>(init);
+        init = list->inits.size() == 1 ? list->inits[0].get() : nullptr;
+    }
+    if (var->initStyle == ast::InitStyle::CtorArgs && var->ctorArgs.size() == 1) init = var->ctorArgs[0].get();
+    depth++;
+    bool known = init && evaluateConstant(init, value);
+    depth--;
+    if (known) value = wrapToType(value, symbol->type);
+    return known;
+}
 
 //an operand's type decides signed or unsigned arithmetic, the types are null before type checking
 bool unsignedOperands(const ast::Expr *operand) { return operand->type && isUnsigned(operand->type); }
@@ -175,6 +211,8 @@ bool evaluate(const ast::Expr *expr, long long &value) {
     case ast::ASTKind::SizeofExpr:
         value = (long long)static_cast<const ast::SizeofExpr *>(expr)->size;
         return true;
+    case ast::ASTKind::DeclRefExpr:
+        return constVariableValue(static_cast<const ast::DeclRefExpr *>(expr)->symbol, value);
 
     case ast::ASTKind::UnaryExpr: {
         const ast::UnaryExpr *unary = static_cast<const ast::UnaryExpr *>(expr);

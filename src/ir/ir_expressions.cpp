@@ -33,9 +33,10 @@ Value *IRVisitor::emitRValue(ast::Expr *expr) {
         sema::intLiteral(static_cast<ast::IntLiteral *>(expr)->spelling, value, type);
         return module.getInt(expr->type, value);
     }
-    case ast::ASTKind::FloatLiteral:
-        return module.getFloat(sema::doubleType(),
-                               std::strtod(static_cast<ast::FloatLiteral *>(expr)->spelling.c_str(), nullptr));
+    case ast::ASTKind::FloatLiteral: {
+        const sema::Type *type = nullptr;
+        return module.getFloat(expr->type, sema::floatLiteral(static_cast<ast::FloatLiteral *>(expr)->spelling, type));
+    }
     case ast::ASTKind::CharLiteral:
         return module.getInt(sema::charType(), sema::charLiteralValue(static_cast<ast::CharLiteral *>(expr)->spelling));
     case ast::ASTKind::BoolLiteral:

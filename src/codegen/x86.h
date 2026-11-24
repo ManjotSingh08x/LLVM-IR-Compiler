@@ -23,18 +23,18 @@ enum class Reg {
     XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15
 };
 
-//the width an integer or pointer is worked on with: i1 and i8 are bytes, i32 long, i64 and ptr quad
-enum class Width { Byte, Long, Quad };
+//the width an integer or pointer is worked on with: i1 and i8 are bytes, i16 words, i32 long, i64 and ptr quad
+enum class Width { Byte, Word, Long, Quad };
 
 //-O3 works on virtual registers until graph colouring gives each a real one: %v<n>.q/.l/.b for
-//integers and pointers, %x<n> for floats. they are Reg values far above the physical ones
+//integers and pointers (.w for words), %x<n> for floats. they are Reg values far above the physical ones
 Reg  virtualInt(unsigned n);
 Reg  virtualFloat(unsigned n);
 bool isVirtual(Reg reg);
 
 bool        isXmm(Reg reg);
-std::string regName(Reg reg, Width width = Width::Quad);  //%rax, %eax, %al. an xmm ignores width
-char        suffix(Width width);                         //b, l or q
+std::string regName(Reg reg, Width width = Width::Quad);  //%rax, %eax, %ax, %al. an xmm ignores width
+char        suffix(Width width);                         //b, w, l or q
 
 Width widthOf(const sema::Type *type);
 bool  isFloatType(const sema::Type *type);   //float or double

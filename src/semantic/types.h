@@ -15,7 +15,7 @@ class SymbolTable;
 
 //semantic type, compare with isSameType, never by address
 enum class TypeKind {
-    Void, Bool, Char, SChar, UChar, Int, UInt, Long, ULong, Float, Double,
+    Void, Bool, Char, SChar, UChar, Short, UShort, Int, UInt, Long, ULong, Float, Double,
     Null,     //the type of the null literal, converts to any pointer
     Auto,     //an auto variable before its initializer is checked
     Error,    //the type of an expression that already produced an error
@@ -32,6 +32,11 @@ public:
 
     TypeKind getKind() const { return kind; }
     bool is(TypeKind other) const { return kind == other; }
+
+    //const int is an int with the same kind, made by SymbolTable::constOf
+    bool isConst() const { return unqualifiedType != nullptr; }
+
+    const Type *unqualifiedType = nullptr;  //for a const type, the same type without const
 
 private:
     const TypeKind kind;
@@ -95,6 +100,8 @@ const Type *boolType();
 const Type *charType();
 const Type *scharType();
 const Type *ucharType();
+const Type *shortType();
+const Type *ushortType();
 const Type *intType();
 const Type *uintType();
 const Type *longType();
@@ -114,17 +121,24 @@ const ClosureType   *asClosure(const Type *type);
 RecordSymbol        *asRecord(const Type *type);
 
 //classification
-bool isIntegral(const Type *type);    //bool, the three chars, int, unsigned, long, unsigned long
-bool isUnsigned(const Type *type);    //unsigned char, unsigned int, unsigned long
+bool isIntegral(const Type *type);    //bool, the three chars, short, int, long and their unsigned forms
+bool isUnsigned(const Type *type);    //unsigned char, short, int and long
 unsigned integerSize(const Type *type);  //bytes of an integral type, 0 for anything else
 bool isFloating(const Type *type);    //float, double
 bool isArithmetic(const Type *type);
 bool isScalar(const Type *type);      //arithmetic, pointers and null: usable as a condition
 bool isObjectPointer(const Type *type);  //a pointer that can be dereferenced to an object
 bool isError(const Type *type);
+bool isIncompleteRecord(const Type *type);  //a struct or class declared but not yet defined
 
-//structural equality: same kind and same parts, records by declaration
+//structural equality: same kind, same const and same parts, records by declaration
 bool isSameType(const Type *a, const Type *b);
+
+//isSameType with const ignored at every level, for the ir where only the representation counts
+bool isSameUnqualified(const Type *a, const Type *b);
+
+//the type without its top-level const: const int is int, const int * stays as it is
+const Type *unqualified(const Type *type);
 
 //true when base is a base of derived at any depth
 bool isDerivedFrom(const RecordSymbol *derived, const RecordSymbol *base);
@@ -135,7 +149,7 @@ const Type *stripReference(const Type *type);
 //array-to-pointer and function-to-pointer decay
 const Type *decay(const Type *type, SymbolTable &table);
 
-//bool and the chars become int, the integer promotion
+//bool, the chars and the shorts become int, the integer promotion
 const Type *promote(const Type *type);
 
 //the usual arithmetic conversions of two promoted types: double, then float, then the integer
@@ -154,6 +168,7 @@ struct ConversionStep {
 struct Conversion {
     ConversionRank              rank = ConversionRank::Impossible;
     std::vector<ConversionStep> steps;
+    bool                        addsConst = false;  //int * to const int *, int to const int &: loses a tie
 };
 
 //the implicit conversion from type from to type to

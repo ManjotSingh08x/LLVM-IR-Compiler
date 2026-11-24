@@ -24,6 +24,13 @@ struct QualifiedName {
     }
 };
 
+//N::M::name for messages and dumps, the qualifier being the parts before the name
+inline std::string qualifiedSpelling(const std::vector<std::string> &qualifier, const std::string &name) {
+    std::string out;
+    for (const std::string &part : qualifier) out += part + "::";
+    return out + name;
+}
+
 //a type as written, read inside out: int **(*p)[10] is Pointer -> Array [10] -> Pointer -> Pointer -> int
 enum class TypeSpecKind { Builtin, Named, Struct, Pointer, Reference, Array, Function };
 
@@ -45,11 +52,16 @@ public:
 
     //each declarator sharing a type name gets its own copy
     std::unique_ptr<TypeSpec> clone() const {
-        return std::unique_ptr<TypeSpec>(new TypeSpec(specKind, name, tokIndex, line, col));
+        std::unique_ptr<TypeSpec> copy(new TypeSpec(specKind, name, tokIndex, line, col));
+        copy->isConst = isConst;
+        copy->qualifier = qualifier;
+        return copy;
     }
 
     TypeSpecKind              specKind;
     std::string               name;           //for a type name
+    bool                      isConst = false;  //const int, int *const: for a type name or a pointer
+    std::vector<std::string>  qualifier;        //N::Dog: the namespaces and classes before a Named name
     int                       tokIndex = -1;  //index of the naming token in the token table
     std::unique_ptr<TypeSpec> inner;          //for the wrapping kinds
     std::unique_ptr<Expr>     size;           //for Array, null for an unsized []
@@ -150,8 +162,9 @@ public:
 };
 
 struct BaseSpecifier {
-    AccessKind  access = AccessKind::None;
-    std::string name;
+    AccessKind               access = AccessKind::None;
+    std::string              name;
+    std::vector<std::string> qualifier;  //class D : public N::Base
 };
 
 //struct or class definition
@@ -194,6 +207,18 @@ public:
     std::unique_ptr<TypeSpec> type;
 
     sema::Symbol             *symbol = nullptr;
+};
+
+//namespace N { ... }, opened again with the same name it adds to the same namespace
+class NamespaceDecl : public Decl {
+public:
+    NamespaceDecl(std::string name, NodeList<Decl> decls, int line, int col)
+        : Decl(ASTKind::NamespaceDecl, line, col), name(std::move(name)), decls(std::move(decls)) {}
+
+    std::string    name;
+    NodeList<Decl> decls;
+
+    sema::Scope   *scope = nullptr;  //the namespace's scope, shared by every opening
 };
 
 } // namespace ast

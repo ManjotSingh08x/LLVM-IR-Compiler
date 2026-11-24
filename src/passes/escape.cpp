@@ -45,13 +45,13 @@ EscapeInfo::EscapeInfo(const Function &fn) {
             for (const Instruction *user : users[address]) {
                 switch (user->getOpcode()) {
                 case Opcode::Load:
-                    if (address != alloca || !sema::isSameType(user->getType(), slotType)) wholeAccessOnly = false;
+                    if (address != alloca || !sema::isSameUnqualified(user->getType(), slotType)) wholeAccessOnly = false;
                     break;
                 case Opcode::Store: {
                     const StoreInst *store = static_cast<const StoreInst *>(user);
                     if (store->value == address) {
                         escapes = true;  //the address itself is written to memory
-                    } else if (address != alloca || !sema::isSameType(store->getAccessType(), slotType)) {
+                    } else if (address != alloca || !sema::isSameUnqualified(store->getAccessType(), slotType)) {
                         wholeAccessOnly = false;
                     }
                     break;

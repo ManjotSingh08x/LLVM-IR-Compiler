@@ -53,11 +53,14 @@ private:
     void declareBuiltins();
     void declareRecord(ast::RecordDecl *node, Scope *scope, RecordSymbol *outer);
     void declareMethod(ast::FunctionDecl *node, RecordSymbol *record, ast::AccessKind access);
+    void declareTopLevel(ast::Decl *decl);
+    void declareNamespace(ast::NamespaceDecl *node);
     void declareFunction(ast::FunctionDecl *node);
-    void defineMethod(ast::FunctionDecl *node);
+    void defineMethod(ast::FunctionDecl *node, RecordSymbol *record);
+    void defineNamespaceFunction(ast::FunctionDecl *node, const QualifierTarget &target);
     void declareGlobal(ast::VarDecl *node);
     Symbol *declareTypedef(ast::TypedefDecl *node, Scope *scope);
-    void defineStaticMember(ast::VarDecl *node);
+    void defineStaticMember(ast::VarDecl *node, RecordSymbol *record);
     Symbol *declareVariable(ast::VarDecl *node, Scope *scope, SymbolKind kind);
 
     //pass 2
@@ -71,9 +74,10 @@ private:
     const Type         *parameterType(ast::ParamDecl *param, Scope *scope);
     const FunctionType *signatureOf(ast::FunctionDecl *node, Scope *scope);
     const Type         *sizeFromInitializer(const Type *type, ast::VarDecl *node);
-    RecordSymbol       *findRecord(const std::string &name, Scope *scope);
-    const Type         *findTypeName(const std::string &name, Scope *scope);
-    RecordSymbol       *findRecordPath(const ast::QualifiedName &name, int line, int col);
+    RecordSymbol       *findRecord(const std::string &name, Scope *scope, int line, int col);
+    const Type         *findTypeName(const std::string &name, Scope *scope, int line, int col);
+    const Type         *findQualifiedType(const std::vector<std::string> &qualifier, const std::string &name,
+                                          Scope *scope, int line, int col, std::string &error);
 
     //names
     bool            isFree(Scope *scope, const std::string &name, int line, int col);

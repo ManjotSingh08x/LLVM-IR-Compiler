@@ -1,0 +1,80 @@
+// namespaces: nested and reopened namespaces, the same name at file scope and in two namespaces,
+// functions and static members defined outside their namespace or class, qualified names as values,
+// calls, types, base classes and array sizes, Class::static members and Base::method() from a
+// derived class. names inside a namespace get its parts in their mangled names
+
+int value = 1;
+int describe(int x) { return x; }
+
+namespace geometry {
+    const int SIDES = 4;
+    int value = 10;
+    struct Point { int x; int y; };
+    int describe(int x) { return x * 100 + value; }
+    int area(Point p) { return p.x * p.y; }
+    int perimeter(int a, int b);
+
+    namespace detail {
+        int value = 20;
+        int scale(int x) { return x * value + geometry::value; }
+        class Counter {
+        public:
+            static int total;
+            static int bump() { total++; return total; }
+            int id;
+            Counter(int start) { id = start; }
+        };
+    }
+}
+
+namespace geometry {
+    int doubled(int x) { return describe(x) * 2; }
+    double ratio(double a) { return a / SIDES; }
+}
+
+int geometry::perimeter(int a, int b) { return 2 * (a + b); }
+int geometry::detail::Counter::total = 5;
+
+class Shape {
+public:
+    static int count;
+    static int next() { return ++count; }
+    int sides() { return 3; }
+};
+int Shape::count = 0;
+
+class Square : public Shape {
+public:
+    int sides() { return Shape::sides() + 1; }
+};
+
+struct Box : geometry::Point { int z; };
+
+geometry::Point makePoint(int x, int y) {
+    geometry::Point p = {x, y};
+    return p;
+}
+
+int main() {
+    geometry::Point p = makePoint(3, 4);
+    geometry::detail::Counter c(7);
+    geometry::Point *pp = &p;
+    int squares[geometry::SIDES];
+    for (int i = 0; i < geometry::SIDES; i++) squares[i] = i * i;
+    Square sq;
+    Box b;
+    b.x = 2; b.y = 5; b.z = 9;
+    printf("%d %d %d %d\n", value, geometry::value, geometry::detail::value, describe(5));
+    printf("%d %d %d %d\n", geometry::describe(5), geometry::area(p), geometry::perimeter(3, 4), geometry::doubled(1));
+    printf("%d %d %d %f\n", geometry::detail::scale(2), geometry::detail::Counter::bump(), c.id, geometry::ratio(10.0));
+    printf("%d %d %d %d\n", Shape::next(), Shape::next(), Shape::count, sq.sides());
+    printf("%d %d %d %d\n", pp->x, squares[3], (int)sizeof(squares), geometry::area(b) + b.z);
+    geometry::value = 50;
+    printf("%d %d\n", geometry::describe(1), geometry::detail::scale(1));
+    return 0;
+}
+
+// IR: %struct.Box = type { %struct.geometry.Point, i32 }
+// IR: @class_8geometry6detail7Counter_5total = global i32 5
+// IR: @global_8geometry5value = global i32 10
+// IR: @global_8geometry6detail5value = global i32 20

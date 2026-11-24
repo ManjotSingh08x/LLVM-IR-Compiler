@@ -85,9 +85,11 @@ private:
         RecordSymbol          *namingRecord = nullptr;  //when found as a member: the record searched
         std::vector<BaseClass> path;                  //the bases walked from namingRecord to the member
         bool                   ambiguous = false;     //found in two different bases
+        bool                   reported = false;      //not found, and the error is already given
     };
 
     //declarations
+    void checkTopLevel(ast::Decl *decl);
     void checkRecord(ast::RecordDecl *node);
     void checkFunction(ast::FunctionDecl *node);
     void checkVarDecl(ast::VarDecl *node);
@@ -100,6 +102,7 @@ private:
 
     //names
     Lookup lookupName(const std::string &name, int line, int col);
+    Lookup lookupRef(ast::DeclRefExpr *node);
     bool   lookupMember(RecordSymbol *record, const std::string &name, Lookup &result);
     void   captureVariable(Symbol *symbol, const std::vector<Scope *> &lambdas, int line, int col);
     RecordSymbol *thisRecord(int line, int col);
@@ -120,6 +123,7 @@ private:
     //values
     const Type *check(std::unique_ptr<ast::Expr> &expr);
     const Type *decayValue(std::unique_ptr<ast::Expr> &expr);
+    Conversion  conversionOf(ast::Expr *expr, const Type *to);
     bool        convert(std::unique_ptr<ast::Expr> &expr, const Type *to, const std::string &what);
     void        wrap(std::unique_ptr<ast::Expr> &expr, ast::CastKind kind, const Type *type);
     void        checkCondition(std::unique_ptr<ast::Expr> &cond, const std::string &what);

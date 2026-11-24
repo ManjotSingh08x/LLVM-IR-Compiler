@@ -110,7 +110,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
                 if (!isScalarType(load->getType())) break;
                 Value *same = nullptr;
                 for (size_t i = known.size(); i-- > 0;) {
-                    if (known[i].address == load->address && sema::isSameType(known[i].type, load->getType())) {
+                    if (known[i].address == load->address && sema::isSameUnqualified(known[i].type, load->getType())) {
                         same = known[i].value;
                         break;
                     }

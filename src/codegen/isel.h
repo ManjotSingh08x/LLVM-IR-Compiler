@@ -70,6 +70,7 @@ private:
     void emitGEP(ir::GEPInst *inst, const InstNextUse &info);
     void emitBinary(ir::BinaryInst *inst, const InstNextUse &info);
     Reg  divideByPowerOfTwo(bool remainder, Width width, unsigned shift);
+    void widen(Reg reg, Width width, bool isSigned);
     void emitIntCompare(ir::BinaryInst *inst);  //sets the flags only
     void emitFloatBinary(ir::BinaryInst *inst, const InstNextUse &info);
     void emitUnary(ir::UnaryInst *inst, const InstNextUse &info);

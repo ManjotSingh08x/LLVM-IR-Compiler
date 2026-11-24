@@ -104,6 +104,34 @@ ast::Expr *withoutParens(ast::Expr *expr) {
     return expr;
 }
 
+//the object a member is reached through: s in s.x, *p in p->x, after findMember decays p
+bool isConstObject(const ast::MemberExpr *node) {
+    const Type *base = node->base->type;
+    if (!node->isArrow) return base->isConst();
+    const PointerType *pointer = asPointer(base);
+    return pointer && pointer->pointee->isConst();
+}
+
+//const int, int *const or an array of const elements
+bool isConstObjectType(const Type *type) {
+    while (asArray(type)) type = asArray(type)->element;
+    return type->isConst();
+}
+
+//a const member, at any depth, makes a whole object of the record unassignable
+const Symbol *constField(const RecordSymbol *record) {
+    for (const Symbol *field : record->fields) {
+        const Type *type = field->type;
+        while (asArray(type)) type = asArray(type)->element;
+        if (type->isConst()) return field;
+        if (asRecord(type) && constField(asRecord(type))) return field;
+    }
+    for (const BaseClass &base : record->bases) {
+        if (const Symbol *field = constField(base.record)) return field;
+    }
+    return nullptr;
+}
+
 std::string argumentTypes(const ast::NodeList<ast::Expr> &args) {
     std::string out = "(";
     for (size_t i = 0; i < args.size(); i++) {
@@ -117,22 +145,34 @@ std::string argumentTypes(const ast::NodeList<ast::Expr> &args) {
 
 void TypeChecker::check(ast::Program *program) {
     current = program->scope;
-    for (const std::unique_ptr<ast::Decl> &decl : program->decls) {
-        switch (decl->getKind()) {
-        case ast::ASTKind::RecordDecl:
-            checkRecord(static_cast<ast::RecordDecl *>(decl.get()));
-            break;
-        case ast::ASTKind::FunctionDecl:
-        case ast::ASTKind::ConstructorDecl:
-        case ast::ASTKind::DestructorDecl:
-            checkFunction(static_cast<ast::FunctionDecl *>(decl.get()));
-            break;
-        case ast::ASTKind::VarDecl:
-            checkVarDecl(static_cast<ast::VarDecl *>(decl.get()));
-            break;
-        default:
-            break;
-        }
+    for (const std::unique_ptr<ast::Decl> &decl : program->decls) checkTopLevel(decl.get());
+}
+
+//a declaration at file scope or in a namespace, whose scope is current
+void TypeChecker::checkTopLevel(ast::Decl *decl) {
+    switch (decl->getKind()) {
+    case ast::ASTKind::RecordDecl:
+        checkRecord(static_cast<ast::RecordDecl *>(decl));
+        break;
+    case ast::ASTKind::FunctionDecl:
+    case ast::ASTKind::ConstructorDecl:
+    case ast::ASTKind::DestructorDecl:
+        checkFunction(static_cast<ast::FunctionDecl *>(decl));
+        break;
+    case ast::ASTKind::VarDecl:
+        checkVarDecl(static_cast<ast::VarDecl *>(decl));
+        break;
+    case ast::ASTKind::NamespaceDecl: {
+        ast::NamespaceDecl *space = static_cast<ast::NamespaceDecl *>(decl);
+        if (space->scope == nullptr) break;
+        Scope *saved = current;
+        current = space->scope;
+        for (const std::unique_ptr<ast::Decl> &member : space->decls) checkTopLevel(member.get());
+        current = saved;
+        break;
+    }
+    default:
+        break;
     }
 }
 
@@ -175,6 +215,18 @@ void TypeChecker::checkFunction(ast::FunctionDecl *node) {
     context.returnType = fn->signature()->returnType;
     current = node->scope;
 
+    //a definition needs the size of its return value and of every parameter
+    if (isIncompleteRecord(context.returnType)) {
+        diags.error(node->line, node->col, "'" + node->name.str() + "' returns the incomplete type '"
+                                               + typeToString(context.returnType) + "'");
+    }
+    for (const Type *param : fn->signature()->params) {
+        if (isIncompleteRecord(param)) {
+            diags.error(node->line, node->col, "'" + node->name.str() + "' takes the incomplete type '"
+                                                   + typeToString(param) + "'");
+        }
+    }
+
     visit(node->body.get());
     resolveGotos(current);
     context = saved;
@@ -214,11 +266,14 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
             return;
         }
         check(*value);
-        const Type *deduced = decayValue(*value);
+        //auto copies the value, so the source's own const is dropped; const auto keeps the copy const
+        const Type *deduced = unqualified(decayValue(*value));
         if (deduced->is(TypeKind::Void) || deduced->is(TypeKind::Null)) {
             diags.error(node->line, node->col, "'auto' cannot be deduced from a value of type '"
                                                    + typeToString(deduced) + "'");
             deduced = errorType();
+        } else if (symbol->type->isConst()) {
+            deduced = table.constOf(deduced);
         }
         if (node->initStyle == ast::InitStyle::Brace) node->init->type = deduced;
         symbol->type = deduced;
@@ -230,6 +285,10 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     RecordSymbol *record = asRecord(type);
     switch (node->initStyle) {
     case ast::InitStyle::None:
+        //a const member gets its value from a constructor, a brace list or a definition outside the class
+        if (isConstObjectType(type) && !record && symbol->kind == SymbolKind::Variable && !symbol->parentRecord) {
+            diags.error(node->line, node->col, "the const variable '" + node->name.str() + "' must be initialised");
+        }
         if (record) {
             node->constructor = construct(record, node->ctorArgs, node->line, node->col);
         } else if (const ArrayType *array = asArray(type)) {
@@ -406,6 +465,33 @@ TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, i
     return result;
 }
 
+//a name as written: N::f looks only where its qualifier points, f looks outward from here
+TypeChecker::Lookup TypeChecker::lookupRef(ast::DeclRefExpr *node) {
+    if (node->qualifier.empty()) return lookupName(node->name, node->line, node->col);
+
+    Lookup result;
+    std::string spelled = ast::qualifiedSpelling(node->qualifier, node->name);
+    QualifierTarget target = resolveQualifier(current, node->qualifier, node->line, node->col);
+    if (!target.error.empty()) {
+        diags.error(node->line, node->col, target.error);
+        result.reported = true;
+        return result;
+    }
+    if (target.record) {
+        if (lookupMember(target.record, node->name, result)) result.namingRecord = target.record;
+    } else if (const std::vector<Symbol *> *found = target.scope->find(node->name)) {
+        for (Symbol *symbol : *found) {
+            bool before = symbol->line < node->line || (symbol->line == node->line && symbol->col < node->col);
+            if (symbol->line == 0 || before) result.symbols.push_back(symbol);
+        }
+    }
+    if (result.symbols.empty()) {
+        diags.error(node->line, node->col, "no member named '" + node->name + "' in " + target.spelling());
+        result.reported = true;
+    }
+    return result;
+}
+
 //own members first, then each base, ambiguous when found through two
 bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lookup &result) {
     if (const std::vector<Symbol *> *found = record->members->find(name)) {
@@ -471,7 +557,7 @@ RecordSymbol *TypeChecker::thisRecord(int line, int col) {
             if (scope->function && scope->function->isMethod()) return scope->function->parentRecord;
             break;
         }
-        if (scope->kind == ScopeKind::Record || scope->kind == ScopeKind::Global) break;
+        if (scope->kind == ScopeKind::Record || scope->kind == ScopeKind::Global || scope->kind == ScopeKind::Namespace) break;
     }
     diags.error(line, col, "'this' can only be used inside a non-static member function");
     return nullptr;
@@ -529,7 +615,7 @@ void TypeChecker::checkAccess(Symbol *member, const Lookup &lookup, int line, in
 
 const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &lookup) {
     if (lookup.symbols.empty()) {
-        diags.error(node->line, node->col, "use of undeclared identifier '" + node->name + "'");
+        if (!lookup.reported) diags.error(node->line, node->col, "use of undeclared identifier '" + node->name + "'");
         return setType(node, errorType(), false);
     }
     if (lookup.ambiguous) {
@@ -543,6 +629,10 @@ const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &loo
     case SymbolKind::Record:
     case SymbolKind::Typedef:
         diags.error(node->line, node->col, "'" + node->name + "' is a type, not a value");
+        return setType(node, errorType(), false);
+
+    case SymbolKind::Namespace:
+        diags.error(node->line, node->col, "'" + node->name + "' is a namespace, not a value");
         return setType(node, errorType(), false);
 
     case SymbolKind::Function: {
@@ -594,6 +684,10 @@ bool TypeChecker::findMember(ast::MemberExpr *node, Lookup &result) {
                                                + "a class or struct, not '" + typeToString(base) + "'");
         return false;
     }
+    if (!record->isComplete) {
+        diags.error(node->line, node->col, "member access into incomplete type '" + record->qualifiedName() + "'");
+        return false;
+    }
     if (!lookupMember(record, node->member, result)) {
         diags.error(node->line, node->col, "no member named '" + node->member + "' in '"
                                                + record->qualifiedName() + "'");
@@ -622,7 +716,10 @@ const Type *TypeChecker::finishMember(ast::MemberExpr *node, const Lookup &looku
     checkAccess(symbol, lookup, node->line, node->col);
     //through a pointer the member is an lvalue, with . when the object is, static always
     bool isLValue = node->isArrow || node->base->isLValue || symbol->kind == SymbolKind::Variable;
-    return setType(node, symbol->type, isLValue);
+    //a field of a const object is const too, a static member belongs to no object
+    const Type *type = symbol->type;
+    if (symbol->kind == SymbolKind::Field && isConstObject(node) && !asReference(type)) type = table.constOf(type);
+    return setType(node, type, isLValue);
 }
 
 //calls
@@ -635,18 +732,19 @@ FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> 
         if (isError(arg->type)) return nullptr;
     }
 
+    //each argument's rank, and within a rank the conversion that adds no const is better
     std::vector<FunctionSymbol *> viable;
-    std::vector<std::vector<ConversionRank>> ranks;
+    std::vector<std::vector<int>> ranks;
     for (FunctionSymbol *candidate : candidates) {
         const FunctionType *signature = candidate->signature();
         if (args.size() < signature->params.size()) continue;
         if (args.size() > signature->params.size() && !signature->isVariadic) continue;
-        std::vector<ConversionRank> rank;
+        std::vector<int> rank;
         bool fits = true;
         for (size_t i = 0; i < signature->params.size() && fits; i++) {
-            Conversion conversion = findConversion(args[i]->type, args[i]->isLValue, signature->params[i], table);
+            Conversion conversion = conversionOf(args[i].get(), signature->params[i]);
             fits = conversion.rank != ConversionRank::Impossible;
-            rank.push_back(conversion.rank);
+            rank.push_back((int)conversion.rank * 2 + (conversion.addsConst ? 1 : 0));
         }
         if (!fits) continue;
         viable.push_back(candidate);
@@ -710,6 +808,10 @@ void TypeChecker::applyArguments(const FunctionType *signature, ast::NodeList<as
 
 const Type *TypeChecker::callResult(ast::CallExpr *node, const FunctionType *signature) {
     const Type *result = signature->returnType;
+    if (isIncompleteRecord(result)) {
+        diags.error(node->line, node->col, "the call returns the incomplete type '" + typeToString(result) + "'");
+        return setType(node, errorType(), false);
+    }
     return setType(node, stripReference(result), asReference(result) != nullptr);
 }
 
@@ -763,11 +865,22 @@ void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line
     }
 }
 
+//findConversion, but a string literal may still initialise a char *, as clang and gcc allow
+Conversion TypeChecker::conversionOf(ast::Expr *expr, const Type *to) {
+    const PointerType *pointer = asPointer(unqualified(to));
+    if (withoutParens(expr)->getKind() == ast::ASTKind::StringLiteral && pointer
+        && pointer->pointee->is(TypeKind::Char) && !pointer->pointee->isConst()) {
+        return findConversion(table.arrayOf(charType(), asArray(expr->type)->size), true, to, table);
+    }
+    return findConversion(expr->type, expr->isLValue, to, table);
+}
+
 bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, const std::string &what) {
-    Conversion conversion = findConversion(expr->type, expr->isLValue, to, table);
+    Conversion conversion = conversionOf(expr.get(), to);
     if (conversion.rank == ConversionRank::Impossible) {
         if (asReference(to) && !expr->isLValue && !isError(expr->type)) {
-            diags.error(expr->line, expr->col, "a reference in " + what + " must be bound to an object, not a value");
+            diags.error(expr->line, expr->col, "a reference in " + what + " must be bound to an object, not a value"
+                                                   + " (only a const reference binds to a temporary)");
         } else {
             diags.error(expr->line, expr->col, "cannot convert '" + typeToString(expr->type) + "' to '"
                                                    + typeToString(to) + "' in " + what);
@@ -780,8 +893,9 @@ bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, cons
             checkBaseConversion(expr->type, step.result, expr->line, expr->col, what);
         }
         wrap(expr, step.kind, step.result);
-        //a reference binds to the base part of the same object
-        if (bindsReference) expr->isLValue = true;
+        //a reference binds to the base part of the same object; any other step makes a value that a
+        //const reference binds to as a temporary
+        if (bindsReference && step.kind == ast::CastKind::DerivedToBase) expr->isLValue = true;
     }
     return true;
 }
@@ -808,6 +922,18 @@ bool TypeChecker::checkModifiable(ast::Expr *expr, const std::string &what) {
     if (!expr->isLValue || asArray(expr->type) || asFunction(expr->type) || asClosure(expr->type)) {
         diags.error(expr->line, expr->col, "the operand of " + what + " must be a variable that can be changed");
         return false;
+    }
+    if (expr->type->isConst()) {
+        diags.error(expr->line, expr->col, "the operand of " + what + " is const ('" + typeToString(expr->type)
+                                               + "') and cannot be changed");
+        return false;
+    }
+    if (RecordSymbol *record = asRecord(expr->type)) {
+        if (const Symbol *field = constField(record)) {
+            diags.error(expr->line, expr->col, "'" + record->qualifiedName() + "' cannot be assigned because its member '"
+                                                   + field->name + "' is const");
+            return false;
+        }
     }
     return true;
 }
@@ -911,7 +1037,7 @@ const Type *TypeChecker::visitReturnStmt(ast::ReturnStmt *node) {
         const Type *type = voidType();
         if (node->value) {
             check(node->value);
-            type = decayValue(node->value);
+            type = unqualified(decayValue(node->value));
         }
         if (isError(type)) return nullptr;
         if (context.returnType == nullptr) {
@@ -1008,14 +1134,18 @@ const Type *TypeChecker::visitIntLiteral(ast::IntLiteral *node) {
     return setType(node, type, false);
 }
 
-const Type *TypeChecker::visitFloatLiteral(ast::FloatLiteral *node) { return setType(node, doubleType(), false); }
+const Type *TypeChecker::visitFloatLiteral(ast::FloatLiteral *node) {
+    const Type *type = nullptr;
+    floatLiteral(node->spelling, type);
+    return setType(node, type, false);
+}
 
 const Type *TypeChecker::visitCharLiteral(ast::CharLiteral *node) { return setType(node, charType(), false); }
 
 //a string literal is an array of its characters and the closing \0
 const Type *TypeChecker::visitStringLiteral(ast::StringLiteral *node) {
     uint64_t size = stringLiteralLength(node->spelling) + 1;
-    return setType(node, table.arrayOf(charType(), size), true);
+    return setType(node, table.arrayOf(table.constOf(charType()), size), true);
 }
 
 const Type *TypeChecker::visitBoolLiteral(ast::BoolLiteral *node) { return setType(node, boolType(), false); }
@@ -1029,7 +1159,7 @@ const Type *TypeChecker::visitThisExpr(ast::ThisExpr *node) {
 }
 
 const Type *TypeChecker::visitDeclRefExpr(ast::DeclRefExpr *node) {
-    return finishDeclRef(node, lookupName(node->name, node->line, node->col));
+    return finishDeclRef(node, lookupRef(node));
 }
 
 const Type *TypeChecker::visitParenExpr(ast::ParenExpr *node) {
@@ -1162,19 +1292,21 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     case ast::BinaryOp::Add:
         if (isObjectPointer(left) && isIntegral(right)) {
             convert(node->rhs, indexType(right), "an operand");
-            return setType(node, left, false);
+            return setType(node, unqualified(left), false);
         }
         if (isIntegral(left) && isObjectPointer(right)) {
             convert(node->lhs, indexType(left), "an operand");
-            return setType(node, right, false);
+            return setType(node, unqualified(right), false);
         }
         break;
     case ast::BinaryOp::Sub:
         if (isObjectPointer(left) && isIntegral(right)) {
             convert(node->rhs, indexType(right), "an operand");
-            return setType(node, left, false);
+            return setType(node, unqualified(left), false);
         }
-        if (isObjectPointer(left) && isObjectPointer(right) && isSameType(left, right)) {
+        //const int * - int * is fine: only the objects pointed at must be of one type
+        if (isObjectPointer(left) && isObjectPointer(right)
+            && isSameType(unqualified(asPointer(left)->pointee), unqualified(asPointer(right)->pointee))) {
             return setType(node, intType(), false);
         }
         break;
@@ -1274,6 +1406,8 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
         convert(node->falseExpr, common, "a ?: branch");
         return setType(node, common, false);
     }
+    t = unqualified(t);
+    f = unqualified(f);
     if (isSameType(t, f)) return setType(node, t, false);
     if (findConversion(f, false, t, table).rank != ConversionRank::Impossible && !isArithmetic(t)) {
         convert(node->falseExpr, t, "a ?: branch");
@@ -1300,8 +1434,8 @@ const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
 
     if (callee->getKind() == ast::ASTKind::DeclRefExpr) {
         ast::DeclRefExpr *ref = static_cast<ast::DeclRefExpr *>(callee);
-        lookup = lookupName(ref->name, ref->line, ref->col);
-        name = ref->name;
+        lookup = lookupRef(ref);
+        name = ast::qualifiedSpelling(ref->qualifier, ref->name);
         if (lookup.symbols.empty() || lookup.symbols[0]->kind != SymbolKind::Function || lookup.ambiguous) {
             finishDeclRef(ref, lookup);
         }
@@ -1329,6 +1463,12 @@ const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
             return setType(node, errorType(), false);
         }
         checkAccess(fn, lookup, node->line, node->col);
+        if (viaMember && fn->isMethod() && isConstObject(static_cast<ast::MemberExpr *>(callee))) {
+            diags.error(node->line, node->col, "'" + name + "' cannot be called on a const object"
+                                                   " (const member functions are not supported)");
+            setType(callee, errorType(), false);
+            return setType(node, errorType(), false);
+        }
 
         if (viaMember) {
             static_cast<ast::MemberExpr *>(callee)->symbol = fn;
@@ -1516,9 +1656,9 @@ const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
 
     std::vector<const Type *> params;
     for (const std::unique_ptr<ast::ParamDecl> &param : node->params) {
-        params.push_back(param->symbol ? param->symbol->type : errorType());
+        params.push_back(param->symbol ? unqualified(param->symbol->type) : errorType());
     }
-    const Type *returnType = context.returnType ? context.returnType : voidType();
+    const Type *returnType = context.returnType ? unqualified(context.returnType) : voidType();
     closure->signature = table.functionType(returnType, params, false);
 
     context = saved;

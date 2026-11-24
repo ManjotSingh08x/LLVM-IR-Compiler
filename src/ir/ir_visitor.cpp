@@ -73,9 +73,29 @@ Function *IRVisitor::functionFor(const sema::FunctionSymbol *fn) {
 
 //  pass 2 
 
-void IRVisitor::emitGlobalVariables(ast::Program *program) {
-    for (const std::unique_ptr<ast::Decl> &decl : program->decls) {
+void IRVisitor::emitGlobalVariables(ast::Program *program) { emitGlobalVariables(program->decls); }
+
+//file scope, and each namespace's declarations in turn
+void IRVisitor::emitGlobalVariables(const ast::NodeList<ast::Decl> &decls) {
+    for (const std::unique_ptr<ast::Decl> &decl : decls) {
         if (decl->getKind() == ast::ASTKind::VarDecl) emitGlobalVariable(static_cast<ast::VarDecl *>(decl.get()));
+        if (decl->getKind() == ast::ASTKind::RecordDecl) emitStaticMemberValues(static_cast<ast::RecordDecl *>(decl.get()));
+        if (decl->getKind() == ast::ASTKind::NamespaceDecl) {
+            emitGlobalVariables(static_cast<ast::NamespaceDecl *>(decl.get())->decls);
+        }
+    }
+}
+
+//static const int SIZE = 4; written inside the class gives the static member its value
+void IRVisitor::emitStaticMemberValues(ast::RecordDecl *record) {
+    for (const std::unique_ptr<ast::Decl> &member : record->members) {
+        if (member->getKind() == ast::ASTKind::RecordDecl) {
+            emitStaticMemberValues(static_cast<ast::RecordDecl *>(member.get()));
+            continue;
+        }
+        if (member->getKind() != ast::ASTKind::VarDecl) continue;
+        ast::VarDecl *var = static_cast<ast::VarDecl *>(member.get());
+        if (var->symbol && var->symbol->isStatic && var->initStyle != ast::InitStyle::None) emitGlobalVariable(var);
     }
 }
 
@@ -86,7 +106,9 @@ void IRVisitor::emitGlobalVariable(ast::VarDecl *decl) {
 
     GlobalVariable *global = nullptr;
     if (symbol->parentRecord) {
-        //int Counter::total = 0; defines the static member made in pass 1
+        //int Counter::total = 0; defines the static member made in pass 1. a definition without a value
+        //keeps the one given in the class, or zero
+        if (decl->initStyle == ast::InitStyle::None && !sema::asRecord(type)) return;
         global = module.findGlobal(symbol->mangledName);
     } else {
         Linkage linkage = symbol->isStatic ? Linkage::Internal : Linkage::External;
@@ -145,6 +167,11 @@ void IRVisitor::emitDefinitions(ast::Decl *decl) {
     case ast::ASTKind::RecordDecl: {
         ast::RecordDecl *record = static_cast<ast::RecordDecl *>(decl);
         for (const std::unique_ptr<ast::Decl> &member : record->members) emitDefinitions(member.get());
+        break;
+    }
+    case ast::ASTKind::NamespaceDecl: {
+        ast::NamespaceDecl *space = static_cast<ast::NamespaceDecl *>(decl);
+        for (const std::unique_ptr<ast::Decl> &member : space->decls) emitDefinitions(member.get());
         break;
     }
     case ast::ASTKind::FunctionDecl:

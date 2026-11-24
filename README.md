@@ -62,7 +62,6 @@ To debug the optimizer:
 - **Expressions:**
   - C++ casts other than `static_cast` such as `const_cast`, `reinterpret_cast`, `dynamic_cast`. 
   - C-style casts to a bare class name, such as `(Dog *)p` or `(Number)d`.
-  - `sizeof` of a bare typedef/class name with `*` or `[]`, such as `sizeof(Dog *)` (`sizeof(Dog)` works).
 - **C++ features not supported:**
   - templates, exceptions;
   - virtual functions, operator overloading, constructor initialiser lists;

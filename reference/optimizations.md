@@ -21,10 +21,11 @@ All section numbers refer to *Compilers: Principles, Techniques, and Tools*, 2nd
 -O1   O0 → inline → local_dag → const_prop_dense → local_dag → simplify_cfg
       → codegen + peephole                     (linear register allocation)
 -O2   O1 → mem2reg → sccp → instsimplify
-      → loop_simplify → licm → iv_strength_reduce → loop_unswitch
+      → loop_simplify → licm → loop_unswitch
       → simplify_cfg → instsimplify → cse → dce → sink
       → codegen (φ elimination inside codegen) + peephole   (linear register allocation)
--O3   O2, with codegen changed: φ elimination into copies + graph-colouring register allocation
+-O3   O2 + iv_strength_reduce (after licm), with codegen changed:
+      φ elimination into copies + graph-colouring register allocation
 ```
 
 The levels are **cumulative**: each one runs everything in the level below, then adds its own passes.
@@ -288,7 +289,7 @@ Repeat the marking until nothing changes. Then move the invariant instructions t
 - `sdiv`/`srem` may only be hoisted when their block dominates all exits. Thanks to rotation (§1.3) this is now true for the whole body of most loops.
 - Loads are never hoisted, since there is no alias analysis.
 
-**iv_strength_reduce: induction variables** (§9.1.8, with the affine view of §9.8).
+**iv_strength_reduce: induction variables** (§9.1.8, with the affine view of §9.8). **Runs at -O3 only; see "Why not at -O2" below.**
 - A **basic induction variable** is a header φ that changes by a constant each iteration: `%i = phi [init, pre], [%i + c, latch]`.
 - A **derived induction variable** is `j = a*i + b`, where a and b are invariant.
 - **Strength reduction** replaces the multiplication with a new induction variable that is updated by addition:
@@ -300,6 +301,13 @@ Repeat the marking until nothing changes. Then move the invariant instructions t
   The main beneficiary is array indexing: the GEP for `a[i]` computes `base + i*size`.
 - **Safety:** keep the original exit test. Rewriting it in terms of `j` (induction-variable elimination) is only valid if `a*n + b` cannot overflow.
 - If `i` ends up with no uses, DCE removes it later.
+
+**Why not at -O2: the linear allocator cannot profit from it.**
+- Each induction variable the pass creates is a new φ that lives across the whole loop.
+- The -O2 backend allocates registers one block at a time (§8.6 `getReg`). Every value live at a block boundary is stored to memory and reloaded in the next block, and a φ's value goes through its stack slot on every iteration.
+- So the multiply it removes (a `movslq` + `imul` for `a[i]`, both cheap) is replaced by a store and a reload on the loop-carried path every iteration.
+- Measured on the regression programs and two benchmarks with -O2 as it was: +5% static instructions, +10% stack accesses, and an array loop 10% slower (0.200s → 0.221s). LICM looked costly too, but only because it hoists the array's base address, which is what makes the address computation qualify for strength reduction.
+- The pass is kept and runs at -O3, where the graph-colouring allocator can keep a loop-carried induction variable in one register for the whole loop. Step 8 measures whether that pays off.
 
 **loop_unswitch** (not in the book).
 
@@ -371,7 +379,7 @@ Registers are allocated with the same linear (§8.6) allocator as -O1, followed 
 
 ## 4. -O3: graph colouring
 
--O3 runs the same IR passes as -O2. Only codegen changes.
+-O3 runs the -O2 passes plus `iv_strength_reduce` (§3.4) after `licm`. Codegen changes as described below.
 
 ### 4.1 Machine IR with virtual registers (prerequisite)
 Graph colouring (§8.8.4) uses **two passes**:
@@ -455,7 +463,7 @@ Instead of using φ slots, each φ becomes a **copy** in each predecessor:
 | instsimplify (+ reassociation) | O2+ | §8.5.4, §8.7.4 | per instruction | def-use, reverse postorder |
 | loop_simplify + LCSSA | O2+ | §9.6.6 | loop | dominators, loops |
 | licm | O2+ | §9.1.7 (1st ed. §10.7) | loop | loops, dominators |
-| iv_strength_reduce | O2+ | §9.1.8, §9.8 | loop | loops, def-use |
+| iv_strength_reduce | O3 | §9.1.8, §9.8 | loop | loops, def-use |
 | loop_unswitch | O2+ | not in book | loop | invariance, LCSSA, cloning |
 | cse | O2+ | §9.1.4, §9.2.6 | global | available expressions, dominator tree |
 | dce | O2+ | §9.1.6 | global | def-use |

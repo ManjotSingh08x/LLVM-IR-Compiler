@@ -1,0 +1,65 @@
+q/ regression: global cse, dce and sink. an expression computed in a block and again in a block it
+// dominates is computed once; one computed on two separate paths is not merged (that would need
+// partial-redundancy elimination); a variable summed in a loop and never read disappears (a cycle
+// of phis that only feeds itself); a value used on one side of a branch moves down into it.
+// the inputs come from stdin (test/regression/inputs): 6 4 1
+
+int dominated(int a, int b, int c) {
+    int x = a * b + 7;
+    int r = x;
+    if (c > 0) {
+        int y = a * b + 7;  //the same as x: reused
+        r = r + y;
+    }
+    return r;
+}
+
+int separatePaths(int a, int b, int c) {
+    int r = 0;
+    if (c > 0) {
+        r = a * b;
+    } else {
+        r = a * b + 1;
+    }
+    return r + a * b;
+}
+
+int deadLoop(int n) {
+    int unused = 0;
+    int used = 0;
+    for (int i = 0; i < n; i++) {
+        unused = unused * 3 + i;
+        used += 2;
+    }
+    return used;
+}
+
+int sunk(int a, int b, int c) {
+    int t = a * b - c;  //only the c > 0 side uses it
+    if (c > 0) return t * 2;
+    return c;
+}
+
+int main() {
+    int a;
+    int b;
+    int c;
+    scanf("%d %d %d", &a, &b, &c);
+    printf("cse %d %d %d %d\n", dominated(a, b, c), dominated(a, b, -c), separatePaths(a, b, c), separatePaths(a, b, -c));
+    printf("dce %d %d\n", deadLoop(0), deadLoop(9));
+    printf("sink %d %d\n", sunk(a, b, c), sunk(a, b, -c));
+    return 0;
+}
+
+// -O2 and up
+// IR-LABEL: define i32 @{{[A-Za-z0-9_]*}}dominated
+// IR-GE2: mul i32 %a, %b
+// IR-GE2-NOT: mul i32 %a, %b
+// IR-LABEL: define i32 @{{[A-Za-z0-9_]*}}separatePaths
+// IR-LABEL: define i32 @{{[A-Za-z0-9_]*}}deadLoop
+// IR-GE2-NOT: mul i32
+// IR-LABEL: define i32 @{{[A-Za-z0-9_]*}}sunk
+// the multiply comes after the branch, in the block that uses it
+// IR-GE2: br i1
+// IR-GE2: mul i32 %a, %b
+// IR-LABEL: define i32 @main

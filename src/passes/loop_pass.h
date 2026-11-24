@@ -49,6 +49,9 @@ public:
 protected:
     virtual LoopResult runOnLoop(Loop &loop, LoopContext &ctx) = 0;
 
+    //true: every loop is also put in loop-closed ssa form (formLCSSA) before runOnLoop sees it
+    virtual bool needsLCSSA() const { return false; }
+
     //a loop whose header is the entry block cannot get a preheader without moving the allocas
     //into the loop, such loops are never canonicalized or handed to runOnLoop
     static bool isUsable(const Loop &loop, const ir::Function &fn);
@@ -56,7 +59,20 @@ protected:
 private:
     //puts every usable loop in canonical form, true when the cfg changed
     static bool canonicalize(ir::Function &fn, AnalysisManager &am);
+
+    //forms lcssa for every usable loop, true when any phi was made
+    static bool closeLoops(ir::Function &fn, AnalysisManager &am);
 };
+
+//loop-closed ssa: every value defined in loop and used outside it reaches those uses through a phi
+//in an exit block ("x.lcssa = phi [x, exiting block]"), so copying the loop only has to add entries
+//to those phis. each outside use takes the phi of the exit block that dominates it. false, with
+//nothing changed for that value, when a use is dominated by no single exit (the value is then left
+//as it was and isLCSSA stays false). changed is set when any phi was made
+bool formLCSSA(ir::Function &fn, const Loop &loop, const Dominators &doms, bool &changed);
+
+//true when no value defined in loop is used outside it except by the exit blocks' phis
+bool isLCSSA(const Loop &loop, const DefUse &defUse);
 
 //makes a new block named label that preds jump to instead of target, and that jumps to target.
 //phis in target merge the entries of preds into a phi in the new block (or into the one value

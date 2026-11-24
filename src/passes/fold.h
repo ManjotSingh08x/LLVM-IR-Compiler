@@ -1,6 +1,8 @@
 #ifndef PASSES_FOLD_H
 #define PASSES_FOLD_H
 
+#include <string>
+
 #include "ir/cfg.h"
 
 namespace passes {
@@ -27,6 +29,11 @@ ir::Value *foldInstruction(ir::Module &module, const ir::Instruction &inst,
 //null. instead it may rewrite inst in place into something cheaper (x*2^k -> x<<k, sext(sext x)
 //-> sext x) and set rewritten. floating identities only where they hold for NaN and -0.0 too
 ir::Value *simplifyInstruction(ir::Module &module, ir::Instruction &inst, bool &rewritten);
+
+//a string that two pure instructions (arithmetic, compare, cast, select, getelementptr) share
+//exactly when they compute the same value: opcode, kind, types and operands, the operands of
+//+ * & | ^ == != sorted. the value numbers of local_dag and the expressions of cse
+std::string expressionKey(const ir::Instruction &inst);
 
 //value as a constant, or null
 const ir::Constant *asConstant(const ir::Value *value);

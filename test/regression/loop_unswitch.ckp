@@ -1,0 +1,51 @@
+// regression: loop unswitching. "if (flag) break;" at the top of a loop is decided once before the
+// loop; an invariant if/else inside a loop gives two copies of the loop, one per side; a value
+// computed in the loop and used after it still arrives (through the exit's phi) from either copy.
+// the flags come from stdin (test/regression/inputs): 1 0
+
+int stopEarly(int n, int flag) {
+    int s = 0;
+    int i = 0;
+    while (i < n) {
+        if (flag) break;
+        s += i;
+        i++;
+    }
+    return s * 100 + i;
+}
+
+int twoWays(int n, int mode) {
+    int a = 0;
+    int b = 0;
+    int last = 0;
+    for (int i = 0; i < n; i++) {
+        if (mode) {
+            a += i;
+        } else {
+            b += i * 2;
+        }
+        last = i;
+    }
+    return a * 10000 + b * 10 + last;
+}
+
+int main() {
+    int on;
+    int off;
+    scanf("%d %d", &on, &off);
+    printf("stop %d %d %d\n", stopEarly(10, on), stopEarly(10, off), stopEarly(0, off));
+    printf("ways %d %d %d\n", twoWays(8, on), twoWays(8, off), twoWays(0, on));
+    return 0;
+}
+
+// -O2 and up: stopEarly tests the flag before its loop; twoWays has two copies of the loop
+// IR-LABEL: define i32 @{{[A-Za-z0-9_]*}}stopEarly
+// IR-GE2: icmp ne i32 %flag, 0
+// IR-GE2: phi i32
+// IR-LABEL: define i32 @{{[A-Za-z0-9_]*}}twoWays
+// IR-GE2: icmp ne i32 %mode, 0
+// IR-GE2: phi i32
+// IR-GE2: phi i32
+// IR-GE2: phi i32
+// IR-GE2: phi i32
+// IR-LABEL: define i32 @main

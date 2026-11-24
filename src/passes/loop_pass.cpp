@@ -1,6 +1,7 @@
 #include "passes/loop_pass.h"
 
 #include <algorithm>
+#include <map>
 
 namespace passes {
 
@@ -61,6 +62,100 @@ BasicBlock *redirectPredecessors(Function &fn, BasicBlock *target, const std::ve
     return middle;
 }
 
+namespace {
+
+//the blocks a use reads its value in: a phi reads each entry at the end of that entry's block
+std::vector<std::pair<Instruction *, BasicBlock *>> usesOf(const Instruction *def, const DefUse &defUse) {
+    std::vector<std::pair<Instruction *, BasicBlock *>> uses;
+    for (Instruction *user : defUse.users(def)) {
+        if (user->getOpcode() == Opcode::Phi) {
+            for (const std::pair<Value *, BasicBlock *> &in : static_cast<PhiInst *>(user)->incoming) {
+                if (in.first == def) uses.push_back(std::make_pair(user, in.second));
+            }
+        } else {
+            uses.push_back(std::make_pair(user, user->getParent()));
+        }
+    }
+    return uses;
+}
+
+} // namespace
+
+bool isLCSSA(const Loop &loop, const DefUse &defUse) {
+    for (BasicBlock *block : loop.blocks) {
+        for (std::unique_ptr<Instruction> &inst : block->instructions) {
+            for (const std::pair<Instruction *, BasicBlock *> &use : usesOf(inst.get(), defUse)) {
+                if (!loop.contains(use.second)) return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool formLCSSA(Function &fn, const Loop &loop, const Dominators &doms, bool &changed) {
+    DefUse defUse(fn);
+    bool complete = true;
+    std::vector<Instruction *> defs;
+    for (BasicBlock *block : fn.getBlocks()) {
+        if (!loop.contains(block)) continue;
+        for (std::unique_ptr<Instruction> &inst : block->instructions) {
+            if (!inst->getName().empty()) defs.push_back(inst.get());
+        }
+    }
+    for (Instruction *def : defs) {
+        //the outside uses, each with the exit block that dominates it
+        std::vector<std::pair<std::pair<Instruction *, BasicBlock *>, BasicBlock *>> outside;
+        bool usable = true;
+        for (const std::pair<Instruction *, BasicBlock *> &use : usesOf(def, defUse)) {
+            if (loop.contains(use.second)) continue;
+            BasicBlock *walk = use.second;
+            while (walk != nullptr && !loop.contains(walk) &&
+                   std::find(loop.exits.begin(), loop.exits.end(), walk) == loop.exits.end()) {
+                walk = doms.idom(walk);
+            }
+            if (walk == nullptr || loop.contains(walk)) {
+                usable = false;
+                break;
+            }
+            outside.push_back(std::make_pair(use, walk));
+        }
+        if (!usable) {
+            complete = false;
+            continue;
+        }
+        std::map<BasicBlock *, PhiInst *> exitPhis;
+        for (const auto &entry : outside) {
+            BasicBlock *exit = entry.second;
+            PhiInst *&phi = exitPhis[exit];
+            if (phi == nullptr) {
+                //one entry per edge into the exit; every one of them comes from inside the loop
+                for (BasicBlock *pred : exit->predecessors) {
+                    if (!doms.dominates(def->getParent(), pred)) usable = false;
+                }
+                if (!usable) break;
+                phi = new PhiInst(def->getType(), fn.uniqueName(def->getName() + ".lcssa"));
+                for (BasicBlock *pred : exit->predecessors) {
+                    for (BasicBlock *succ : pred->getTerminator()->getSuccessors()) {
+                        if (succ == exit) phi->addIncoming(def, pred);
+                    }
+                }
+                exit->insertAtFront(std::unique_ptr<Instruction>(phi));
+                changed = true;
+            }
+            Instruction *user = entry.first.first;
+            if (user->getOpcode() == Opcode::Phi) {
+                for (std::pair<Value *, BasicBlock *> &in : static_cast<PhiInst *>(user)->incoming) {
+                    if (in.first == def && in.second == entry.first.second) in.first = phi;
+                }
+            } else {
+                user->replaceOperand(def, phi);
+            }
+        }
+        if (!usable) complete = false;
+    }
+    return complete;
+}
+
 bool LoopPass::isUsable(const Loop &loop, const Function &fn) {
     return loop.header != fn.getEntryBlock();
 }
@@ -114,8 +209,32 @@ bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
     }
 }
 
+bool LoopPass::closeLoops(Function &fn, AnalysisManager &am) {
+    //new phis invalidate the cached analyses, so loops are looked up again by header each time
+    std::vector<BasicBlock *> headers;
+    for (Loop *loop : am.getLoops(fn).innermostFirst()) {
+        if (isUsable(*loop, fn)) headers.push_back(loop->header);
+    }
+    bool changed = false;
+    for (BasicBlock *header : headers) {
+        const Loop *loop = nullptr;
+        for (Loop *candidate : am.getLoops(fn).innermostFirst()) {
+            if (candidate->header == header) loop = candidate;
+        }
+        if (loop == nullptr) continue;
+        bool made = false;
+        formLCSSA(fn, *loop, am.getDominators(fn), made);
+        if (made) {
+            changed = true;
+            am.invalidate(fn);
+        }
+    }
+    return changed;
+}
+
 bool LoopPass::run(Function &fn, Module &module, AnalysisManager &am) {
     bool changed = canonicalize(fn, am);
+    if (needsLCSSA() && closeLoops(fn, am)) changed = true;
     std::set<BasicBlock *> done;
     for (;;) {
         Loop *next = nullptr;
@@ -134,7 +253,10 @@ bool LoopPass::run(Function &fn, Module &module, AnalysisManager &am) {
         changed = true;
         if (result == LoopResult::CFGChanged) fn.recomputeCFG();
         am.invalidate(fn);
-        if (result == LoopResult::CFGChanged) canonicalize(fn, am);
+        if (result == LoopResult::CFGChanged) {
+            canonicalize(fn, am);
+            if (needsLCSSA()) closeLoops(fn, am);
+        }
     }
 }
 

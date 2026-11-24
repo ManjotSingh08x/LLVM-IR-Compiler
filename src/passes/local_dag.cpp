@@ -31,49 +31,6 @@ bool isPure(const Instruction &inst) {
     }
 }
 
-bool isCommutative(BinaryOpKind op) {
-    switch (op) {
-    case BinaryOpKind::Add: case BinaryOpKind::Mul: case BinaryOpKind::And: case BinaryOpKind::Or:
-    case BinaryOpKind::Xor: case BinaryOpKind::ICmpEQ: case BinaryOpKind::ICmpNE:
-    case BinaryOpKind::FAdd: case BinaryOpKind::FMul: case BinaryOpKind::FCmpOEQ: case BinaryOpKind::FCmpUNE:
-        return true;
-    default:
-        return false;
-    }
-}
-
-//what makes two pure instructions compute the same value: opcode, kind, types and operands
-std::string keyOf(const Instruction &inst) {
-    std::vector<std::string> ops;
-    for (const Value *operand : inst.getOperands()) ops.push_back(operand->getTypedOperand());
-    std::string key = std::to_string((int)inst.getOpcode()) + "|" + formatType(inst.getType());
-    switch (inst.getOpcode()) {
-    case Opcode::Binary: {
-        const BinaryInst &b = static_cast<const BinaryInst &>(inst);
-        key += "|" + std::to_string((int)b.op) + "|" + formatType(b.operandType) + (b.isExact ? "|exact" : "");
-        if (isCommutative(b.op)) std::sort(ops.begin(), ops.end());
-        break;
-    }
-    case Opcode::Unary:
-        key += "|" + std::to_string((int)static_cast<const UnaryInst &>(inst).op);
-        break;
-    case Opcode::Cast: {
-        const CastInst &c = static_cast<const CastInst &>(inst);
-        key += "|" + std::to_string((int)c.op) + "|" + formatType(c.fromType);
-        break;
-    }
-    case Opcode::GEP: {
-        const GEPInst &g = static_cast<const GEPInst &>(inst);
-        key += "|" + formatType(g.getAccessType()) + (g.inBounds ? "|inbounds" : "");
-        break;
-    }
-    default:
-        break;
-    }
-    for (const std::string &op : ops) key += "|" + op;
-    return key;
-}
-
 //a value read from or written to memory, available until something may change that memory
 struct Known {
     Value            *address;
@@ -217,7 +174,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
                 }
                 if (rewritten) changed = true;
                 //common subexpressions
-                std::string key = keyOf(*inst);
+                std::string key = expressionKey(*inst);
                 std::map<std::string, Instruction *>::iterator it = available.find(key);
                 if (it != available.end()) {
                     replaceWith(inst, it->second);

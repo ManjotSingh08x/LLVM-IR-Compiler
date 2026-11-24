@@ -8,30 +8,24 @@
 
 namespace sema {
 
-//work out literal values from their source spelling
-
-//decimal, 0x1F, 0755 and 0b1010 with a u and l suffix. the type is C's: the first of int, long
-//(decimal) or int, unsigned int, long, unsigned long (others) that holds the value, narrowed by
-//the suffix. false when no type holds it
+//parses an integer literal and picks its C type from its value and suffix, false when none fits
 bool intLiteral(const std::string &spelling, long long &value, const Type *&type);
 
-//a value converted to an integer type: wrapped to its width, sign- or zero-extended back to 64 bits
+//converts a value to an integer type: wrapped to its width, then extended back to 64 bits
 long long wrapToType(long long value, const Type *type);
 
-//1.5, .5e3, 2e-1 as double, with an f suffix as float, rounded once to that type
+//parses a floating literal as double, or as float with an f suffix
 double floatLiteral(const std::string &spelling, const Type *&type);
 
-//'a', '\n', '\x41', '\0'
 long long charLiteralValue(const std::string &spelling);
 
-//the number of characters a string literal holds, without the closing \0
+//string literal length, without the closing \0
 size_t stringLiteralLength(const std::string &spelling);
 
 //a string literal's characters with escapes resolved, without quotes or the closing \0
 std::string decodeStringLiteral(const std::string &spelling);
 
-//evaluates an integer constant expression, false when it is not constant. after type checking each
-//step is done in the type of its node, unsigned where the types say so
+//evaluates an integer constant expression, false when it is not constant
 bool evaluateConstant(const ast::Expr *expr, long long &value);
 
 } // namespace sema

@@ -41,7 +41,6 @@ public:
         std::map<const Instruction *, Value *> current;
         rename(fn.getEntryBlock(), current);
 
-        //every use of a replaced load reads its value now, then the slots and their accesses go
         for (BasicBlock *block : fn.getBlocks()) {
             for (std::unique_ptr<Instruction> &inst : block->instructions) {
                 for (Value *operand : inst->getOperands()) {
@@ -55,7 +54,6 @@ public:
     }
 
 private:
-    //the slot a load or store accesses, when it is being promoted
     const Instruction *slotOf(const Value *address) const {
         if (address->getKind() != ValueKind::Instruction) return nullptr;
         const Instruction *inst = static_cast<const Instruction *>(address);
@@ -80,7 +78,6 @@ private:
     }
 
     void placePhis(const Instruction *slot) {
-        //blocks that store the slot, and blocks where it is live on entry
         std::set<BasicBlock *> defs;
         std::set<BasicBlock *> upwardLoad;  //a load comes before any store in the block
         std::set<BasicBlock *> killed;      //a store in the block
@@ -111,8 +108,7 @@ private:
             }
         }
 
-        //iterated dominance frontier of the stores. walked in layout order, so phis are made (and
-        //named) in the same order whatever the addresses of the blocks
+        //iterated dominance frontier, walked in layout order so phis are named the same every run
         std::set<BasicBlock *> placed;
         std::vector<BasicBlock *> frontierWork = inLayoutOrder(defs);
         while (!frontierWork.empty()) {
@@ -134,12 +130,11 @@ private:
     Value *valueOf(const Instruction *slot, std::map<const Instruction *, Value *> &current) {
         std::map<const Instruction *, Value *>::iterator it = current.find(slot);
         if (it != current.end()) return it->second;
-        //read before any store: the slot held garbage, zero stands in for it
+        //read before any store: zero stands in for the garbage
         return module.getZero(static_cast<const AllocaInst *>(slot)->getAccessType());
     }
 
-    //the dominator-tree walk of renaming; current is copied per call, so the stack of values is the
-    //call stack
+    //current is copied per call, so the call stack holds the value stack
     void rename(BasicBlock *block, std::map<const Instruction *, Value *> current) {
         for (std::unique_ptr<Instruction> &owned : block->instructions) {
             Instruction *inst = owned.get();
@@ -190,7 +185,6 @@ bool Mem2Reg::run(Function &fn, Module &module, AnalysisManager &am) {
     if (changed) am.invalidate(fn);
     Promoter promoter(fn, module, am.getDominators(fn));
     if (promoter.run()) changed = true;
-    //the slots themselves go last, nothing uses them any more
     if (changed) {
         std::vector<Instruction *> unusedSlots;
         std::map<const Value *, size_t> uses;

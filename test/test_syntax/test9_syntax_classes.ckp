@@ -1,0 +1,38 @@
+// Tests: namespace
+namespace shapes {
+
+// Tests: class with access specifiers
+class Shape {
+protected:
+    int sides;
+
+public:
+    // Tests: static member
+    static int count;
+
+    // Tests: constructor and destructor
+    Shape() { sides = 0; count++; }
+    ~Shape() { count--; }
+
+    int getSides() { return this->sides; }
+};
+
+int Shape::count = 0;
+
+// Tests: inheritance
+class Square : public Shape {
+public:
+    Square() { sides = 4; }
+    int corners() { return sides; }
+};
+
+}
+
+int main() {
+    shapes::Square sq;
+    shapes::Shape *p = new shapes::Shape();
+    printf("%d %d %d\n", sq.getSides(), sq.corners(), shapes::Shape::count);
+    delete p;
+    printf("%d\n", shapes::Shape::count);
+    return 0;
+}

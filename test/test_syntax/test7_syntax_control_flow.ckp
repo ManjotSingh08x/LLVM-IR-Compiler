@@ -1,0 +1,43 @@
+int main() {
+    int sum = 0;
+
+    // Tests: if-else chain
+    int n = 5;
+    if (n < 0) sum = -1;
+    else if (n == 0) sum = 0;
+    else sum = 1;
+
+    // Tests: for loop with break and continue
+    for (int i = 0; i < 10; i++) {
+        if (i % 2 == 0) continue;
+        if (i > 7) break;
+        sum += i;
+    }
+
+    // Tests: while and do-while loops
+    while (sum > 10) sum--;
+    do { sum += 3; } while (sum < 15);
+
+    // Tests: switch with fall-through and default
+    switch (n) {
+        case 4:
+        case 5:
+            sum += 100;
+            break;
+        default:
+            sum = 0;
+    }
+
+    // Tests: until loop
+    int k = 0;
+    until (k == 3) k++;
+
+    // Tests: goto
+    int tries = 0;
+retry:
+    tries++;
+    if (tries < 3) goto retry;
+
+    printf("%d %d %d\n", sum, k, tries);
+    return 0;
+}

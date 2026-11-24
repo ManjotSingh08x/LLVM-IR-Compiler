@@ -11,17 +11,16 @@ namespace ir {
 
 class BasicBlock;
 
-//the families an instruction belongs to. each family shares a base class
+//instruction families, each with its own base class
 enum class InstCategory {
-    Return,      //ret
+    Return,
     Branch,      //br, switch, unreachable
     Memory,      //alloca, load, store, getelementptr
-    Call,        //call
+    Call,
     Expression,  //arithmetic, compares, casts, select: pure register values
-    Phi          //phi, made by the ssa passes, never by irgen
+    Phi          //phi, only made by the optimization passes
 };
 
-//the exact kind of an instruction, so code can switch on it without dynamic_cast
 enum class Opcode {
     Ret, Br, Switch, Unreachable,
     Alloca, Load, Store, GEP,
@@ -41,25 +40,21 @@ public:
     BasicBlock  *getParent() const { return parent; }
     void         setParent(BasicBlock *block) { parent = block; }
 
-    //a terminator ends its block: ret, br, switch, unreachable
     virtual bool isTerminator() const { return false; }
 
     //true when removing the instruction could change what the program does
     virtual bool hasSideEffects() const { return isTerminator(); }
 
-    //the values the instruction reads, in order. blocks are not operands
+    //the values the instruction reads, in order, blocks are not operands
     std::vector<Value *> getOperands() const;
 
-    //makes every operand that is from read to instead
     void replaceOperand(Value *from, Value *to);
 
     //the blocks a terminator can jump to, in order, with repeats
     std::vector<BasicBlock *> getSuccessors() const;
 
-    //makes every jump to from go to to instead
     void replaceSuccessor(BasicBlock *from, BasicBlock *to);
 
-    //writes the instruction as one line of llvm text
     virtual void dump(std::ostream &out) const = 0;
 
     std::string getOperand() const override { return "%" + name; }
@@ -73,9 +68,6 @@ protected:
     BasicBlock  *parent = nullptr;
 };
 
-// return 
-
-//ret void, or ret <type> <value>
 class ReturnInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Ret; }
@@ -94,9 +86,6 @@ protected:
     std::vector<Value **> operandSlots() override;
 };
 
-//branches
-
-//br label %target, or br i1 %cond, label %target, label %falseTarget
 class BranchInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Br; }
@@ -121,7 +110,6 @@ protected:
     std::vector<BasicBlock **> successorSlots() override;
 };
 
-//switch i32 %v, label %default [ i32 1, label %a  i32 2, label %b ]
 class SwitchInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Switch; }
@@ -142,7 +130,6 @@ protected:
     std::vector<BasicBlock **> successorSlots() override;
 };
 
-//unreachable: the end of a block that can never run to its end
 class UnreachableInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Unreachable; }
@@ -152,8 +139,6 @@ public:
     bool isTerminator() const override { return true; }
     void dump(std::ostream &out) const override { out << "  unreachable\n"; }
 };
-
-//  memory 
 
 class MemoryInst : public Instruction {
 public:
@@ -166,7 +151,6 @@ protected:
     const sema::Type *accessType;
 };
 
-//%x.addr = alloca i32
 class AllocaInst : public MemoryInst {
 public:
     Opcode getOpcode() const override { return Opcode::Alloca; }
@@ -177,7 +161,6 @@ public:
     void dump(std::ostream &out) const override;
 };
 
-//%t0 = load i32, ptr %x.addr
 class LoadInst : public MemoryInst {
 public:
     Opcode getOpcode() const override { return Opcode::Load; }
@@ -193,7 +176,6 @@ protected:
     std::vector<Value **> operandSlots() override { return { &address }; }
 };
 
-//store i32 %t0, ptr %x.addr
 class StoreInst : public MemoryInst {
 public:
     Opcode getOpcode() const override { return Opcode::Store; }
@@ -230,9 +212,7 @@ protected:
     std::vector<Value **> operandSlots() override;
 };
 
-//  calls 
-
-//%t2 = call i32 @f(i32 1), variadic callees are written with their full type
+//variadic callees are written with their full type
 class CallInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Call; }
@@ -252,8 +232,6 @@ public:
 protected:
     std::vector<Value **> operandSlots() override;
 };
-
-//  expressions 
 
 class ExprInst : public Instruction {
 public:
@@ -294,7 +272,6 @@ protected:
 
 enum class UnaryOpKind { FNeg };
 
-//%t1 = fneg double %t0
 class UnaryInst : public ExprInst {
 public:
     Opcode getOpcode() const override { return Opcode::Unary; }
@@ -318,7 +295,6 @@ enum class CastOpKind {
     PtrToInt, IntToPtr
 };
 
-//%t2 = sext i8 %t1 to i32
 class CastInst : public ExprInst {
 public:
     Opcode getOpcode() const override { return Opcode::Cast; }
@@ -356,9 +332,7 @@ protected:
     std::vector<Value **> operandSlots() override { return { &condition, &ifTrue, &ifFalse }; }
 };
 
-//  ssa 
-
-//%x = phi i32 [ %a, %then ], [ 0, %entry ], one entry per predecessor block
+//one incoming value per predecessor block
 class PhiInst : public Instruction {
 public:
     Opcode getOpcode() const override { return Opcode::Phi; }
@@ -366,7 +340,7 @@ public:
     PhiInst(const sema::Type *type, const std::string &name) : Instruction(InstCategory::Phi, type, name) {}
 
     void   addIncoming(Value *value, BasicBlock *block) { incoming.push_back(std::make_pair(value, block)); }
-    //the value that arrives from block, or null when block is not listed
+    //null when block is not listed
     Value *getIncomingValueFor(const BasicBlock *block) const;
     void   removeIncomingBlock(const BasicBlock *block);
     void   replaceIncomingBlock(BasicBlock *from, BasicBlock *to);

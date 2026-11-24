@@ -8,15 +8,13 @@ namespace {
 
 std::string lengthPrefixed(const std::string &name) { return std::to_string(name.size()) + name; }
 
-//Outer::Inner written for a mangled name: 5Outer5Inner, with its namespaces first: 1N5Outer
-//a record declared in a function body is named by its unique mangled name, s.3
+//a record's mangled name: its namespaces and outer records first, a local record by its unique name
 std::string recordPath(const RecordSymbol *record) {
     if (record->outer) return recordPath(record->outer) + lengthPrefixed(record->name);
     if (record->scope->kind == ScopeKind::Namespace) return namespacePath(record->scope) + lengthPrefixed(record->name);
     return lengthPrefixed(record->mangledName);
 }
 
-//the parts of a qualified name before the last: A::B::f gives A, B
 std::vector<std::string> qualifierOf(const ast::QualifiedName &name) {
     return std::vector<std::string>(name.parts.begin(), name.parts.end() - 1);
 }
@@ -27,9 +25,9 @@ bool isVoidParamList(const ast::NodeList<ast::ParamDecl> &params) {
     return type->specKind == ast::TypeSpecKind::Builtin && type->name == "void";
 }
 
-//a parameter written as an array or a function is a pointer
 void bindConstantNames(ast::Expr *expr, Scope *scope);
 
+//a parameter written as an array or a function is a pointer
 const Type *adjustParameter(const Type *type, SymbolTable &table) {
     if (type->is(TypeKind::Array) || type->is(TypeKind::Function)) return decay(type, table);
     return type;
@@ -93,8 +91,6 @@ void SymbolBuilder::declareNamespace(ast::NamespaceDecl *node) {
     for (const std::unique_ptr<ast::Decl> &decl : node->decls) declareTopLevel(decl.get());
     current = saved;
 }
-
-//pass 1: declarations
 
 void SymbolBuilder::declareBuiltins() {
     const char *names[] = { "printf", "scanf" };
@@ -544,8 +540,6 @@ Symbol *SymbolBuilder::declareTypedef(ast::TypedefDecl *node, Scope *scope) {
     return symbol;
 }
 
-//pass 2: bodies
-
 void SymbolBuilder::buildBodies(ast::Decl *decl) {
     switch (decl->getKind()) {
     case ast::ASTKind::RecordDecl: {
@@ -625,8 +619,6 @@ void SymbolBuilder::buildInitializer(ast::VarDecl *node, Scope *scope) {
     for (const std::unique_ptr<ast::Expr> &arg : node->ctorArgs) visit(arg.get());
     current = saved;
 }
-
-//statements
 
 void SymbolBuilder::visitCompoundStmt(ast::CompoundStmt *node) {
     if (node->scope == nullptr) node->scope = current->addChild(ScopeKind::Block, node->line, node->col);
@@ -710,8 +702,6 @@ void SymbolBuilder::visitCaseStmt(ast::CaseStmt *node) {
 
 void SymbolBuilder::visitDefaultStmt(ast::DefaultStmt *node) { visit(node->sub.get()); }
 
-//expressions
-
 void SymbolBuilder::visitParenExpr(ast::ParenExpr *node) { visit(node->sub.get()); }
 
 void SymbolBuilder::visitUnaryExpr(ast::UnaryExpr *node) { visit(node->operand.get()); }
@@ -786,8 +776,6 @@ void SymbolBuilder::visitLambdaExpr(ast::LambdaExpr *node) {
     visit(node->body.get());
     current = saved;
 }
-
-//types
 
 const Type *SymbolBuilder::resolveType(ast::TypeSpec *spec, Scope *scope, bool allowUnsized) {
     if (spec == nullptr) return errorType();
@@ -974,8 +962,7 @@ Symbol *visibleTypeSymbol(const std::string &name, Scope *scope, int line, int c
     return nullptr;
 }
 
-//the names in an array size, which is evaluated before the type checker resolves any name: a const
-//variable declared before the size can give its value
+//binds the names in an array size early, so a const declared before it can give its value
 void bindConstantNames(ast::Expr *expr, Scope *scope) {
     if (expr == nullptr) return;
     switch (expr->getKind()) {
@@ -1023,14 +1010,12 @@ RecordSymbol *SymbolBuilder::findRecord(const std::string &name, Scope *scope, i
     return static_cast<RecordSymbol *>(visibleTypeSymbol(name, scope, line, col, true));
 }
 
-//the type a plain name stands for: a record, or the type a typedef names
 const Type *SymbolBuilder::findTypeName(const std::string &name, Scope *scope, int line, int col) {
     Symbol *symbol = visibleTypeSymbol(name, scope, line, col, false);
     return symbol ? symbol->type : nullptr;
 }
 
-//N::Dog: a record or typedef inside the namespace or class the qualifier names, declared before the use
-//unless it is a class member
+//N::Dog: a record or typedef inside the qualifier's namespace or class
 const Type *SymbolBuilder::findQualifiedType(const std::vector<std::string> &qualifier, const std::string &name,
                                              Scope *scope, int line, int col, std::string &error) {
     QualifierTarget target = resolveQualifier(scope, qualifier, line, col);
@@ -1047,8 +1032,6 @@ const Type *SymbolBuilder::findQualifiedType(const std::vector<std::string> &qua
     error = "no type named '" + name + "' in " + target.spelling();
     return nullptr;
 }
-
-//names
 
 bool SymbolBuilder::isFree(Scope *scope, const std::string &name, int line, int col) {
     if (scope->find(name) == nullptr) return true;

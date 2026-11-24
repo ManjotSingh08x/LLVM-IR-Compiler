@@ -8,7 +8,7 @@
 
 namespace ast {
 
-//debugging visitor: one line per node, indented by depth, as role: Kind attrs <line:col>
+//debug printer: one line per node, indented by depth
 class ASTPrinter : public ASTVisitor<ASTPrinter> {
 public:
     explicit ASTPrinter(std::ostream &out) : out(out) {}
@@ -69,10 +69,8 @@ public:
     void visitImplicitCastExpr(ImplicitCastExpr *node);
 
 private:
-    //writes the line for a node, attrs may be empty
     void line(const ASTNode &node, const std::string &attrs);
 
-    //visits a child one level deeper, labelled with its role
     void child(const char *role, ASTNode *node);
 
     template <class T>
@@ -80,7 +78,6 @@ private:
         for (const auto &item : list) child(role, item.get());
     }
 
-    //the array sizes and function pointer parameters inside a written type
     void typeChildren(const TypeSpec *type);
     void initChildren(VarDecl *node);
     void functionBody(FunctionDecl *node);

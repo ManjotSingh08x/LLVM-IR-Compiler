@@ -2,7 +2,7 @@
 
 #include <map>
 
-#include "passes/dfa_available_exprs.h"
+#include "dataflow/dfa_available_exprs.h"
 #include "passes/fold.h"
 #include "passes/local_dag.h"
 
@@ -16,10 +16,10 @@ class Eliminator {
 public:
     Eliminator(const Dominators &doms, const AvailableExpressions &available) : doms(doms), available(available) {}
 
-    //the dominator-tree walk; table is copied per call, so it holds exactly the blocks above
+    //table is copied per call, so it holds only expressions from dominating blocks
     void walk(BasicBlock *block, std::map<std::string, Instruction *> table) {
         const std::set<std::string> &availableIn = available.in(block);
-        std::set<std::string> local;  //computed earlier in this block
+        std::set<std::string> local;
         for (std::unique_ptr<Instruction> &owned : block->instructions) {
             Instruction *inst = owned.get();
             for (Value *operand : inst->getOperands()) {
@@ -50,8 +50,7 @@ private:
 
 bool CSE::run(Function &fn, Module &module, AnalysisManager &am) {
     (void)module;
-    //a replaced operand changes the expressions that use it, so availability is worked out again
-    //and the walk repeated until nothing more is found (a chain a+b, (a+b)*c needs two rounds)
+    //repeat until nothing changes, since one replacement can expose another
     bool changed = false;
     for (int round = 0; round < 8; round++) {
         AvailableExpressions available(fn);

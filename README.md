@@ -2,19 +2,36 @@
 
 A compiler for a subset of C++, written for CSC-305. It turns a `.ckp` source file into LLVM IR. It can then optimize the IR at four levels (`-O0` to `-O3`) and generate x86-64 assembly that `gcc` or `clang` can link.
 
-The compiler is written in C++17. It uses Flex and Bison, and links only LLVM's Support library. The optimizations are documented pass by pass in [reference/optimizations.md](reference/optimizations.md).
+The compiler is written in C++17. It uses Flex and Bison, and links only LLVM's Support library.
 
 ## Commands
 
 You need `flex`, `bison`, `g++`, `llvm-config` and `clang`.
 
 ```bash
-make                          # build the compiler: build/parser
-make test                     # build, then run the full test suite at -O0, -O1, -O2 and -O3
-bash run.sh --levels=2        # run the full suite at one level only
-bash run.sh --bless           # rewrite the expected outputs (review the diff before committing)
-make clean                    # delete build/ and outputs/
+make                                  # build the compiler: build/parser
+make test                             # run every test at -O0, -O1, -O2 and -O3
+./run_tests.sh test/test_ir           # run the tests in one folder
+./run_tests.sh path/to/file.cpp       # run one file, with any extension
+./run_tests.sh test/test_lex -o2 -o3  # run at chosen levels only
+make clean                            # delete build/ and outputs/
 ```
+
+Every file under `test/` is a test, except those in `test/expected/` and `test/inputs/`. A file the compiler rejects only has its errors printed. A file it accepts is compiled at each level and checked:
+- the IR is verified after every pass;
+- the optimized IR passes clang's verifier;
+- the FileCheck lines in the file (`// IR-GE2:`, `// ASM-O3:` ...) match the optimized IR or assembly;
+- the program links and runs, and its output must match `test/expected/<name>.out`, or the output of the unoptimized program when there is none.
+
+Standard input comes from `test/inputs/<name>.in` when that file exists. Both are found by file name, so they also work for a file outside `test/`.
+
+| Folder | Tests |
+|---|---|
+| `test/test_lex/` | literals, comments and operators; two lexical errors |
+| `test/test_syntax/` | declarations, control flow, functions, classes and expressions; three syntax errors |
+| `test/test_ir/` | arithmetic, arrays and pointers, classes, functions, input, const and namespaces; semantic errors |
+| `test/test_codegen/` | integer and floating code, calls, memory, objects, short and float |
+| `test/test_optimization/` | one small program per optimization, with FileCheck lines showing its effect |
 
 To compile one file:
 
@@ -35,54 +52,20 @@ To debug the optimizer:
 
 ## Architecture
 
-```text
-  file.ckp
-     │
-     ▼
-┌───────────────┐  tokens
-│ Lexer (flex)  │────────────┐
-└───────────────┘            ▼
-                    ┌─────────────────┐
-                    │ Parser (bison)  │  builds the AST
-                    └────────┬────────┘
-                             ▼
-                    ┌─────────────────┐   declares names    ┌───────────────────────┐
-                    │ Semantic        │────────────────────►│ Symbol table          │
-                    │ 1. SymbolBuilder│◄────────────────────│ scope tree: globals,  │
-                    │ 2. TypeChecker  │   looks up names    │ classes, functions,   │
-                    └────────┬────────┘                     │ blocks, lambdas       │
-                             │ AST with types, implicit     └───────────┬───────────┘
-                             │ casts and resolved symbols               │ mangled names, types,
-                             ▼                                          │ record layouts,
-                    ┌─────────────────┐◄────────────────────────────────┘ lambda captures
-                    │ IR generation   │  CFG per function  ──►  file.ll
-                    └────────┬────────┘
-                             ▼
-                    ┌─────────────────┐  -O0  simplify_cfg, loop_rotate
-                    │ Optimizer       │  -O1  + inline, local DAG, constant propagation
-                    │ (pass managers) │  -O2  + SSA: mem2reg, sccp, licm, unswitch, cse, dce, sink
-                    └────────┬────────┘  -O3  + induction-variable strength reduction ──► file.opt.ll
-                             ▼
-                    ┌─────────────────┐  instruction selection → register allocation
-                    │ x86-64 codegen  │  (-O0..-O2: getReg, -O3: graph colouring)
-                    └────────┬────────┘  → peephole (-O1+)  ──►  file.s
-                             ▼
-                      gcc / clang link  ──►  executable
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Compiler pipeline: lexer, parser and semantic analysis with the symbol table; IR generation; the optimizer stages by level; x86-64 code generation; gcc/clang link" width="100%">
+</p>
 
 Semantic analysis builds the symbol table, a tree of scopes, and keeps it. Every AST node points into the tree. IR generation does not look names up again: it reads the resolved symbols, and takes from them the mangled function names, the LLVM types, record layouts and lambda captures.
 
 ## Limitations
 
 - **Types:**
-  - not supported: `short`, `long`, `unsigned`, `const`, `enum`, `union`;
-  - not supported: number suffixes such as `10L`, `1u`, `1.5f`.
+  - `volatile`, `enum`, `union`.
 - **Expressions:**
-  - not supported: explicit casts, `sizeof`, the comma operator;
-  - not supported: `<<=`, `>>=`, `&=`, `|=`, `^=`;
-  - `::` is allowed only in declarations, not in expressions.
+  - the comma operator, C++ casts (`static_cast<T>(x)`), and casts to bare typedef/class names such as `(Dog *)p`. 
 - **C++ features not supported:**
-  - templates, namespaces, exceptions;
+  - templates, exceptions;
   - virtual functions, operator overloading, constructor initialiser lists;
   - default arguments;
   - user-defined variadic functions;
@@ -90,11 +73,7 @@ Semantic analysis builds the symbol table, a tree of scopes, and keeps it. Every
 - **Libraries:** only `printf` and `scanf` are built in. Other functions are name-mangled, so the compiler cannot call C library functions or link with separately compiled C code.
 - **Code generation:**
   - x86-64 Linux (System V ABI) only;
-  - structs passed to or returned from functions by value are not supported. Use pointers or references.
-- **Not implemented in the optimizer:**
-  - partial-redundancy elimination;
-  - loop unrolling, fusion and fission;
-  - instruction scheduling.
+  - structs, classes and lambdas passed or returned by value use a hidden-pointer convention for all sizes (works within compiled code, but small structs do not match System V register-passing with external C code).
 
 ## Members
 

@@ -142,7 +142,7 @@ std::string paramList(const TypeSpec *fn) {
     return out + ")";
 }
 
-//spells a written type C style, built outside in: int **(*)[10], int (*)(int)
+//spells a written type in C style, such as int (*)(int)
 std::string typeString(const TypeSpec *type, const std::string &inside) {
     if (type == nullptr) return "?" + inside;
     switch (type->specKind) {
@@ -257,8 +257,6 @@ void ASTPrinter::initChildren(VarDecl *node) {
     children("arg", node->ctorArgs);
 }
 
-//program and type
-
 void ASTPrinter::visitProgram(Program *node) {
     line(*node, "");
     children(nullptr, node->decls);
@@ -267,8 +265,6 @@ void ASTPrinter::visitProgram(Program *node) {
 void ASTPrinter::visitTypeSpec(TypeSpec *node) {
     line(*node, quoted(typeString(node)));
 }
-
-//declarations
 
 void ASTPrinter::visitVarDecl(VarDecl *node) {
     std::string attrs = node->name.str() + " " + quoted(typeString(node->type.get()));
@@ -336,8 +332,6 @@ void ASTPrinter::visitTypedefDecl(TypedefDecl *node) {
     line(*node, node->name + " " + quoted(typeString(node->type.get())));
     typeChildren(node->type.get());
 }
-
-//statements
 
 void ASTPrinter::visitCompoundStmt(CompoundStmt *node) {
     line(*node, "");
@@ -414,8 +408,6 @@ void ASTPrinter::visitDefaultStmt(DefaultStmt *node) {
     child(nullptr, node->sub.get());
 }
 
-//expressions
-
 void ASTPrinter::visitIntLiteral(IntLiteral *node) { line(*node, node->spelling); }
 
 void ASTPrinter::visitFloatLiteral(FloatLiteral *node) { line(*node, node->spelling); }
@@ -476,7 +468,7 @@ void ASTPrinter::visitCallExpr(CallExpr *node) {
 }
 
 void ASTPrinter::visitArraySubscriptExpr(ArraySubscriptExpr *node) {
-    line(*node, "");
+    line(*node, node->reversed ? "(reversed)" : "");
     child("base", node->base.get());
     child("index", node->index.get());
 }

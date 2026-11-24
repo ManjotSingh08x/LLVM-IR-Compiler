@@ -1,6 +1,8 @@
 #ifndef AST_EXPRESSIONS_H
 #define AST_EXPRESSIONS_H
 
+#include <cstdint>
+
 #include "ast/declarations.h"
 
 namespace ast {
@@ -24,7 +26,6 @@ public:
     IntLiteral(std::string spelling, int line, int col)
         : Expr(ASTKind::IntLiteral, line, col), spelling(std::move(spelling)) {}
 
-
     std::string spelling;
 };
 
@@ -32,7 +33,6 @@ class FloatLiteral : public Expr {
 public:
     FloatLiteral(std::string spelling, int line, int col)
         : Expr(ASTKind::FloatLiteral, line, col), spelling(std::move(spelling)) {}
-
 
     std::string spelling;
 };
@@ -42,7 +42,6 @@ public:
     CharLiteral(std::string spelling, int line, int col)
         : Expr(ASTKind::CharLiteral, line, col), spelling(std::move(spelling)) {}
 
-
     std::string spelling;
 };
 
@@ -51,7 +50,6 @@ public:
     StringLiteral(std::string spelling, int line, int col)
         : Expr(ASTKind::StringLiteral, line, col), spelling(std::move(spelling)) {}
 
-
     std::string spelling;
 };
 
@@ -59,7 +57,6 @@ class BoolLiteral : public Expr {
 public:
     BoolLiteral(bool value, int line, int col)
         : Expr(ASTKind::BoolLiteral, line, col), value(value) {}
-
 
     bool value;
 };
@@ -76,23 +73,20 @@ public:
 
 };
 
-//a use of a name
 class DeclRefExpr : public Expr {
 public:
     DeclRefExpr(std::string name, int line, int col)
         : Expr(ASTKind::DeclRefExpr, line, col), name(std::move(name)) {}
 
-
     std::string              name;
-    std::vector<std::string> qualifier;        //N::f, Counter::total: the parts before the name
-    sema::Symbol            *symbol = nullptr;  //what the name refers to, set by the type checker
+    std::vector<std::string> qualifier;
+    sema::Symbol            *symbol = nullptr;
 };
 
 class ParenExpr : public Expr {
 public:
     ParenExpr(std::unique_ptr<Expr> sub, int line, int col)
         : Expr(ASTKind::ParenExpr, line, col), sub(std::move(sub)) {}
-
 
     std::unique_ptr<Expr> sub;
 };
@@ -101,7 +95,6 @@ class UnaryExpr : public Expr {
 public:
     UnaryExpr(UnaryOp op, std::unique_ptr<Expr> operand, int line, int col)
         : Expr(ASTKind::UnaryExpr, line, col), op(op), operand(std::move(operand)) {}
-
 
     bool isPostfix() const { return op == UnaryOp::PostInc || op == UnaryOp::PostDec; }
 
@@ -114,7 +107,6 @@ public:
     BinaryExpr(BinaryOp op, std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, int line, int col)
         : Expr(ASTKind::BinaryExpr, line, col), op(op), lhs(std::move(lhs)), rhs(std::move(rhs)) {}
 
-
     BinaryOp              op;
     std::unique_ptr<Expr> lhs;
     std::unique_ptr<Expr> rhs;
@@ -126,20 +118,17 @@ public:
         : Expr(ASTKind::AssignExpr, line, col), op(op), target(std::move(target)),
           value(std::move(value)) {}
 
-
     AssignOp              op;
     std::unique_ptr<Expr> target;
     std::unique_ptr<Expr> value;
 };
 
-//cond ? trueExpr : falseExpr
 class ConditionalExpr : public Expr {
 public:
     ConditionalExpr(std::unique_ptr<Expr> cond, std::unique_ptr<Expr> trueExpr,
                     std::unique_ptr<Expr> falseExpr, int line, int col)
         : Expr(ASTKind::ConditionalExpr, line, col), cond(std::move(cond)),
           trueExpr(std::move(trueExpr)), falseExpr(std::move(falseExpr)) {}
-
 
     std::unique_ptr<Expr> cond;
     std::unique_ptr<Expr> trueExpr;
@@ -151,36 +140,32 @@ public:
     CallExpr(std::unique_ptr<Expr> callee, NodeList<Expr> args, int line, int col)
         : Expr(ASTKind::CallExpr, line, col), callee(std::move(callee)), args(std::move(args)) {}
 
-
     std::unique_ptr<Expr> callee;
     NodeList<Expr>        args;
 
-    //the function called by name, null for function pointers and lambdas
+    //null when the callee is not a named function
     sema::FunctionSymbol *function = nullptr;
 };
-//a[i], where base may be any expression: f(x)[i]
 class ArraySubscriptExpr : public Expr {
 public:
     ArraySubscriptExpr(std::unique_ptr<Expr> base, std::unique_ptr<Expr> index, int line, int col)
         : Expr(ASTKind::ArraySubscriptExpr, line, col), base(std::move(base)), index(std::move(index)) {}
 
-
     std::unique_ptr<Expr> base;
     std::unique_ptr<Expr> index;
+    bool                  reversed = false;  //written as index[base] and swapped by the type checker
 };
 
-//base.member or base->member
 class MemberExpr : public Expr {
 public:
     MemberExpr(std::unique_ptr<Expr> base, std::string member, bool isArrow, int line, int col)
         : Expr(ASTKind::MemberExpr, line, col), base(std::move(base)), member(std::move(member)),
           isArrow(isArrow) {}
 
-
     std::unique_ptr<Expr> base;
     std::string           member;
     bool                  isArrow;
-    sema::Symbol         *symbol = nullptr;  //the field or method, set by the type checker
+    sema::Symbol         *symbol = nullptr;
 };
 
 //new T, new T(args), new T{...}, new T[n], new T[n]{...}
@@ -190,37 +175,34 @@ class NewExpr : public Expr {
 public:
     NewExpr(NewForm form, int line, int col) : Expr(ASTKind::NewExpr, line, col), form(form) {}
 
-
     NewForm                   form;
-    std::unique_ptr<TypeSpec> type;  //the element type for the array forms
-    NodeList<Expr>            args;  //for Args
-    NodeList<Expr>            dims;  //for Array and ArrayInit
-    std::unique_ptr<Expr>     init;  //an InitListExpr, for InitList and ArrayInit
-    sema::FunctionSymbol     *constructor = nullptr;  //the constructor that runs, if any
+    std::unique_ptr<TypeSpec> type;
+    NodeList<Expr>            args;
+    NodeList<Expr>            dims;
+    std::unique_ptr<Expr>     init;
+    sema::FunctionSymbol     *constructor = nullptr;
 };
 
-//(T) e, an explicit cast. the type checker converts sub to T with implicit casts under it
+//(T) e, sub is converted to T with implicit casts under it
 class CastExpr : public Expr {
 public:
     CastExpr(std::unique_ptr<TypeSpec> target, std::unique_ptr<Expr> sub, int line, int col)
         : Expr(ASTKind::CastExpr, line, col), target(std::move(target)), sub(std::move(sub)) {}
 
-
     std::unique_ptr<TypeSpec> target;
     std::unique_ptr<Expr>     sub;
 };
 
-//sizeof e or sizeof(T), an unsigned long constant. e is type checked but never evaluated
+//sizeof e or sizeof(T), e is type checked but never evaluated
 class SizeofExpr : public Expr {
 public:
     SizeofExpr(std::unique_ptr<TypeSpec> typeOperand, std::unique_ptr<Expr> exprOperand, int line, int col)
         : Expr(ASTKind::SizeofExpr, line, col), typeOperand(std::move(typeOperand)),
           exprOperand(std::move(exprOperand)) {}
 
-
-    std::unique_ptr<TypeSpec> typeOperand;  //null for sizeof e
-    std::unique_ptr<Expr>     exprOperand;  //null for sizeof(T)
-    uint64_t                  size = 0;     //bytes, set by the type checker
+    std::unique_ptr<TypeSpec> typeOperand;
+    std::unique_ptr<Expr>     exprOperand;
+    uint64_t                  size = 0;
 };
 
 class DeleteExpr : public Expr {
@@ -228,20 +210,17 @@ public:
     DeleteExpr(bool isArray, std::unique_ptr<Expr> operand, int line, int col)
         : Expr(ASTKind::DeleteExpr, line, col), isArray(isArray), operand(std::move(operand)) {}
 
-
     bool                  isArray;
     std::unique_ptr<Expr> operand;
 };
 
-//{ a, b, { c } }
 class InitListExpr : public Expr {
 public:
     InitListExpr(NodeList<Expr> inits, int line, int col)
         : Expr(ASTKind::InitListExpr, line, col), inits(std::move(inits)) {}
 
-
     NodeList<Expr>        inits;
-    sema::FunctionSymbol *constructor = nullptr;  //when the list is a class's constructor arguments
+    sema::FunctionSymbol *constructor = nullptr;  //set when the list is a class's constructor arguments
 };
 
 enum class CaptureDefault { None, ByCopy, ByRef };
@@ -251,7 +230,7 @@ struct LambdaCapture {
 
     Kind          kind = Kind::ByCopy;
     std::string   name;  //empty for this
-    sema::Symbol *symbol = nullptr;  //the captured variable, set by the type checker
+    sema::Symbol *symbol = nullptr;
 };
 
 class LambdaExpr : public Expr {
@@ -261,32 +240,31 @@ public:
         : Expr(ASTKind::LambdaExpr, line, col), captureDefault(captureDefault),
           captures(std::move(captures)), params(std::move(params)), body(std::move(body)) {}
 
-
     CaptureDefault                captureDefault;
     std::vector<LambdaCapture>    captures;
     NodeList<ParamDecl>           params;
     std::unique_ptr<CompoundStmt> body;
 
-    sema::Scope                  *scope = nullptr;  //holds the parameters
-    //variables the body uses from the enclosing function, listed or captured by default
+    sema::Scope                  *scope = nullptr;
+    //variables the body uses from the enclosing function
     std::vector<LambdaCapture>    usedCaptures;
 };
 
-//a conversion the source leaves implicit, inserted by the type checker
+//a conversion inserted by the type checker
 enum class CastKind {
-    IntegralCast,       //between bool, char and int
+    IntegralCast,
     IntegralToFloating,
     FloatingToIntegral,
-    FloatingCast,       //float and double
-    ToBool,             //an arithmetic value or a pointer tested as bool
+    FloatingCast,
+    ToBool,
     ArrayToPointer,
     FunctionToPointer,
     NullToPointer,
-    DerivedToBase,      //a derived class pointer or object used as its base
-    PointerToVoid,      //any object pointer to void *
-    PointerCast,        //an explicit cast between unrelated pointer types: the address is unchanged
-    PointerToIntegral,  //an explicit cast of an address to an integer
-    IntegralToPointer   //an explicit cast of a long to an address
+    DerivedToBase,
+    PointerToVoid,
+    PointerCast,        //between unrelated pointer types, the address is unchanged
+    PointerToIntegral,
+    IntegralToPointer
 };
 
 class ImplicitCastExpr : public Expr {
@@ -296,7 +274,6 @@ public:
           sub(std::move(sub)) {
         type = toType;
     }
-
 
     CastKind              castKind;
     std::unique_ptr<Expr> sub;

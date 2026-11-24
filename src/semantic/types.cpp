@@ -1,11 +1,8 @@
 #include "semantic/types.h"
 
-
 #include "semantic/symbols.h"
 
 namespace sema {
-
-//builtins
 
 namespace {
 
@@ -45,8 +42,6 @@ const Type *nullType() { return &theNull; }
 const Type *autoType() { return &theAuto; }
 const Type *errorType() { return &theError; }
 
-//views
-
 const PointerType *asPointer(const Type *type) {
     return type && type->is(TypeKind::Pointer) ? static_cast<const PointerType *>(type) : nullptr;
 }
@@ -70,8 +65,6 @@ const ClosureType *asClosure(const Type *type) {
 RecordSymbol *asRecord(const Type *type) {
     return type && type->is(TypeKind::Record) ? static_cast<const RecordType *>(type)->record : nullptr;
 }
-
-//classification
 
 bool isIntegral(const Type *type) { return integerSize(type) != 0; }
 
@@ -201,13 +194,10 @@ const Type *commonArithmeticType(const Type *a, const Type *b) {
     return s;  //a wider signed type holds every value of the narrower unsigned one
 }
 
-//conversions
-
 namespace {
 
 ConversionRank worse(ConversionRank a, ConversionRank b) { return a > b ? a : b; }
 
-//the cast between two arithmetic types
 ast::CastKind arithmeticCast(const Type *from, const Type *to) {
     if (to->is(TypeKind::Bool)) return ast::CastKind::ToBool;
     if (isIntegral(from) && isIntegral(to)) return ast::CastKind::IntegralCast;
@@ -244,8 +234,7 @@ bool bindsDirectly(const Type *from, const Type *referee, Conversion &result) {
     return false;
 }
 
-//T * to const T *, T ** to const T *const *: const may be added at a level only when every level
-//above it in the target is const too, or a const T could be written through the result
+//const may be added at a level only when every level above it in the target is const too
 bool qualifiesTo(const PointerType *from, const PointerType *to, bool &addsConst) {
     const Type *f = from->pointee;
     const Type *t = to->pointee;
@@ -270,7 +259,7 @@ bool qualifiesTo(const PointerType *from, const PointerType *to, bool &addsConst
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table) {
     Conversion result;
 
-    //an error has already been reported, let it through without another one
+    //an error was already reported, let it through
     if (isError(from) || isError(to)) {
         result.rank = ConversionRank::Exact;
         return result;
@@ -359,8 +348,6 @@ Conversion findConversion(const Type *from, bool isLValue, const Type *to, Symbo
     result.steps.clear();
     return result;
 }
-
-//spelling
 
 namespace {
 
@@ -482,7 +469,7 @@ std::string mangleType(const Type *type) {
         return out + "E";
     }
     case TypeKind::Record: {
-        //a nested record, or one in a namespace, is wrapped in N..E so its parts are not read as parameters
+        //a nested or namespaced record is wrapped in N..E so its parts are not read as parameters
         const RecordSymbol *record = asRecord(type);
         const RecordSymbol *outermost = record;
         while (outermost->outer) outermost = outermost->outer;
@@ -494,8 +481,6 @@ std::string mangleType(const Type *type) {
         return "?";
     }
 }
-
-//lowering
 
 std::string toLLVMRecord(const RecordSymbol *record) {
     if (!record) return "<none>";

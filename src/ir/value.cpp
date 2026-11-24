@@ -21,7 +21,6 @@ std::string Constant::getOperand() const {
         return escapeLLVMString(bytes);
 
     case ConstantKind::Aggregate: {
-        //arrays are written [ i32 1, i32 2 ], records { i32 1, i32 2 }
         bool isArray = type->is(sema::TypeKind::Array);
         std::string out = isArray ? "[" : "{ ";
         for (size_t i = 0; i < elements.size(); i++) {

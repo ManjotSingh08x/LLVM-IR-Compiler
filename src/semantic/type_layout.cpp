@@ -1,6 +1,5 @@
 #include "semantic/type_layout.h"
 
-
 namespace sema {
 
 uint64_t alignTo(uint64_t value, uint64_t align) {
@@ -69,7 +68,7 @@ void TypeLayout::place(StructLayout &layout) {
 const TypeLayout::StructLayout &TypeLayout::structLayout(const Type *type) {
     static const StructLayout empty;
 
-    //the same shape as formatRecordBody and formatClosureBody in ir/ir_types.cpp
+    //must match the record layout written in ir/ir_types.cpp
     if (type->is(TypeKind::Record)) {
         RecordSymbol *record = asRecord(type);
         std::map<const void *, StructLayout>::iterator it = cache.find(record);

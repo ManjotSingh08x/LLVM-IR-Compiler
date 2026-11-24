@@ -1,0 +1,17 @@
+// Tests: line comment
+int main() {
+    int a = 1;   // Tests: line comment after code
+
+    /* Tests: block comment
+       over several lines */
+    int b = 2;
+
+    // Tests: block comment inside an expression
+    int c = a + /* ignored */ b;
+
+    // Tests: comment markers inside a string are text
+    printf("not a comment: /* nor this */ // nor this\n");
+
+    printf("%d\n", c);   /* Tests: block comment after code */
+    return 0;
+}

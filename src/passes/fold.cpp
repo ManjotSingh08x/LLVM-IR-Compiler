@@ -13,13 +13,12 @@ namespace {
 
 bool isFloatType(const sema::Type *type) { return type->is(sema::TypeKind::Float); }
 
-//an integer constant read as signed at its width; an i1 true is -1 when signed
+//an i1 true reads as -1 when signed
 long long signedValue(const Constant *c) {
     if (integerBits(c->getType()) == 1) return c->intValue ? -1 : 0;
     return c->intValue;
 }
 
-//the same bits read as unsigned at the width
 unsigned long long unsignedValue(const Constant *c) {
     unsigned bits = integerBits(c->getType());
     unsigned long long v = (unsigned long long)c->intValue;
@@ -49,7 +48,7 @@ Constant *foldInt(Module &module, BinaryOpKind op, const sema::Type *type, const
         return module.getInt(type, (long long)(op == BinaryOpKind::UDiv ? n / d : n % d));
     }
     case BinaryOpKind::Shl:
-        if (y < 0 || y >= (long long)bits) return nullptr;  //poison in llvm
+        if (y < 0 || y >= (long long)bits) return nullptr;  //undefined in llvm
         return module.getInt(type, (long long)(ux << y));
     case BinaryOpKind::AShr:
         if (y < 0 || y >= (long long)bits) return nullptr;
@@ -140,7 +139,6 @@ bool sameNumber(const Constant *a, const Constant *b) {
 Constant *foldBinary(Module &module, BinaryOpKind op, const sema::Type *operandType, const Constant *lhs,
                      const Constant *rhs, const sema::Type *resultType) {
     if (!isNumber(lhs) || !isNumber(rhs)) {
-        //null pointers compare equal to each other
         if (lhs->constKind == ConstantKind::Null && rhs->constKind == ConstantKind::Null) {
             if (op == BinaryOpKind::ICmpEQ) return module.getBool(true);
             if (op == BinaryOpKind::ICmpNE) return module.getBool(false);
@@ -157,7 +155,7 @@ Constant *foldBinary(Module &module, BinaryOpKind op, const sema::Type *operandT
     }
     if (lhs->constKind == ConstantKind::Int) return foldInt(module, op, resultType, lhs, rhs);
 
-    //floating: computed in the precision of the type, as sse does
+    //floating: computed in the precision of the type
     double x = lhs->floatValue, y = rhs->floatValue, r;
     bool single = isFloatType(operandType);
     switch (op) {
@@ -191,7 +189,7 @@ Constant *foldCast(Module &module, CastOpKind op, const Constant *operand, const
         return module.getInt(toType, (long long)unsignedValue(operand));
     case CastOpKind::SIToFP:
     case CastOpKind::UIToFP:
-        //an i64 through double then float could round twice, the machine rounds once
+        //an i64 through double then float could round twice
         if (integerBits(operand->getType()) == 64 && isFloatType(toType)) return nullptr;
         return module.getFloat(toType, op == CastOpKind::SIToFP ? (double)signedValue(operand)
                                                                 : (double)unsignedValue(operand));
@@ -200,7 +198,7 @@ Constant *foldCast(Module &module, CastOpKind op, const Constant *operand, const
         unsigned bits = integerBits(toType);
         if (std::isnan(v) || bits == 0) return nullptr;
         double t = std::trunc(v);
-        //out of range is poison in llvm and a different answer on the machine: leave it
+        //out of range is undefined: leave it for run time
         double lo = bits == 1 ? -1.0 : -std::ldexp(1.0, bits - 1);
         double hi = bits == 1 ? 0.0 : std::ldexp(1.0, bits - 1) - 1.0;
         if (t < lo || t > hi) return nullptr;
@@ -247,8 +245,6 @@ Value *foldInstruction(Module &module, const Instruction &inst, const std::vecto
     }
 }
 
-//algebraic identities (8.5.4, 8.7.4). returns the value inst equals, or null. may instead rewrite
-//inst in place into something cheaper (x * 2^k -> x << k) and set rewritten
 Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
     rewritten = false;
     switch (inst.getOpcode()) {
@@ -269,7 +265,7 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
             if (isIntConst(y, 1)) return x;
             if (isIntConst(x, 1)) return y;
             if (isIntConst(y, 0) || isIntConst(x, 0)) return module.getInt(t, 0);
-            //local reduction in strength: a multiply by 2^k is a shift
+            //a multiply by 2^k is a shift
             Value *other = x;
             const Constant *c = asConstant(y);
             if (!c || c->constKind != ConstantKind::Int) {
@@ -322,7 +318,7 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
         case BinaryOpKind::ICmpULT: case BinaryOpKind::ICmpUGT:
             if (x == y) return module.getBool(false);
             break;
-        //floating: only the identities that hold for every input, -0.0 and NaN included
+        //floating: only the identities that also hold for -0.0 and NaN
         case BinaryOpKind::FAdd:
             if (isFloatConst(y, 0.0, true)) return x;   //x + -0.0
             if (isFloatConst(x, 0.0, true)) return y;
@@ -381,7 +377,6 @@ Value *simplifyInstruction(Module &module, Instruction &inst, bool &rewritten) {
     }
 }
 
-//what makes two pure instructions compute the same value: opcode, kind, types and operands
 std::string expressionKey(const Instruction &inst) {
     std::vector<std::string> ops;
     for (const Value *operand : inst.getOperands()) ops.push_back(operand->getTypedOperand());

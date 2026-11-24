@@ -1,0 +1,19 @@
+// Tests: iv_strength_reduce replaces i * 12 in a loop with a value that grows by 12 (-O3)
+int sumScaled(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        total += i * 12;
+    }
+    return total;
+}
+
+int main() {
+    printf("total %d\n", sumScaled(10));
+    return 0;
+}
+
+// IR-O2-LABEL: define i32 @{{.*}}sumScaled
+// IR-O2: mul i32 %{{.*}}, 12
+// IR-O3-LABEL: define i32 @{{.*}}sumScaled
+// IR-O3-NOT: mul i32
+// IR-O3: add i32 %{{.*}}, 12

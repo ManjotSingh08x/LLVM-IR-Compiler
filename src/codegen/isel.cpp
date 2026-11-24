@@ -10,7 +10,7 @@ const Reg kIntArgRegs[] = {Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg:
 const size_t kIntArgCount = 6;
 const size_t kFloatArgCount = 8;
 
-//what a call overwrites (system v): every general register but rbx, rbp, rsp, r12-r15, and every xmm
+//registers a call overwrites (system v): all but rbx, rbp, rsp and r12-r15
 const std::vector<Reg> kCallClobbers = {
     Reg::RAX, Reg::RCX, Reg::RDX, Reg::RSI, Reg::RDI, Reg::R8, Reg::R9, Reg::R10, Reg::R11,
     Reg::XMM0, Reg::XMM1, Reg::XMM2, Reg::XMM3, Reg::XMM4, Reg::XMM5, Reg::XMM6, Reg::XMM7,
@@ -50,7 +50,6 @@ bool isFloatOp(ir::BinaryOpKind op) {
     }
 }
 
-//the condition code an integer compare sets: e, ne, l, g, ...
 const char *conditionCode(ir::BinaryOpKind op) {
     switch (op) {
     case ir::BinaryOpKind::ICmpEQ:  return "e";
@@ -154,8 +153,6 @@ bool FunctionEmitter::held(const ir::Value *value, Reg &reg) {
     return true;
 }
 
-//  function structure
-
 bool FunctionEmitter::emit(AsmLines &out) {
     layoutFrame();
     MCode entry;
@@ -187,7 +184,7 @@ bool FunctionEmitter::emit(AsmLines &out) {
         calleeSaved = ra.usedCalleeSaved();
     }
 
-    //the frame is complete only now: homes and spill slots were made on demand, then the save slots
+    //the frame is complete only now, so the save slots go last
     for (Reg reg : calleeSaved) frame.saveSlot(reg);
     uint64_t size = frame.size();
     std::string name = symbolName(&fn);
@@ -231,8 +228,7 @@ void FunctionEmitter::layoutFrame() {
     }
 }
 
-//arguments arrive in registers (or above the return address): -O0 to -O2 store them to their homes,
-//-O3 copies them into their virtual registers
+//stores arguments to their homes, or at -O3 copies them into their virtual registers
 void FunctionEmitter::storeIncomingArguments(MCode &code) {
     size_t    intUsed = 0;
     size_t    floatUsed = 0;
@@ -343,9 +339,7 @@ void FunctionEmitter::emitInstruction(ir::Instruction *inst, const InstNextUse &
     }
 }
 
-//  operands
-
-//any integer or pointer value into dst: constants, addresses of globals and allocas, cached or home values
+//loads any integer or pointer value into dst
 void FunctionEmitter::loadInt(const ir::Value *value, Reg dst, Width width) {
     const Width w = loadWidth(width);
     switch (value->getKind()) {
@@ -477,8 +471,6 @@ void FunctionEmitter::defineResult(const ir::Instruction *inst, const InstNextUs
     op(isXmm(src) ? "movaps" : "movq", { use(src), def(reg) });
 }
 
-//  memory
-
 void FunctionEmitter::emitLoad(ir::LoadInst *inst, const InstNextUse &info) {
     const sema::Type *type = inst->getAccessType();
     Mem mem = addressOf(inst->address, Reg::R11);
@@ -533,7 +525,6 @@ void FunctionEmitter::emitStore(ir::StoreInst *inst, const InstNextUse &info) {
     finishOperands(info);
 }
 
-//writes a constant of any type at mem: zeroinitializer, strings and nested aggregates field by field
 void FunctionEmitter::storeConstant(const ir::Constant *constant, const sema::Type *type, const Mem &mem) {
     switch (constant->constKind) {
     case ir::ConstantKind::Int:
@@ -656,8 +647,6 @@ void FunctionEmitter::emitGEP(ir::GEPInst *inst, const InstNextUse &info) {
     defineResult(inst, info, Reg::RAX);
 }
 
-//  arithmetic
-
 void FunctionEmitter::emitIntCompare(ir::BinaryInst *inst) {
     Width w = widthOf(inst->operandType);
     loadInt(inst->lhs, Reg::RAX, w);
@@ -769,8 +758,7 @@ void FunctionEmitter::widen(Reg reg, Width width, bool isSigned) {
     if (width == Width::Word) op(isSigned ? "movswl" : "movzwl", { use(reg, Width::Word), def(reg, Width::Long) });
 }
 
-//the dividend in rax. division rounds toward zero, so a negative dividend gets a bias of 2^shift - 1
-//before the arithmetic shift: its sign bits, shifted down to the low shift bits
+//signed division of rax by 2^shift, biasing a negative dividend so it rounds toward zero
 Reg FunctionEmitter::divideByPowerOfTwo(bool remainder, Width w, unsigned shift) {
     const std::string s(1, suffix(w));
     const long long bits = w == Width::Quad ? 64 : 32;
@@ -902,8 +890,7 @@ void FunctionEmitter::emitCast(ir::CastInst *inst, const InstNextUse &info) {
         }
         const std::string cvt = std::string(isDoubleType(to) ? "cvtsi2sd" : "cvtsi2ss") + suffix(convert);
         if (wf == Width::Quad && !isSigned) {
-            //above 2^63 the signed conversion would go negative: halve, keeping the low bit so the
-            //rounding is the same, convert, then double
+            //above 2^63: halve keeping the low bit, convert, then double
             std::string big = localLabel(), done = localLabel();
             op("testq", { use(Reg::RAX), use(Reg::RAX) });
             op("js", { textOp(big) });
@@ -998,10 +985,7 @@ void FunctionEmitter::emitSelect(ir::SelectInst *inst, const InstNextUse &info) 
     defineResult(inst, info, Reg::RAX);
 }
 
-//  calls
-
-//system v: integers in rdi, rsi, rdx, rcx, r8, r9, floats in xmm0-xmm7, the rest on the stack
-//right to left, %al holds the number of vector registers for a variadic callee
+//system v calling convention: integer and float argument registers, the rest on the stack
 void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
     const sema::FunctionType *type = inst->calleeType;
     std::vector<std::pair<const ir::Value *, Reg>> inRegs;
@@ -1054,7 +1038,7 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
         }
         Width w = widthOf(entry.first->getType());
         loadInt(entry.first, entry.second, w);
-        //signed chars and shorts are passed sign-extended, bools and unsigned ones zero-extended to 32 bits, as clang does
+        //small signed ints are passed sign-extended, bools and unsigned ones zero-extended
         const sema::Type *paramType = inRegTypes[r];
         widen(entry.second, w, !(ir::integerBits(paramType) == 1 || sema::isUnsigned(paramType)));
     }
@@ -1091,8 +1075,6 @@ void FunctionEmitter::emitCall(ir::CallInst *inst, const InstNextUse &info) {
     resultOnly.result = info.result;
     defineResult(inst, resultOnly, isFloatType(inst->getType()) ? Reg::XMM0 : Reg::RAX);
 }
-
-//  phis
 
 void FunctionEmitter::emitPhi(ir::PhiInst *phi, const InstNextUse &info) {
     if (global) return;  //defined by the copies on the edges into this block
@@ -1220,8 +1202,6 @@ void FunctionEmitter::branchSplit(const std::string &condCode, ir::BasicBlock *b
     jumpUnless(ifTrue, next);
 }
 
-//  terminators
-
 void FunctionEmitter::jumpUnless(const ir::BasicBlock *target, const ir::BasicBlock *next) {
     if (target != next) op("jmp", { textOp(label(target)) });
 }
@@ -1242,8 +1222,7 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
     ir::BasicBlock *block = inst->getParent();
     ir::BasicBlock *deferred = nullptr;
     if (!global) {
-        //the successors' phi copies come first, while the flags do not matter yet (a repeated edge
-        //carries the same values). only a loop exit may wait until after the jump, see deferredEdge
+        //the successors' phi copies come first; only a loop exit may wait until after the jump
         if (inst->getOpcode() == ir::Opcode::Br) deferred = deferredEdge(block, static_cast<ir::BranchInst *>(inst));
         std::set<const ir::BasicBlock *> done;
         if (deferred) done.insert(deferred);
@@ -1316,7 +1295,6 @@ void FunctionEmitter::emitTerminator(ir::Instruction *inst, const InstNextUse &i
         Width w = widthOf(sw->condition->getType());
         loadInt(sw->condition, Reg::RAX, w);
         //-O3: a case whose block has phis goes through a local label that does that edge's copies
-        //(in order of first use, so the output does not depend on addresses)
         std::vector<std::pair<const ir::BasicBlock *, std::string>> edgeLabels;
         for (const std::pair<long long, ir::BasicBlock *> &c : sw->cases) {
             std::string target = label(c.second);

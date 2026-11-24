@@ -1,0 +1,9 @@
+Base()
+Counter()
+Base()
+Counter()
+5 7 2
+~Counter()
+~Base()
+~Counter()
+~Base()

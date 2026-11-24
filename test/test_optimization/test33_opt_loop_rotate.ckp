@@ -1,0 +1,19 @@
+// Tests: loop_rotate moves the loop test to the bottom, with a guard in front (-O0 and up)
+int main() {
+    int n = 5;
+    int sum = 0;
+    int i = 0;
+    while (i < n) {
+        sum += i;
+        i++;
+    }
+    printf("sum %d\n", sum);
+    return 0;
+}
+
+// IR-O0-LABEL: define i32 @main()
+// IR-O0: icmp slt
+// IR-O0-NEXT: br i1 %{{.*}}, label %while.body.preheader, label %while.end
+// IR-O0: while.body:
+// IR-O0: while.cond:
+// IR-O0: br i1 %{{.*}}, label %while.body, label %while.end.loopexit

@@ -1,10 +1,7 @@
+//statements, local variables, scopes with destructors to run, and jumps
 #include "ir/ir_visitor.h"
 
-//statements, local variables, scopes with destructors to run, and jumps
-
 namespace ir {
-
-//  local variables 
 
 void IRVisitor::emitLocalVariable(ast::VarDecl *decl) {
     sema::Symbol *symbol = decl->symbol;
@@ -68,8 +65,6 @@ void IRVisitor::emitStaticLocal(ast::VarDecl *decl) {
 
     builder.setInsertBlock(doneBlock);
 }
-
-//  scopes and cleanups 
 
 void IRVisitor::pushScope(const ast::Stmt *owner) {
     CleanupScope scope;
@@ -193,8 +188,6 @@ void IRVisitor::emitJump(const JumpTarget &target) {
     emitCleanupsDownTo(target.cleanupDepth);
     builder.createBr(target.block);
 }
-
-//  statements 
 
 Value *IRVisitor::visitCompoundStmt(ast::CompoundStmt *node) {
     pushScope(node);

@@ -1,6 +1,6 @@
 #include "passes/sink.h"
 
-#include "passes/dfa_available_exprs.h"
+#include "dataflow/dfa_available_exprs.h"
 
 namespace passes {
 
@@ -8,7 +8,6 @@ using namespace ir;
 
 namespace {
 
-//the nearest block dominating both
 BasicBlock *commonDominator(const Dominators &doms, BasicBlock *a, BasicBlock *b) {
     while (a != nullptr && !doms.dominates(a, b)) a = doms.idom(a);
     return a;
@@ -23,7 +22,7 @@ bool Sink::run(Function &fn, Module &module, AnalysisManager &am) {
     const DefUse &defUse = am.getDefUse(fn);
     bool changed = false;
 
-    //bottom-up over the dominator tree and each block, so users move before what they use
+    //bottom-up, so users move before what they use
     std::vector<BasicBlock *> order(doms.preorder().rbegin(), doms.preorder().rend());
     for (BasicBlock *block : order) {
         std::vector<Instruction *> candidates;

@@ -19,13 +19,12 @@ enum class SymbolKind {
     Variable,   //a global, a local, or a static data member
     Parameter,
     Field,      //a non-static data member
-    Function,   //a free function, a method, a constructor or a destructor
+    Function,
     Record,
-    Typedef,    //another name for its type
+    Typedef,
     Namespace
 };
 
-//one declared name
 class Symbol {
 public:
     Symbol(SymbolKind kind, std::string name, const Type *type, int line, int col)
@@ -40,12 +39,12 @@ public:
     //the mangled name, empty for locals and fields
     std::string mangledName;
     const Type *type;
-    Scope      *scope = nullptr;  //the scope the symbol is declared in
-    ast::Decl  *decl = nullptr;   //its declaration, null for builtins
+    Scope      *scope = nullptr;
+    ast::Decl  *decl = nullptr;
     int         line;
     int         col;
 
-    //for members of a record
+    //set for members of a record
     RecordSymbol   *parentRecord = nullptr;
     ast::AccessKind access = ast::AccessKind::None;
 
@@ -70,7 +69,7 @@ public:
     bool                isConstructor = false;
     bool                isDestructor = false;
     bool                isBuiltin = false;      //printf and scanf
-    ast::FunctionDecl  *definition = nullptr;   //the declaration with the body
+    ast::FunctionDecl  *definition = nullptr;
 };
 
 struct BaseClass {
@@ -83,13 +82,12 @@ public:
     RecordSymbol(std::string name, bool isClass, int line, int col)
         : Symbol(SymbolKind::Record, std::move(name), nullptr, line, col), isClass(isClass) {}
 
-    //N::Outer::Inner
     std::string qualifiedName() const;
 
     bool                          isClass;
-    bool                          isComplete = false;  //set once all members are declared
+    bool                          isComplete = false;
     Scope                        *members = nullptr;
-    RecordSymbol                 *outer = nullptr;     //the enclosing record of a nested one
+    RecordSymbol                 *outer = nullptr;
     std::vector<BaseClass>        bases;
     std::vector<Symbol *>         fields;  //non-static data members, in layout order
     std::vector<FunctionSymbol *> constructors;
@@ -102,7 +100,6 @@ public:
     NamespaceSymbol(std::string name, int line, int col)
         : Symbol(SymbolKind::Namespace, std::move(name), nullptr, line, col) {}
 
-    //N::M
     std::string qualifiedName() const;
 
     Scope *members = nullptr;
@@ -110,7 +107,6 @@ public:
 
 enum class ScopeKind { Global, Namespace, Record, Function, Block, Lambda };
 
-//one node of the scope tree, kept for later passes to walk
 class Scope {
 public:
     Scope(ScopeKind kind, Scope *parent, int line, int col)
@@ -135,18 +131,18 @@ public:
     int       line;
     int       col;
 
-    RecordSymbol    *record = nullptr;    //for a record scope
-    NamespaceSymbol *space = nullptr;     //for a namespace scope
-    FunctionSymbol  *function = nullptr;  //for a function scope
-    ast::LambdaExpr *lambda = nullptr;    //for a lambda scope
+    RecordSymbol    *record = nullptr;
+    NamespaceSymbol *space = nullptr;
+    FunctionSymbol  *function = nullptr;
+    ast::LambdaExpr *lambda = nullptr;
 
     std::vector<std::unique_ptr<Scope>>       children;
-    std::vector<std::unique_ptr<Symbol>>      symbols;  //in declaration order
+    std::vector<std::unique_ptr<Symbol>>      symbols;
     llvm::StringMap<std::vector<Symbol *>>    table;
-    llvm::StringMap<ast::LabelStmt *>         labels;   //for function and lambda scopes
+    llvm::StringMap<ast::LabelStmt *>         labels;
 };
 
-//the namespaces a declaration in scope sits in, for mangled names: 1N1M, empty outside any
+//the mangled prefix of the namespaces scope sits in, such as 1N1M
 std::string namespacePath(const Scope *scope);
 
 //the same as written in source: N::M::, empty outside any namespace
@@ -156,13 +152,11 @@ std::string namespacePrefix(const Scope *scope);
 struct QualifierTarget {
     Scope        *scope = nullptr;
     RecordSymbol *record = nullptr;
-    std::string   error;  //set when the qualifier names nothing usable
-    std::string   spelling() const;  //namespace 'N' or class 'C', for messages
+    std::string   error;
+    std::string   spelling() const;
 };
 
-//resolves the qualifier seen from scope at line:col. the first part is the nearest namespace or class
-//of that name declared before the use (or anywhere in an enclosing class), each later part a
-//namespace or class inside the one before
+//resolves a qualifier like A::B:: as seen from scope at line:col
 QualifierTarget resolveQualifier(Scope *from, const std::vector<std::string> &qualifier, int line, int col);
 
 //root of the scope tree and owner of every compound type
@@ -183,7 +177,6 @@ public:
     const Type         *constOf(const Type *type);
     ClosureType        *closureType(ast::LambdaExpr *lambda);
 
-    //writes the scope tree with every symbol, its type and its mangled name
     void dump(std::ostream &out);
 
 private:

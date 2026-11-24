@@ -1,0 +1,14 @@
+int main() {
+    // Tests: scanf of integers and a double
+    int count;
+    double price;
+    scanf("%d %lf", &count, &price);
+
+    // Tests: scanf of a word into a char array
+    char name[16];
+    scanf("%15s", name);
+
+    // Tests: printf with the values read
+    printf("%s bought %d for %.2f\n", name, count, count * price);
+    return 0;
+}

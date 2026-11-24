@@ -7,7 +7,7 @@ namespace ast {
 
 class ParamDecl;
 
-//a possibly qualified name, Shape::area. lastTok is the token index of the final part
+//a possibly qualified name such as Shape::area, lastTok is the token index of its last part
 struct QualifiedName {
     std::vector<std::string> parts;
     int lastTok = -1;
@@ -24,19 +24,17 @@ struct QualifiedName {
     }
 };
 
-//N::M::name for messages and dumps, the qualifier being the parts before the name
 inline std::string qualifiedSpelling(const std::vector<std::string> &qualifier, const std::string &name) {
     std::string out;
     for (const std::string &part : qualifier) out += part + "::";
     return out + name;
 }
 
-//a type as written, read inside out: int **(*p)[10] is Pointer -> Array [10] -> Pointer -> Pointer -> int
+//a type as written, each pointer, reference, array or function wraps the type inside it
 enum class TypeSpecKind { Builtin, Named, Struct, Pointer, Reference, Array, Function };
 
 class TypeSpec : public ASTNode {
 public:
-    //a type name: int, Dog, struct Node
     TypeSpec(TypeSpecKind specKind, std::string name, int tokIndex, int line, int col);
 
     //a pointer, reference, array or function around inner, null until the base type is known
@@ -50,7 +48,7 @@ public:
             || specKind == TypeSpecKind::Struct;
     }
 
-    //each declarator sharing a type name gets its own copy
+    //copies only the type name part, for each declarator that shares it
     std::unique_ptr<TypeSpec> clone() const {
         std::unique_ptr<TypeSpec> copy(new TypeSpec(specKind, name, tokIndex, line, col));
         copy->isConst = isConst;
@@ -59,15 +57,15 @@ public:
     }
 
     TypeSpecKind              specKind;
-    std::string               name;           //for a type name
-    bool                      isConst = false;  //const int, int *const: for a type name or a pointer
-    std::vector<std::string>  qualifier;        //N::Dog: the namespaces and classes before a Named name
-    int                       tokIndex = -1;  //index of the naming token in the token table
-    std::unique_ptr<TypeSpec> inner;          //for the wrapping kinds
-    std::unique_ptr<Expr>     size;           //for Array, null for an unsized []
-    NodeList<ParamDecl>       params;         //for Function
+    std::string               name;
+    bool                      isConst = false;
+    std::vector<std::string>  qualifier;
+    int                       tokIndex = -1;
+    std::unique_ptr<TypeSpec> inner;
+    std::unique_ptr<Expr>     size;
+    NodeList<ParamDecl>       params;
 
-    const sema::Type         *resolved = nullptr;  //filled in by the symbol builder
+    const sema::Type         *resolved = nullptr;
 };
 
 //how a variable is initialised: int a = 1, int a{1}, Dog d(3)
@@ -80,16 +78,15 @@ public:
     VarDecl(QualifiedName name, std::unique_ptr<TypeSpec> type, int line, int col)
         : Decl(ASTKind::VarDecl, line, col), name(std::move(name)), type(std::move(type)) {}
 
-
     QualifiedName             name;
     std::unique_ptr<TypeSpec> type;
     InitStyle                 initStyle = InitStyle::None;
-    std::unique_ptr<Expr>     init;      //for Copy and Brace
-    NodeList<Expr>            ctorArgs;  //for CtorArgs
+    std::unique_ptr<Expr>     init;
+    NodeList<Expr>            ctorArgs;
     bool                      isStatic = false;
 
     sema::Symbol             *symbol = nullptr;
-    sema::FunctionSymbol     *constructor = nullptr;  //the constructor that runs, if any
+    sema::FunctionSymbol     *constructor = nullptr;
 };
 
 class ParamDecl : public Decl {
@@ -97,8 +94,7 @@ public:
     ParamDecl(std::string name, std::unique_ptr<TypeSpec> type, int line, int col)
         : Decl(ASTKind::ParamDecl, line, col), name(std::move(name)), type(std::move(type)) {}
 
-
-    std::string               name;  //empty for an unnamed parameter
+    std::string               name;
     std::unique_ptr<TypeSpec> type;
 
     sema::Symbol             *symbol = nullptr;
@@ -122,17 +118,16 @@ public:
         : FunctionDecl(ASTKind::FunctionDecl, std::move(returnType), std::move(name),
                        std::move(params), std::move(body), line, col) {}
 
-
     bool isDefinition() const { return body != nullptr; }
 
-    std::unique_ptr<TypeSpec>     returnType;  //null for constructors and destructors
+    std::unique_ptr<TypeSpec>     returnType;
     QualifiedName                 name;
     NodeList<ParamDecl>           params;
-    std::unique_ptr<CompoundStmt> body;  //null for a declaration
+    std::unique_ptr<CompoundStmt> body;
     bool                          isStatic = false;
 
     sema::FunctionSymbol         *symbol = nullptr;
-    sema::Scope                  *scope = nullptr;  //holds the parameters
+    sema::Scope                  *scope = nullptr;
 
 protected:
     FunctionDecl(ASTKind kind, std::unique_ptr<TypeSpec> returnType, QualifiedName name,
@@ -151,7 +146,6 @@ public:
 
 };
 
-//the last part of the name carries the ~, as in Dog::~Dog
 class DestructorDecl : public FunctionDecl {
 public:
     DestructorDecl(QualifiedName name, NodeList<ParamDecl> params,
@@ -164,10 +158,9 @@ public:
 struct BaseSpecifier {
     AccessKind               access = AccessKind::None;
     std::string              name;
-    std::vector<std::string> qualifier;  //class D : public N::Base
+    std::vector<std::string> qualifier;
 };
 
-//struct or class definition
 class RecordDecl : public Decl {
 public:
     RecordDecl(bool isClass, std::string name, std::vector<BaseSpecifier> bases,
@@ -175,33 +168,29 @@ public:
         : Decl(ASTKind::RecordDecl, line, col), isClass(isClass), name(std::move(name)),
           bases(std::move(bases)), members(std::move(members)) {}
 
-
     bool                       isClass;
     std::string                name;
     std::vector<BaseSpecifier> bases;
     NodeList<Decl>             members;
-    bool                       hasBody = true;  //false for a forward declaration, struct Node;
+    bool                       hasBody = true;
 
     sema::RecordSymbol        *symbol = nullptr;
-    sema::Scope               *scope = nullptr;  //holds the members
+    sema::Scope               *scope = nullptr;
 };
 
-//public: private: protected: inside a class, kept in member order
 class AccessSpecDecl : public Decl {
 public:
     AccessSpecDecl(AccessKind access, int line, int col)
         : Decl(ASTKind::AccessSpecDecl, line, col), access(access) {}
 
-
     AccessKind access;
 };
 
-//typedef int *IntPtr; one node per declarator, each holding the aliased type
+//one node per declarator of a typedef
 class TypedefDecl : public Decl {
 public:
     TypedefDecl(std::string name, std::unique_ptr<TypeSpec> type, int line, int col)
         : Decl(ASTKind::TypedefDecl, line, col), name(std::move(name)), type(std::move(type)) {}
-
 
     std::string               name;
     std::unique_ptr<TypeSpec> type;
@@ -209,7 +198,7 @@ public:
     sema::Symbol             *symbol = nullptr;
 };
 
-//namespace N { ... }, opened again with the same name it adds to the same namespace
+//reopening a namespace adds to the same scope
 class NamespaceDecl : public Decl {
 public:
     NamespaceDecl(std::string name, NodeList<Decl> decls, int line, int col)
@@ -218,7 +207,7 @@ public:
     std::string    name;
     NodeList<Decl> decls;
 
-    sema::Scope   *scope = nullptr;  //the namespace's scope, shared by every opening
+    sema::Scope   *scope = nullptr;
 };
 
 } // namespace ast

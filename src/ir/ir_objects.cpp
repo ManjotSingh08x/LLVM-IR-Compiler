@@ -1,8 +1,7 @@
+//object lifetime: initialization, construction, destruction, new, delete and base conversions
 #include "ir/ir_visitor.h"
 
 #include "semantic/constants.h"
-
-//object lifetime: initialization, construction, destruction, new, delete and base conversions
 
 namespace ir {
 
@@ -27,9 +26,6 @@ ast::Expr *referenceSource(ast::VarDecl *decl) {
 
 } // namespace
 
-//  initialization 
-
-//gives the object at address its initial value
 void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl) {
     //a reference stores the address of the object it is bound to
     if (sema::asReference(type)) {
@@ -54,7 +50,7 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
                 emitDefaultConstruct(address, type, nullptr);
             }
         } else if (!decl->ctorArgs.empty()) {
-            builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);    //int x(5)
+            builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);
         }
         return;
 
@@ -73,7 +69,7 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     }
     const sema::ArrayType *array = sema::asArray(type);
     if (array && expr->getKind() == ast::ASTKind::StringLiteral) {
-        //char s[8] = "hi": the characters, the \0, then zeros up to the size
+        //char array from a string: the characters, the \0, then zeros
         std::string bytes = sema::decodeStringLiteral(static_cast<ast::StringLiteral *>(expr)->spelling);
         bytes.resize(array->size, '\0');
         builder.createStore(type, module.getString(type, bytes), address);
@@ -90,7 +86,7 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     builder.createStore(type, emitRValue(expr), address);
 }
 
-//{ ... }: constructor arguments, or an element or field-wise fill, the rest zero or default constructed
+//{ ... }: constructor arguments or element and field fill, the rest zero or default constructed
 void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list) {
     if (list->constructor) {
         emitConstructorCall(list->constructor, address, list->inits);
@@ -133,7 +129,6 @@ void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitLi
         return;
     }
 
-    //int a{5} or int b{}
     if (list->inits.empty()) {
         builder.createStore(type, module.getZero(type), address);
     } else {
@@ -144,7 +139,7 @@ void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitLi
 //a field without an initializer: its in-class initializer or default construction
 void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *record, const sema::Symbol *field) {
     ast::VarDecl *decl = RecordLayout::fieldDeclaration(field);
-    if (decl == nullptr && !layout.needsConstruction(field->type)) return;  //int plain; needs no code
+    if (decl == nullptr && !layout.needsConstruction(field->type)) return;
 
     Value *fieldAddr = builder.createStructGEP(record->type, object, RecordLayout::fieldIndex(record, field));
     if (decl == nullptr) {
@@ -159,8 +154,6 @@ void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *re
     ctx().thisPtr = savedThis;
     ctx().thisRecord = savedRecord;
 }
-
-//  construction 
 
 //default-constructs an object with no initializer, element-wise for arrays
 void IRVisitor::emitDefaultConstruct(Value *address, const sema::Type *type, const sema::FunctionSymbol *chosen) {
@@ -211,8 +204,6 @@ void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value
     for (const sema::Symbol *field : record->fields) emitFieldDefaultInit(thisPtr, record, field);
 }
 
-//  destruction 
-
 //the end of every destructor: fields in reverse order, then bases in reverse
 void IRVisitor::emitMemberDestruction(const sema::RecordSymbol *record, Value *thisPtr) {
     for (size_t i = record->fields.size(); i > 0; i--) {
@@ -261,8 +252,6 @@ Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isC
     pendingStructors.push_back(pending);
     return fn;
 }
-
-//  array element loops, destruction runs backwards 
 
 void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Value *begin, Value *end,
                                 ElementAction action, const sema::FunctionSymbol *ctor) {
@@ -313,8 +302,6 @@ void IRVisitor::emitElementAction(Value *element, const sema::Type *elementType,
     }
 }
 
-//  fields and base classes 
-
 //the address of a field, moved into the base subobject when inherited
 Value *IRVisitor::fieldAddress(Value *object, const sema::RecordSymbol *objectRecord, const sema::Symbol *field) {
     const sema::RecordSymbol *owner = field->parentRecord;
@@ -344,8 +331,6 @@ Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, c
                                          module.getNull(module.pointerType()));
     return builder.createSelect(isNull, module.getNull(module.pointerType()), result, module.pointerType());
 }
-
-//  new and delete 
 
 Value *IRVisitor::callMalloc(Value *bytes) {
     Function *fn = module.getRuntimeMalloc();
@@ -389,7 +374,6 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
         return object;
     }
 
-    //new T[n] and new T[n]{...}
     Value *count = builder.createCast(CastOpKind::SExt, emitRValue(node->dims[0].get()), sema::intType(), sema::longType());
     Value *bytes = sizeOf(element, count);
     Value *elements = nullptr;

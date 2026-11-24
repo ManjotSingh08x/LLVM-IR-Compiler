@@ -1,0 +1,33 @@
+// Tests: constructor and destructor order
+class Base {
+public:
+    Base() { printf("Base()\n"); }
+    ~Base() { printf("~Base()\n"); }
+};
+
+// Tests: inheritance and member functions
+class Counter : public Base {
+    int value;
+
+public:
+    static int instances;
+    Counter() { value = 0; instances++; printf("Counter()\n"); }
+    ~Counter() { printf("~Counter()\n"); }
+    void add(int n) { value += n; }
+    int get() { return value; }
+};
+
+int Counter::instances = 0;
+
+int main() {
+    // Tests: object on the stack
+    Counter c;
+    c.add(5);
+
+    // Tests: object on the heap
+    Counter *h = new Counter();
+    h->add(7);
+    printf("%d %d %d\n", c.get(), h->get(), Counter::instances);
+    delete h;
+    return 0;
+}

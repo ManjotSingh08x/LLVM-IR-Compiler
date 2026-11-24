@@ -1,0 +1,18 @@
+// Tests: dce removes computations whose results are never used (-O2 and up)
+int compute(int x) {
+    int unused = x * 37;
+    int alsoUnused = unused + 11;
+    return x + 1;
+}
+
+int main() {
+    printf("%d\n", compute(5));
+    return 0;
+}
+
+// IR-O1-LABEL: define i32 @{{.*}}compute
+// IR-O1: mul i32 %x, 37
+// IR-GE2-LABEL: define i32 @{{.*}}compute
+// IR-GE2-NOT: mul i32
+// IR-GE2: add i32 %x, 1
+// IR-GE2-NEXT: ret i32

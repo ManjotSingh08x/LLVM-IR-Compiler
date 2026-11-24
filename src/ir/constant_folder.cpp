@@ -58,8 +58,6 @@ FoldedNumber makeFloat(double value, const sema::Type *type) {
 
 } // namespace
 
-//whole declarations and values
-
 Constant *ConstantFolder::foldVariable(ast::VarDecl *decl, const sema::Type *type) {
     //a constructor, or a member that needs one, always runs as code
     if (decl->constructor != nullptr || layout.needsConstruction(type)) return nullptr;
@@ -150,12 +148,11 @@ Constant *ConstantFolder::foldList(ast::InitListExpr *list, const sema::Type *ty
         return module.getAggregate(type, elements);
     }
 
-    //int a{5} or int b{}
     if (list->inits.empty()) return module.getZero(type);
     return fold(list->inits[0].get(), type);
 }
 
-//char s[8] = "hi" is the characters, the \0, and zeros up to the size
+//a char array from a string: the characters, the \0, then zeros
 Constant *ConstantFolder::foldStringArray(ast::StringLiteral *literal, const sema::ArrayType *array) {
     std::string bytes = sema::decodeStringLiteral(literal->spelling);
     bytes.resize(array->size, '\0');
@@ -230,12 +227,10 @@ Constant *ConstantFolder::foldAddress(ast::Expr *expr) {
     return module.getAddress(global);
 }
 
-// numbers 
-
 bool ConstantFolder::foldNumber(ast::Expr *expr, FoldedNumber &out) {
     switch (expr->getKind()) {
     case ast::ASTKind::DeclRefExpr: {
-        //a const integer variable with a constant value, const int M = N * 2
+        //a const integer variable with a constant value
         long long value = 0;
         if (!sema::evaluateConstant(expr, value)) return false;
         out = makeInt(value, expr->type);

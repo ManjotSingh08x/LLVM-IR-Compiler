@@ -29,7 +29,7 @@ struct LocalCleanup {
     const sema::Type *type;   //a record, or an array of records
 };
 
-//one { } block (or the init part of a for) with the objects declared in it so far
+//one { } block with the objects declared in it so far
 struct CleanupScope {
     const ast::Stmt          *owner = nullptr;
     std::vector<LocalCleanup> objects;
@@ -59,9 +59,9 @@ struct FunctionContext {
     const sema::Type                               *returnType = nullptr;
     Value                                          *thisPtr = nullptr;
     const sema::RecordSymbol                       *thisRecord = nullptr;
-    Value                                          *retvalSlot = nullptr;   //see visitReturnStmt
+    Value                                          *retvalSlot = nullptr;
     Value                                          *resultAddress = nullptr;
-    BasicBlock                                     *returnBlock = nullptr;  //destructors: where return goes
+    BasicBlock                                     *returnBlock = nullptr;  //where return jumps when destructors must run
     std::map<const sema::Symbol *, VariableBinding> locals;
     std::map<const ast::LabelStmt *, BasicBlock *>  labelBlocks;
     std::map<const ast::LabelStmt *, LabelInfo>     labels;
@@ -71,7 +71,6 @@ struct FunctionContext {
     std::vector<CleanupScope>                       cleanupScopes;
 };
 
-//what is needed to lower one function body
 struct FunctionInfo {
     Function                 *function = nullptr;
     const sema::FunctionType *signature = nullptr;  //the parameters callers see, without this
@@ -89,24 +88,21 @@ struct PendingStructor {
     bool                      isConstructor;
 };
 
-//repeat what an object needs for every element of an array
 enum class ElementAction { DefaultConstruct, ZeroFill, Destroy };
 
-//what ++x, x++, --x and x-- computed
 struct IncDecResult {
     Value *address = nullptr;
     Value *oldValue = nullptr;
     Value *newValue = nullptr;
 };
 
-//lowers the checked tree to a Module: statements via visit, expressions via emitLValue/emitRValue
+//lowers the checked syntax tree to an ir Module
 class IRVisitor : public ast::ASTVisitor<IRVisitor, Value *> {
 public:
     IRVisitor(Module &module, sema::SymbolTable &symTab, sema::Diagnostics &diags);
 
     void generate(ast::Program *program);
 
-    //statements. they return null
     Value *visitCompoundStmt(ast::CompoundStmt *node);
     Value *visitDeclStmt(ast::DeclStmt *node);
     Value *visitExprStmt(ast::ExprStmt *node);
@@ -124,7 +120,6 @@ public:
     Value *visitDefaultStmt(ast::DefaultStmt *node);
 
 private:
-    //  ir_visitor.cpp: passes, functions and globals 
     void collectScope(sema::Scope *scope);
     void declareFunction(sema::FunctionSymbol *fn);
     void emitGlobalVariables(ast::Program *program);
@@ -142,7 +137,6 @@ private:
     Function *functionFor(const sema::FunctionSymbol *fn);
     void error(int line, int col, const std::string &message);
 
-    //  ir_statements.cpp: statements, locals, scopes 
     void emitLocalVariable(ast::VarDecl *decl);
     void emitStaticLocal(ast::VarDecl *decl);
     void pushScope(const ast::Stmt *owner);
@@ -154,7 +148,6 @@ private:
     BasicBlock *labelBlock(const ast::LabelStmt *label);
     void emitJump(const JumpTarget &target);
 
-    //  ir_expressions.cpp: expressions 
     Value *emitLValue(ast::Expr *expr);
     Value *emitRValue(ast::Expr *expr);
     void   emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFalse);
@@ -179,7 +172,6 @@ private:
     Value *emitArithmeticConversion(Value *value, const sema::Type *from, const sema::Type *to);
     Value *sizeOf(const sema::Type *type, Value *count);
 
-    //  ir_calls.cpp: calls and lambdas 
     Value *emitCall(ast::CallExpr *node);
     Value *emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn);
     std::vector<Value *> emitArguments(const sema::FunctionType *signature, ast::NodeList<ast::Expr> &args);
@@ -188,7 +180,6 @@ private:
     void      emitLambdaBody(ast::LambdaExpr *lambda);
     void      emitLambdaInto(Value *address, ast::LambdaExpr *lambda);
 
-    //  ir_objects.cpp: objects 
     void   emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl);
     void   emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr);
     void   emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list);

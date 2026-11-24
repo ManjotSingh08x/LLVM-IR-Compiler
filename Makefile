@@ -10,51 +10,46 @@ LLVM_CONFIG ?= llvm-config
 CXX         ?= g++
 endif
 
-LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG) --cxxflags)
-LLVM_LDFLAGS  := $(shell $(LLVM_CONFIG) --ldflags)
-LLVM_LIBS     := $(shell $(LLVM_CONFIG) --libs support) \
-                 $(shell $(LLVM_CONFIG) --system-libs)
-
-# llvm-config reports its own warning and standard settings, ours come after it
-CXXFLAGS := $(LLVM_CXXFLAGS) -std=c++17 -Wall -Isrc -Ibuild
-LDFLAGS  := $(LLVM_LDFLAGS)
-LDLIBS   := $(LLVM_LIBS)
-
-FLEX     := flex
-BISON    := bison
+CXXFLAGS := $(shell $(LLVM_CONFIG) --cxxflags) -std=c++17 -Wall -Isrc -Ibuild
+LDFLAGS  := $(shell $(LLVM_CONFIG) --ldflags)
+LDLIBS   := $(shell $(LLVM_CONFIG) --libs support) $(shell $(LLVM_CONFIG) --system-libs)
 
 BUILD    := build
-SRC      := src
 TARGET   := $(BUILD)/parser
 PARSER   := $(BUILD)/parser.tab.cpp
 PSTAMP   := $(BUILD)/parser.stamp
 SCANNER  := $(BUILD)/lex.yy.cpp
-AST_SRCS := $(wildcard $(SRC)/ast/*.cpp) $(wildcard $(SRC)/semantic/*.cpp) $(wildcard $(SRC)/ir/*.cpp) \
-            $(wildcard $(SRC)/passes/*.cpp) $(wildcard $(SRC)/codegen/*.cpp)
-AST_HDRS := $(wildcard $(SRC)/ast/*.h) $(wildcard $(SRC)/semantic/*.h) $(wildcard $(SRC)/ir/*.h) \
-            $(wildcard $(SRC)/passes/*.h) $(wildcard $(SRC)/codegen/*.h) $(SRC)/declarator.h
 
-.PHONY: all clean test
+MODULES  := ast semantic ir dataflow passes pipeline codegen
+SRCS     := $(foreach m,$(MODULES),$(wildcard src/$(m)/*.cpp))
+HDRS     := $(foreach m,$(MODULES),$(wildcard src/$(m)/*.h)) src/declarator.h
+
+.PHONY: all test clean diagram
 
 all: $(TARGET)
 
-$(BUILD):
+$(PSTAMP): src/parser.y
 	mkdir -p $(BUILD)
-
-$(PSTAMP): $(SRC)/parser.y | $(BUILD)
-	$(BISON) -d -v -b $(BUILD)/parser $(SRC)/parser.y
+	bison -d -v -b $(BUILD)/parser src/parser.y
 	mv $(BUILD)/parser.tab.c $(PARSER)
 	touch $(PSTAMP)
 
-$(SCANNER): $(SRC)/lexer.l $(SRC)/token_types.h $(PSTAMP) | $(BUILD)
-	$(FLEX) -o $(SCANNER) $(SRC)/lexer.l
+$(SCANNER): src/lexer.l src/token_types.h $(PSTAMP)
+	flex -o $(SCANNER) src/lexer.l
 
-$(TARGET): $(PSTAMP) $(SCANNER) $(AST_SRCS) $(AST_HDRS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(PARSER) $(SCANNER) $(AST_SRCS) $(LDLIBS) -o $(TARGET)
+$(TARGET): $(PSTAMP) $(SCANNER) $(SRCS) $(HDRS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(PARSER) $(SCANNER) $(SRCS) $(LDLIBS) -o $(TARGET)
 
-# run.sh builds first, so this target does not depend on $(TARGET)
-test:
-	@bash run.sh
+test: $(TARGET)
+	@bash run_tests.sh
 
 clean:
 	rm -rf $(BUILD) outputs
+
+# README architecture diagram: needs tectonic and pdftocairo (poppler)
+diagram: docs/architecture.svg
+
+docs/architecture.svg: docs/architecture.tex
+	cd docs && tectonic architecture.tex
+	pdftocairo -svg docs/architecture.pdf docs/architecture.svg
+	rm -f docs/architecture.pdf

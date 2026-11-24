@@ -7,7 +7,6 @@
 
 #include "ast/ast.h"
 
-
 namespace sema {
 
 class RecordSymbol;
@@ -36,7 +35,7 @@ public:
     //const int is an int with the same kind, made by SymbolTable::constOf
     bool isConst() const { return unqualifiedType != nullptr; }
 
-    const Type *unqualifiedType = nullptr;  //for a const type, the same type without const
+    const Type *unqualifiedType = nullptr;
 
 private:
     const TypeKind kind;
@@ -74,10 +73,9 @@ public:
 
     const Type               *returnType;
     std::vector<const Type *> params;
-    bool                      isVariadic;  //printf and scanf
+    bool                      isVariadic;
 };
 
-//a struct or class, identified by its declaration
 class RecordType : public Type {
 public:
     explicit RecordType(RecordSymbol *record) : Type(TypeKind::Record), record(record) {}
@@ -94,7 +92,6 @@ public:
     const FunctionType *signature = nullptr;
 };
 
-//builtin types
 const Type *voidType();
 const Type *boolType();
 const Type *charType();
@@ -120,21 +117,20 @@ const FunctionType  *asFunction(const Type *type);
 const ClosureType   *asClosure(const Type *type);
 RecordSymbol        *asRecord(const Type *type);
 
-//classification
-bool isIntegral(const Type *type);    //bool, the three chars, short, int, long and their unsigned forms
-bool isUnsigned(const Type *type);    //unsigned char, short, int and long
+bool isIntegral(const Type *type);
+bool isUnsigned(const Type *type);
 unsigned integerSize(const Type *type);  //bytes of an integral type, 0 for anything else
-bool isFloating(const Type *type);    //float, double
+bool isFloating(const Type *type);
 bool isArithmetic(const Type *type);
 bool isScalar(const Type *type);      //arithmetic, pointers and null: usable as a condition
-bool isObjectPointer(const Type *type);  //a pointer that can be dereferenced to an object
+bool isObjectPointer(const Type *type);
 bool isError(const Type *type);
-bool isIncompleteRecord(const Type *type);  //a struct or class declared but not yet defined
+bool isIncompleteRecord(const Type *type);
 
 //structural equality: same kind, same const and same parts, records by declaration
 bool isSameType(const Type *a, const Type *b);
 
-//isSameType with const ignored at every level, for the ir where only the representation counts
+//isSameType ignoring const at every level
 bool isSameUnqualified(const Type *a, const Type *b);
 
 //the type without its top-level const: const int is int, const int * stays as it is
@@ -143,17 +139,14 @@ const Type *unqualified(const Type *type);
 //true when base is a base of derived at any depth
 bool isDerivedFrom(const RecordSymbol *derived, const RecordSymbol *base);
 
-//the referred type for a reference, the type itself otherwise
 const Type *stripReference(const Type *type);
 
-//array-to-pointer and function-to-pointer decay
 const Type *decay(const Type *type, SymbolTable &table);
 
-//bool, the chars and the shorts become int, the integer promotion
+//the integer promotion: bool, the chars and the shorts become int
 const Type *promote(const Type *type);
 
-//the usual arithmetic conversions of two promoted types: double, then float, then the integer
-//type of higher rank, unsigned when the unsigned one is at least as wide
+//the usual arithmetic conversions of two promoted types
 const Type *commonArithmeticType(const Type *a, const Type *b);
 
 //how well a value converts to a type, best first
@@ -171,13 +164,12 @@ struct Conversion {
     bool                        addsConst = false;  //int * to const int *, int to const int &: loses a tie
 };
 
-//the implicit conversion from type from to type to
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table);
 
-//C style spelling, for messages and dumps: int **(*)[10]
+//C style spelling for messages: int **(*)[10]
 std::string typeToString(const Type *type);
 
-//the type code used in mangled names, see the README
+//the type code used in mangled names
 std::string mangleType(const Type *type);
 
 //the llvm type a value is stored as, pointers are opaque ptr

@@ -1,3 +1,4 @@
+//base class for loop passes and the loop forms they rely on
 #ifndef PASSES_LOOP_PASS_H
 #define PASSES_LOOP_PASS_H
 
@@ -5,17 +6,16 @@
 #include <string>
 #include <vector>
 
-#include "passes/pass.h"
+#include "pipeline/pass.h"
 
 namespace passes {
 
 enum class LoopResult {
     Unchanged,
-    Changed,     //instructions moved or rewritten, the cfg is the same
-    CFGChanged   //blocks or edges changed, the loops are found again before the next one
+    Changed,     //instructions moved or rewritten, same cfg
+    CFGChanged   //blocks or edges changed, loops are found again
 };
 
-//what a loop pass gets for the loop it is working on. the analyses are fresh for this call
 struct LoopContext {
     ir::Function      &fn;
     ir::Module        &module;
@@ -23,25 +23,17 @@ struct LoopContext {
     const Dominators  &doms;
     const DefUse      &defUse;
 
-    //true when value is an instruction placed in a block of loop
     bool isDefinedInLoop(const ir::Value *value, const Loop &loop) const;
 
-    //true when block dominates every exit of loop, so it runs on every iteration that leaves
     bool dominatesAllExits(const ir::BasicBlock *block, const Loop &loop) const;
 
-    //a loop whose header is block is not given to the pass again in this run, for loops the pass
-    //created or rearranged itself (a rotated loop has a new header)
+    //the loop with this header is not given to the pass again in this run
     void markDone(ir::BasicBlock *header) { done.insert(header); }
 
     std::set<ir::BasicBlock *> &done;
 };
 
-//the base of every loop optimization. run() is the same for all of them:
-//  1. find the natural loops (dfa_loops) and put each in canonical form: a preheader, a single
-//     latch and dedicated exits (every exit block entered only from inside the loop)
-//  2. give the loops to runOnLoop innermost first, each once; after CFGChanged the loops are
-//     found and canonicalized again and the walk goes on with the ones not done yet
-//a subclass writes name() and runOnLoop()
+//canonicalizes every loop, then runs runOnLoop on each, innermost first
 class LoopPass : public FunctionPass {
 public:
     bool run(ir::Function &fn, ir::Module &module, AnalysisManager &am) final;
@@ -49,35 +41,24 @@ public:
 protected:
     virtual LoopResult runOnLoop(Loop &loop, LoopContext &ctx) = 0;
 
-    //true: every loop is also put in loop-closed ssa form (formLCSSA) before runOnLoop sees it
     virtual bool needsLCSSA() const { return false; }
 
-    //a loop whose header is the entry block cannot get a preheader without moving the allocas
-    //into the loop, such loops are never canonicalized or handed to runOnLoop
+    //a loop headed by the entry block cannot get a preheader, so it is skipped
     static bool isUsable(const Loop &loop, const ir::Function &fn);
 
 private:
-    //puts every usable loop in canonical form, true when the cfg changed
     static bool canonicalize(ir::Function &fn, AnalysisManager &am);
 
-    //forms lcssa for every usable loop, true when any phi was made
+    //forms lcssa for every usable loop
     static bool closeLoops(ir::Function &fn, AnalysisManager &am);
 };
 
-//loop-closed ssa: every value defined in loop and used outside it reaches those uses through a phi
-//in an exit block ("x.lcssa = phi [x, exiting block]"), so copying the loop only has to add entries
-//to those phis. each outside use takes the phi of the exit block that dominates it. false, with
-//nothing changed for that value, when a use is dominated by no single exit (the value is then left
-//as it was and isLCSSA stays false). changed is set when any phi was made
+//routes each outside use of a loop value through an exit-block phi; false when no single exit dominates a use
 bool formLCSSA(ir::Function &fn, const Loop &loop, const Dominators &doms, bool &changed);
 
-//true when no value defined in loop is used outside it except by the exit blocks' phis
 bool isLCSSA(const Loop &loop, const DefUse &defUse);
 
-//makes a new block named label that preds jump to instead of target, and that jumps to target.
-//phis in target merge the entries of preds into a phi in the new block (or into the one value
-//they all share). the new block is placed before placeBefore, or after the last of preds when null.
-//returns the new block; the caller recomputes the cfg
+//inserts a block named label between preds and target, merging target's phis into it
 ir::BasicBlock *redirectPredecessors(ir::Function &fn, ir::BasicBlock *target,
                                      const std::vector<ir::BasicBlock *> &preds, const std::string &label,
                                      ir::BasicBlock *placeBefore);

@@ -11,7 +11,6 @@ namespace ir {
 
 class Function;
 
-//what a Value is, so code holding a Value * can tell the kinds apart
 enum class ValueKind {
     Constant,
     Argument,
@@ -21,7 +20,7 @@ enum class ValueKind {
     Instruction
 };
 
-//anything an instruction can use as an operand, with a sema type and a name
+//anything an instruction can use as an operand
 class Value {
 public:
     Value(ValueKind kind, const sema::Type *type, const std::string &name)
@@ -36,10 +35,9 @@ public:
     const std::string &getName() const { return name; }
     void               setName(const std::string &newName) { name = newName; }
 
-    //how the value is written where it is used: %t0, @global_1x, 42, null
+    //how the value is written as an operand: %t0, @g, 42, null
     virtual std::string getOperand() const = 0;
 
-    //the operand with its type in front: i32 %t0
     std::string getTypedOperand() const { return formatType(type) + " " + getOperand(); }
 
 protected:
@@ -49,16 +47,16 @@ protected:
 };
 
 enum class ConstantKind {
-    Int,        //bool, char, int and i64 values. the type gives the width
-    Float,      //float and double
-    Null,       //the null pointer
+    Int,        //bool, char, int and long, the type gives the width
+    Float,
+    Null,
     ZeroInit,   //zeroinitializer: an array or record of zeros
     String,     //c"..." for a character array
-    Aggregate,  //[ ... ] for an array or { ... } for a record
-    Address     //the address of a global or a function, @name, used inside initializers
+    Aggregate,
+    Address     //@name of a global or function, used inside initializers
 };
 
-//a value known while compiling. constants are made by the Module, which owns them
+//a compile-time value, owned by the Module
 class Constant : public Value {
 public:
     Constant(ConstantKind constKind, const sema::Type *type)
@@ -70,11 +68,10 @@ public:
     long long                     intValue = 0;    //already wrapped to the width of the type
     double                        floatValue = 0.0;
     std::string                   bytes;           //for String: every byte, closing \0 included
-    std::vector<const Constant *> elements;        //for Aggregate, in order
-    const Value                  *target = nullptr; //for Address: the global or function
+    std::vector<const Constant *> elements;
+    const Value                  *target = nullptr;
 };
 
-//a parameter of a function as it arrives: %a in define i32 @f(i32 %a)
 class Argument : public Value {
 public:
     Argument(const sema::Type *type, const std::string &name, Function *parent, size_t index)
@@ -102,7 +99,6 @@ public:
 
     std::string getOperand() const override { return "@" + name; }
 
-    //@name = internal global i32 0
     void dump(std::ostream &out) const;
 
     const sema::Type *valueType;

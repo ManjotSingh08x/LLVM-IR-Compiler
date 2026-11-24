@@ -10,8 +10,7 @@
 
 namespace sema {
 
-//sizes, alignments and field offsets of sema types, matching llvm's x86-64 data layout
-//records are laid out as the ir writes them: bases in order, then fields, each at its natural alignment
+//sizes, alignments and field offsets of types, matching llvm's x86-64 data layout
 class TypeLayout {
 public:
     explicit TypeLayout(SymbolTable &symTab) : symTab(symTab) {}

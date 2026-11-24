@@ -26,25 +26,20 @@ public:
         return !instructions.empty() && instructions.back()->isTerminator();
     }
 
-    //adds an instruction at the end of the block
     void append(std::unique_ptr<Instruction> inst);
 
     //adds an alloca after the existing ones, entry block only
     void insertAlloca(std::unique_ptr<Instruction> inst);
 
-    //for passes: adds an instruction before pos, or at the very top of the block
     void insertBefore(Instruction *pos, std::unique_ptr<Instruction> inst);
     void insertAtFront(std::unique_ptr<Instruction> inst);
 
-    //for passes: takes an instruction out, the function keeps it alive unwritten
+    //takes an instruction out, the function keeps it alive unwritten
     void erase(Instruction *inst);
 
-    //for passes: takes an instruction out and hands it back, to be inserted somewhere else
     std::unique_ptr<Instruction> detach(Instruction *inst);
 
-    //for passes: moves inst and everything after it into a new block placed right after this
-    //one, labelled label. this block is left without a terminator, the caller ends it. phis in the
-    //moved terminator's successors that named this block now name the new one
+    //moves inst and everything after it into a new block right after this one, left unterminated
     BasicBlock *splitAt(Instruction *inst, const std::string &label);
 
     //the last instruction when it is a terminator, otherwise null
@@ -52,7 +47,6 @@ public:
 
     void dump(std::ostream &out) const;
 
-    //records that control can flow from one block to another
     static void addEdge(BasicBlock *from, BasicBlock *to);
 
     Function                                 *parent;
@@ -60,7 +54,7 @@ public:
     std::vector<BasicBlock *>                 predecessors;
     std::vector<BasicBlock *>                 successors;
     size_t                                    allocaCount = 0;
-    bool                                      isPlaced = false;  //in the function's layout yet
+    bool                                      isPlaced = false;
 };
 
 //a function: a declaration when it has no blocks, a definition otherwise
@@ -80,20 +74,19 @@ public:
     BasicBlock *getEntryBlock() const { return layout.empty() ? nullptr : layout.front(); }
     bool        isDefinition() const { return !layout.empty(); }
 
-    //the blocks in the order they are written, entry first
+    //blocks in layout order, entry first
     const std::vector<BasicBlock *> &getBlocks() const { return layout; }
 
-    //for passes: takes a block out of the layout, it stays owned by the function
+    //takes a block out of the layout, it stays owned by the function
     void removeBlock(BasicBlock *block);
 
-    //for passes: places a block made by createBlock just before or just after pos
     void placeBlockBefore(BasicBlock *block, BasicBlock *pos);
     void placeBlockAfter(BasicBlock *block, BasicBlock *pos);
 
     //rebuilds every predecessor and successor list from the terminators, without repeats
     void recomputeCFG();
 
-    //a unique local name within the function: name, name.1, name.2, ...
+    //a unique local name within the function: name, name.1, name.2
     std::string uniqueName(const std::string &base);
     std::string nextTempName();
 
@@ -105,7 +98,7 @@ public:
 
     void dump(std::ostream &out) const;
 
-    const sema::FunctionType              *fnType;  //the lowered type: this comes first for methods
+    const sema::FunctionType              *fnType;  //the lowered type, with this first for methods
     Linkage                                linkage;
     bool                                   isUsed = false;  //called or its address taken
     std::vector<std::unique_ptr<Argument>> args;
@@ -118,7 +111,6 @@ private:
     unsigned                                  tempCounter = 0;
 };
 
-//the translation unit: types, globals, functions and every constant
 class Module {
 public:
     Module(sema::SymbolTable &symTab, const std::string &sourceName)
@@ -127,7 +119,7 @@ public:
     //the type of address values, llvm only sees ptr
     const sema::Type *pointerType();
 
-    //constants. integers are wrapped to the width of their type
+    //integer constants are wrapped to the width of their type
     Constant *getInt(const sema::Type *type, long long value);
     Constant *getInt32(long long value) { return getInt(sema::intType(), value); }
     Constant *getInt64(long long value) { return getInt(sema::longType(), value); }
@@ -137,39 +129,33 @@ public:
     Constant *getZero(const sema::Type *type);   //0, 0.0, null or zeroinitializer
     Constant *getString(const sema::Type *arrayType, const std::string &bytes);
     Constant *getAggregate(const sema::Type *type, const std::vector<const Constant *> &elements);
-    Constant *getAddress(const Value *target);   //ptr @name of a global or function
+    Constant *getAddress(const Value *target);
 
-    //globals
     GlobalVariable *createGlobal(const std::string &name, const sema::Type *valueType,
                                  const Constant *initializer, Linkage linkage, bool isConstant);
     GlobalVariable *findGlobal(const std::string &name) const;
 
-    //a private constant per distinct string literal, @.str
+    //one private constant per distinct string literal
     GlobalVariable *getStringLiteral(const std::string &bytesWithNull);
 
-    //functions
     Function *createFunction(const std::string &name, const sema::FunctionType *sourceType, Linkage linkage);
     const sema::FunctionType *abiSignature(const sema::FunctionType *sourceType);
     Function *findFunction(const std::string &name) const;
 
-    //the c library functions new and delete lower to
     Function *getRuntimeMalloc();
     Function *getRuntimeFree();
-    Function *getRuntimeAtexit();   //declare i32 @atexit(ptr), runs global destructors
+    Function *getRuntimeAtexit();
 
-    //named struct types to write at the top of the module
     void addRecord(const sema::RecordSymbol *record) { records.push_back(record); }
     void addClosure(const ast::LambdaExpr *lambda) { closures.push_back(lambda); }
 
-    //the function run before main via @llvm.global_ctors, null until needed
+    //the function run before main, null until needed
     Function *globalInit = nullptr;
 
     void dump(std::ostream &out) const;
 
-    //every function, declarations included, in the order they were made
     const std::vector<std::unique_ptr<Function>> &getFunctions() const { return functions; }
 
-    //every global variable and string literal, in the order they were made
     const std::vector<std::unique_ptr<GlobalVariable>> &getGlobals() const { return globals; }
 
     sema::SymbolTable &symTab;

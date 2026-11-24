@@ -14,14 +14,12 @@ size_t sizeOf(const Function &fn) {
     return n;
 }
 
-//replaces every use of from in fn with to
 void replaceUses(Function &fn, Value *from, Value *to) {
     for (BasicBlock *block : fn.getBlocks()) {
         for (std::unique_ptr<Instruction> &inst : block->instructions) inst->replaceOperand(from, to);
     }
 }
 
-//copies callee into caller in place of call
 void inlineCall(Module &module, Function &caller, CallInst *call, Function &callee) {
     BasicBlock *before = call->getParent();
     BasicBlock *entry = caller.getEntryBlock();
@@ -30,7 +28,6 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
     ValueMap map;
     for (size_t i = 0; i < callee.args.size(); i++) map[callee.args[i].get()] = call->args[i];
 
-    //the callee's blocks, in order, between the two halves
     std::vector<BasicBlock *> copies;
     BasicBlock *last = before;
     for (BasicBlock *block : callee.getBlocks()) {
@@ -41,8 +38,7 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
         copies.push_back(copy);
     }
 
-    //instructions: allocas go to the caller's entry block, the rest to the matching copy.
-    //operands are mapped once everything exists, a phi may name a later value
+    //operands are mapped once every copy exists, since a phi may name a later value
     std::vector<Instruction *> cloned;
     std::vector<std::pair<ReturnInst *, BasicBlock *>> returns;
     const std::vector<BasicBlock *> &blocks = callee.getBlocks();
@@ -87,8 +83,7 @@ void inlineCall(Module &module, Function &caller, CallInst *call, Function &call
         result = load;
     }
 
-    //the call goes, its uses take the result. a callee that never returns leaves the code after the
-    //call unreachable, its uses get a zero until simplify_cfg deletes that code
+    //code after a call that never returns is unreachable, so its uses get a zero
     if (hasValue && result == nullptr) result = module.getZero(returnType);
     if (hasValue) replaceUses(caller, call, result);
     after->erase(call);
@@ -103,7 +98,7 @@ bool Inliner::run(Module &module, AnalysisManager &am) {
     bool changed = false;
     for (Function *caller : order) {
         if (!caller->isDefinition()) continue;
-        //the call graph is rebuilt after each caller, inlining changes call counts and sizes
+        //rebuilt after each caller, since inlining changes call counts and sizes
         const CallGraph &graph = am.getCallGraph(module);
         std::vector<CallGraph::CallSite> sites = graph.node(caller).calls;
         bool callerChanged = false;

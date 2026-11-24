@@ -34,13 +34,12 @@ const char *accessWord(ast::AccessKind access) {
     return access == ast::AccessKind::Private ? "private" : "protected";
 }
 
-//a local variable or parameter, which a lambda must capture to use
-//the type a pointer offset is computed in: int, or long when the index is unsigned or 64 bits wide,
-//so its value is zero- or sign-extended correctly before it scales the address
+//int, or long when the index is unsigned or 64-bit, so the offset is extended correctly
 const Type *indexType(const Type *index) {
     return isUnsigned(promote(index)) || integerSize(index) == 8 ? longType() : intType();
 }
 
+//a local variable or parameter, which a lambda must capture to use
 bool isLocal(const Symbol *symbol) {
     if (symbol->kind == SymbolKind::Parameter) return true;
     if (symbol->kind != SymbolKind::Variable || symbol->isStatic) return false;
@@ -175,8 +174,6 @@ void TypeChecker::checkTopLevel(ast::Decl *decl) {
         break;
     }
 }
-
-//declarations
 
 void TypeChecker::checkRecord(ast::RecordDecl *node) {
     if (node->scope == nullptr) return;
@@ -321,8 +318,6 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     }
 }
 
-//initialisation
-
 void TypeChecker::initFromValue(std::unique_ptr<ast::Expr> &value, const Type *type) {
     if (value->getKind() == ast::ASTKind::InitListExpr) {
         initFromList(static_cast<ast::InitListExpr *>(value.get()), type);
@@ -431,8 +426,6 @@ FunctionSymbol *TypeChecker::construct(RecordSymbol *record, ast::NodeList<ast::
     applyArguments(ctor->signature(), args, record->qualifiedName(), line, col);
     return ctor;
 }
-
-//names
 
 TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, int col) {
     Lookup result;
@@ -722,8 +715,6 @@ const Type *TypeChecker::finishMember(ast::MemberExpr *node, const Lookup &looku
     return setType(node, type, isLValue);
 }
 
-//calls
-
 //the best overload: no argument converts worse and at least one better
 FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> &candidates,
                                             ast::NodeList<ast::Expr> &args, const std::string &name,
@@ -815,8 +806,6 @@ const Type *TypeChecker::callResult(ast::CallExpr *node, const FunctionType *sig
     return setType(node, stripReference(result), asReference(result) != nullptr);
 }
 
-//values
-
 const Type *TypeChecker::check(std::unique_ptr<ast::Expr> &expr) {
     if (!expr) return errorType();
     const Type *type = visit(expr.get());
@@ -865,7 +854,7 @@ void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line
     }
 }
 
-//findConversion, but a string literal may still initialise a char *, as clang and gcc allow
+//findConversion, but a string literal may still initialise a char *
 Conversion TypeChecker::conversionOf(ast::Expr *expr, const Type *to) {
     const PointerType *pointer = asPointer(unqualified(to));
     if (withoutParens(expr)->getKind() == ast::ASTKind::StringLiteral && pointer
@@ -893,8 +882,7 @@ bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, cons
             checkBaseConversion(expr->type, step.result, expr->line, expr->col, what);
         }
         wrap(expr, step.kind, step.result);
-        //a reference binds to the base part of the same object; any other step makes a value that a
-        //const reference binds to as a temporary
+        //a reference binds to the base part of the same object, other steps make a temporary
         if (bindsReference && step.kind == ast::CastKind::DerivedToBase) expr->isLValue = true;
     }
     return true;
@@ -943,8 +931,6 @@ const Type *TypeChecker::setType(ast::Expr *node, const Type *type, bool isLValu
     node->isLValue = isLValue;
     return type;
 }
-
-//statements
 
 const Type *TypeChecker::visitCompoundStmt(ast::CompoundStmt *node) {
     Scope *saved = current;
@@ -1122,8 +1108,6 @@ const Type *TypeChecker::visitDefaultStmt(ast::DefaultStmt *node) {
     visit(node->sub.get());
     return nullptr;
 }
-
-//expressions
 
 const Type *TypeChecker::visitIntLiteral(ast::IntLiteral *node) {
     long long value;
@@ -1375,8 +1359,7 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
                                                    + "' and '" + typeToString(value) + "')");
             return setType(node, errorType(), false);
         }
-        //x op= v: both sides meet in their common type, only the result converts back. a shift
-        //takes the type of its promoted left side
+        //x op= v: both sides meet in their common type, only the result converts back
         bool shift = node->op == ast::AssignOp::ShlAssign || node->op == ast::AssignOp::ShrAssign;
         convert(node->value, shift ? promote(target) : commonArithmeticType(promote(target), promote(value)),
                 "an assignment");
@@ -1505,6 +1488,13 @@ const Type *TypeChecker::visitArraySubscriptExpr(ast::ArraySubscriptExpr *node) 
     const Type *base = check(node->base);
     const Type *index = check(node->index);
     if (isError(base) || isError(index)) return setType(node, errorType(), false);
+
+    //a[b] is *(a + b), so either side may be the pointer: 3[arr] is arr[3]
+    if (isIntegral(base) && (index->is(TypeKind::Array) || asPointer(index))) {
+        std::swap(node->base, node->index);
+        std::swap(base, index);
+        node->reversed = true;
+    }
 
     base = decayValue(node->base);
     if (!isObjectPointer(base)) {
@@ -1666,9 +1656,7 @@ const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
     return setType(node, closure, false);
 }
 
-//casts are only made by this pass, after their operand has been checked
-//(T) e: the implicit conversions where one exists, otherwise the casts only an explicit cast allows:
-//between unrelated pointers, and between pointers and integers
+//(T) e: an implicit conversion if one exists, else pointer-pointer or pointer-integer casts
 const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
     const Type *target = node->target->resolved;
     const Type *type = check(node->sub);

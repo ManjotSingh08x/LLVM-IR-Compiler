@@ -1,4 +1,0 @@
-# programs whose output is not deterministic: they read uninitialized memory
-# the level matrix only checks that they compile, verify and link
-test1_core_features
-test4_pointer_types

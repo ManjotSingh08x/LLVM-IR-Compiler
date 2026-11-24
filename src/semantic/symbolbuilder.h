@@ -49,7 +49,7 @@ public:
     void visitLambdaExpr(ast::LambdaExpr *node);
 
 private:
-    //pass 1
+    //declares every name before any body is built
     void declareBuiltins();
     void declareRecord(ast::RecordDecl *node, Scope *scope, RecordSymbol *outer);
     void declareMethod(ast::FunctionDecl *node, RecordSymbol *record, ast::AccessKind access);
@@ -63,13 +63,12 @@ private:
     void defineStaticMember(ast::VarDecl *node, RecordSymbol *record);
     Symbol *declareVariable(ast::VarDecl *node, Scope *scope, SymbolKind kind);
 
-    //pass 2
+    //builds the function bodies
     void buildBodies(ast::Decl *decl);
     void buildFunction(ast::FunctionDecl *node);
     void buildInitializer(ast::VarDecl *node, Scope *scope);
     void declareParams(const ast::NodeList<ast::ParamDecl> &params, const FunctionType *signature);
 
-    //types
     const Type         *resolveType(ast::TypeSpec *spec, Scope *scope, bool allowUnsized);
     const Type         *parameterType(ast::ParamDecl *param, Scope *scope);
     const FunctionType *signatureOf(ast::FunctionDecl *node, Scope *scope);
@@ -79,7 +78,6 @@ private:
     const Type         *findQualifiedType(const std::vector<std::string> &qualifier, const std::string &name,
                                           Scope *scope, int line, int col, std::string &error);
 
-    //names
     bool            isFree(Scope *scope, const std::string &name, int line, int col);
     FunctionSymbol *sameSignature(const std::vector<Symbol *> *candidates, const FunctionType *signature);
     std::string     paramCodes(const FunctionType *signature);

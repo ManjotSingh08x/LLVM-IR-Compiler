@@ -1,0 +1,16 @@
+// Tests: inline replaces a call to a small function with its body (-O1 and up)
+int square(int x) {
+    return x * x;
+}
+
+int main() {
+    int a = 7;
+    printf("square %d\n", square(a));
+    return 0;
+}
+
+// IR-O0-LABEL: define i32 @main()
+// IR-O0: call i32 @{{.*}}square
+// IR-GE1-LABEL: define i32 @main()
+// IR-GE1-NOT: call i32 @{{.*}}square
+// IR-GE1: ret i32 0

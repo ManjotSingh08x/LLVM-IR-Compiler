@@ -8,7 +8,6 @@
 
 namespace ir {
 
-//where new instructions go: a function and one of its blocks
 struct InsertPoint {
     Function   *function = nullptr;
     BasicBlock *block = nullptr;
@@ -19,7 +18,6 @@ class IRBuilder {
 public:
     explicit IRBuilder(Module &module) : module(module) {}
 
-    //insertion point
     void        setInsertPoint(Function *fn, BasicBlock *block);
     void        setInsertBlock(BasicBlock *block);
     InsertPoint saveInsertPoint() const;
@@ -32,34 +30,29 @@ public:
 
     BasicBlock *createBlock(const std::string &label);
 
-    //memory
     AllocaInst *createEntryAlloca(const sema::Type *type, const std::string &baseName);
     Value      *createLoad(const sema::Type *type, Value *address);
     void        createStore(const sema::Type *type, Value *value, Value *address);
-    //getelementptr <sourceType>, ptr base, indices...
     Value      *createGEP(const sema::Type *sourceType, Value *base, const std::vector<Value *> &indices,
                           bool inBounds = true);
-    //the address of field (or base) number index of a struct: indices 0, index
+    //address of field or base number index of a struct
     Value      *createStructGEP(const sema::Type *structType, Value *base, unsigned index);
-    //the address of element index of an array that base points at the start of
     Value      *createElementGEP(const sema::Type *elementType, Value *base, Value *index);
 
-    //values
     Value *createBinary(BinaryOpKind op, const sema::Type *operandType, Value *lhs, Value *rhs);
     Value *createExactSDiv(const sema::Type *operandType, Value *lhs, Value *rhs);
     Value *createFNeg(Value *operand);
     Value *createCast(CastOpKind op, Value *operand, const sema::Type *from, const sema::Type *to);
     Value *createSelect(Value *condition, Value *ifTrue, Value *ifFalse, const sema::Type *type);
 
-    //calls. marks a called Function as used
+    //marks a called function as used
     Value *createCall(Value *callee, const sema::FunctionType *sourceType, const std::vector<Value *> &args);
 
-    //terminators
     void        createRet(const sema::Type *returnType, Value *value);
     void        createRetVoid();
     void        createBr(BasicBlock *target);
     void        createCondBr(Value *condition, BasicBlock *trueTarget, BasicBlock *falseTarget);
-    //null when the switch itself is unreachable
+    //returns null when the switch itself is unreachable
     SwitchInst *createSwitch(Value *condition, BasicBlock *defaultTarget);
     void        addSwitchCase(SwitchInst *inst, long long value, BasicBlock *target);
     void        setSwitchDefault(SwitchInst *inst, BasicBlock *target);

@@ -1,0 +1,29 @@
+// Tests: class with data on the heap
+class Stack {
+    int *data;
+    int top;
+
+public:
+    Stack() { data = new int[8]; top = 0; }
+    ~Stack() { delete[] data; }
+    void push(int v) { data[top++] = v; }
+    int pop() { return data[--top]; }
+    bool empty() { return top == 0; }
+};
+
+int main() {
+    // Tests: method calls on a heap object
+    Stack *s = new Stack();
+    for (int i = 1; i <= 4; i++) s->push(i * 10);
+
+    // Tests: lambda calling a method through a captured pointer
+    auto drain = [s]() {
+        int total = 0;
+        while (!s->empty()) total += s->pop();
+        return total;
+    };
+
+    printf("%d\n", drain());
+    delete s;
+    return 0;
+}

@@ -10,10 +10,10 @@
 
 #include "ir/cfg.h"
 
-//x86-64 pieces shared by the backend: registers, operand widths, memory operands, symbols
+//x86-64 registers, operand widths, memory operands and symbols shared by the backend
 namespace codegen {
 
-//one function's assembly, a line each, kept as text so a peephole pass can rewrite it
+//one function's assembly, one line each, kept as text for the peephole pass
 using AsmLines = std::vector<std::string>;
 
 enum class Reg {
@@ -23,21 +23,20 @@ enum class Reg {
     XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15
 };
 
-//the width an integer or pointer is worked on with: i1 and i8 are bytes, i16 words, i32 long, i64 and ptr quad
+//i1 and i8 are bytes, i16 words, i32 long, i64 and ptr quad
 enum class Width { Byte, Word, Long, Quad };
 
-//-O3 works on virtual registers until graph colouring gives each a real one: %v<n>.q/.l/.b for
-//integers and pointers (.w for words), %x<n> for floats. they are Reg values far above the physical ones
+//-O3 virtual registers (%v<n> for integers, %x<n> for floats), numbered above the physical ones
 Reg  virtualInt(unsigned n);
 Reg  virtualFloat(unsigned n);
 bool isVirtual(Reg reg);
 
 bool        isXmm(Reg reg);
-std::string regName(Reg reg, Width width = Width::Quad);  //%rax, %eax, %ax, %al. an xmm ignores width
-char        suffix(Width width);                         //b, w, l or q
+std::string regName(Reg reg, Width width = Width::Quad);
+char        suffix(Width width);
 
 Width widthOf(const sema::Type *type);
-bool  isFloatType(const sema::Type *type);   //float or double
+bool  isFloatType(const sema::Type *type);
 bool  isDoubleType(const sema::Type *type);
 bool  isIntegerLike(const sema::Type *type);  //bool, char, int, i64 and every pointer kind
 
@@ -57,7 +56,7 @@ struct Mem {
     std::string str() const;
 };
 
-//the assembly name of a global or function: private symbols get the local .L prefix
+//the assembly name of a global or function (private ones get the .L prefix)
 std::string symbolName(const ir::Value *value);
 
 //floating constants, written once each into .rodata
@@ -70,10 +69,8 @@ private:
     std::map<std::pair<uint64_t, bool>, std::string> labels;  //(bits, isDouble)
 };
 
-//the bits of a floating constant as stored in memory: 32 for float, 64 for double
 uint64_t floatBits(double value, bool isDouble);
 
-//bytes as the body of a .ascii directive
 std::string escapeAscii(const std::string &bytes);
 
 } // namespace codegen

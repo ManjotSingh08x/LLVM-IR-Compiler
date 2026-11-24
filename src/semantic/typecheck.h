@@ -79,28 +79,24 @@ private:
         std::vector<ast::GotoStmt *> gotos;
     };
 
-    //what a name was found as
     struct Lookup {
         std::vector<Symbol *>  symbols;               //empty when not found, more than one for overloads
         RecordSymbol          *namingRecord = nullptr;  //when found as a member: the record searched
-        std::vector<BaseClass> path;                  //the bases walked from namingRecord to the member
-        bool                   ambiguous = false;     //found in two different bases
+        std::vector<BaseClass> path;
+        bool                   ambiguous = false;
         bool                   reported = false;      //not found, and the error is already given
     };
 
-    //declarations
     void checkTopLevel(ast::Decl *decl);
     void checkRecord(ast::RecordDecl *node);
     void checkFunction(ast::FunctionDecl *node);
     void checkVarDecl(ast::VarDecl *node);
     void resolveGotos(Scope *functionScope);
 
-    //initialisation
     void initFromValue(std::unique_ptr<ast::Expr> &value, const Type *type);
     void initFromList(ast::InitListExpr *list, const Type *type);
     FunctionSymbol *construct(RecordSymbol *record, ast::NodeList<ast::Expr> &args, int line, int col);
 
-    //names
     Lookup lookupName(const std::string &name, int line, int col);
     Lookup lookupRef(ast::DeclRefExpr *node);
     bool   lookupMember(RecordSymbol *record, const std::string &name, Lookup &result);
@@ -113,14 +109,12 @@ private:
     bool   findMember(ast::MemberExpr *node, Lookup &result);
     const Type *finishMember(ast::MemberExpr *node, const Lookup &lookup);
 
-    //calls
     FunctionSymbol *chooseOverload(const std::vector<FunctionSymbol *> &candidates,
                                    ast::NodeList<ast::Expr> &args, const std::string &name, int line, int col);
     void applyArguments(const FunctionType *signature, ast::NodeList<ast::Expr> &args,
                         const std::string &name, int line, int col);
     const Type *callResult(ast::CallExpr *node, const FunctionType *signature);
 
-    //values
     const Type *check(std::unique_ptr<ast::Expr> &expr);
     const Type *decayValue(std::unique_ptr<ast::Expr> &expr);
     Conversion  conversionOf(ast::Expr *expr, const Type *to);

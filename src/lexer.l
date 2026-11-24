@@ -6,11 +6,14 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <deque>
 #include <iostream>
 #include <iomanip>
 #include "token_types.h"
 
-//structs
+//yylex below serves tokens put back by error recovery before scanning new ones
+#define YY_DECL static int scanToken(void)
+
 struct TokenRecord {
     std::string lexeme;
     int         id;
@@ -24,7 +27,6 @@ struct LexError {
     int         col;
 };
 
-//globals
 static std::vector<TokenRecord> g_tokens;
 static std::vector<LexError>    g_errors;
 
@@ -38,8 +40,37 @@ static int cmtCol    = 1;
 
 static std::string g_strBuf;
 
-//helpers
+//brace depth so far and before the last token, so error recovery resumes at the right block
+int        g_braceDepth = 0;
+int        g_depthBeforeToken = 0;
+static int g_lastRBraceTok = -1;
+
+//tokens put back by error recovery, read before the scanner
+struct QueuedToken {
+    int     id;
+    YYSTYPE value;
+    YYLTYPE loc;
+};
+static std::deque<QueuedToken> g_tokenQueue;
+
+//each token's start and the brace depth before it, for error recovery
+struct TokenDepth {
+    int line;
+    int col;
+    int depth;
+};
+static std::vector<TokenDepth> g_tokenDepths;
+
+static void countBraces(int id) {
+    g_depthBeforeToken = g_braceDepth;
+    g_tokenDepths.push_back({ yylloc.first_line, yylloc.first_column, g_braceDepth });
+    if (id == TOK_LBRACE) g_braceDepth++;
+    else if (id == TOK_RBRACE) g_braceDepth--;
+}
+
 static int addToken(int id) {
+    countBraces(id);
+    if (id == TOK_RBRACE) g_lastRBraceTok = (int)g_tokens.size();
     //a token's semantic value is its index in g_tokens
     yylval.tok = (int)g_tokens.size();
     g_tokens.push_back({ std::string(yytext), id, tokLine, std::string() });
@@ -47,6 +78,7 @@ static int addToken(int id) {
 }
 
 static int addTokenText(const std::string &text, int id) {
+    countBraces(id);
     yylval.tok = (int)g_tokens.size();
     g_tokens.push_back({ text, id, tokLine, std::string() });
     return id;
@@ -61,7 +93,7 @@ static void addErrorAt(int line, int col, const std::string &message) {
 }
 
 static bool isValidEscape(char c) {
-    return strchr("\\\\'\"0abfnrtv", c) != NULL;
+    return strchr("\\\\'\"?0abfnrtv", c) != NULL;
 }
 
 static std::string showChar(char c) {
@@ -71,7 +103,7 @@ static std::string showChar(char c) {
     return buf;
 }
 
-//column and parser location tracking
+//tracks token columns and parser locations
 #define YY_USER_ACTION                                    \
     tokLine = yylineno;                                   \
     tokCol  = g_col;                                      \
@@ -106,33 +138,33 @@ CHARBODY    ([^'\\\n]|\\.)
 
 
 "/*"                    { cmtLine = tokLine; cmtCol = tokCol;
-                          BEGIN(BLOCK_COMMENT); }                  // opening block comment
-<BLOCK_COMMENT>"*/"     { BEGIN(INITIAL); }                       // closing block comment
-<BLOCK_COMMENT>[^*\n]+  { }                                       // comment body chars (not * or newline)
-<BLOCK_COMMENT>"*"      { }                                       // lone * not followed by /
-<BLOCK_COMMENT>\n        { }                                      // newline inside block comment
+                          BEGIN(BLOCK_COMMENT); }
+<BLOCK_COMMENT>"*/"     { BEGIN(INITIAL); }
+<BLOCK_COMMENT>[^*\n]+  { }
+<BLOCK_COMMENT>"*"      { }
+<BLOCK_COMMENT>\n        { }
 <BLOCK_COMMENT><<EOF>>   { addErrorAt(cmtLine, cmtCol,
                                      "unterminated block comment");
-                          BEGIN(INITIAL); yyterminate(); }         // EOF inside block comment
+                          BEGIN(INITIAL); yyterminate(); }
 
-"//"[^\n]*              { }                                       // line comment
+"//"[^\n]*              { }
 
-[ \t\r]+                { }                                       // horizontal whitespace
-\n                      { }                                       // newline
+[ \t\r]+                { }
+\n                      { }
 
 
 {LETTER}{IDCHAR}*       { auto it = keywordTable().find(yytext);
                           if (it != keywordTable().end()) return addToken(it->second);
                           else                            return addToken(TOK_IDENTIFIER);
-                        }                                         // letter or underscore followed by alphanumerics
+                        }
 
-{FLOATNUM}[fF]?          { return addToken(TOK_FLOAT_LITERAL); }  // a double, or a float with the f suffix
+{FLOATNUM}[fF]?          { return addToken(TOK_FLOAT_LITERAL); }
 {FLOATNUM}[lL]           { addError(std::string("long double is not supported: ") + yytext);
                            return addToken(TOK_FLOAT_LITERAL); }
 
-0[xX]{HEXDIGIT}+{INTSUFFIX}?   { return addToken(TOK_INT_LITERAL); }  // hexadecimal integer
-0[bB][01]+{INTSUFFIX}?         { return addToken(TOK_INT_LITERAL); }  // binary integer
-0[0-7]+{INTSUFFIX}?            { return addToken(TOK_INT_LITERAL); }  // octal integer
+0[xX]{HEXDIGIT}+{INTSUFFIX}?   { return addToken(TOK_INT_LITERAL); }
+0[bB][01]+{INTSUFFIX}?         { return addToken(TOK_INT_LITERAL); }
+0[0-7]+{INTSUFFIX}?            { return addToken(TOK_INT_LITERAL); }
 {DIGIT}+{INTSUFFIX}?    { errno = 0;
                           if (strpbrk(yytext, "uU")) strtoull(yytext, NULL, 10);
                           else                       strtoll(yytext, NULL, 10);
@@ -147,38 +179,38 @@ CHARBODY    ([^'\\\n]|\\.)
                                                + yytext); }      // starts like a number but has trailing junk
 
 
-'\\x{HEXDIGIT}{1,2}'    { return addToken(TOK_CHAR_LITERAL); }   // hex escape char literal
+'\\x{HEXDIGIT}{1,2}'    { return addToken(TOK_CHAR_LITERAL); }
 '{CHARBODY}'            { if (yytext[1] == '\\' && !isValidEscape(yytext[2]))
                               addError(std::string("invalid escape sequence: ")
                                        + yytext);
                           else
-                              return addToken(TOK_CHAR_LITERAL); } // single character or escape sequence
-''                      { addError("empty character literal"); }  // empty quotes
+                              return addToken(TOK_CHAR_LITERAL); }
+''                      { addError("empty character literal"); }
 '{CHARBODY}{2,}'        { addError(std::string("multi-character literal: ")
-                                   + yytext); }                   // two or more chars between quotes
-'{CHARBODY}*            { addError("unterminated character literal"); }  // opening quote with no closing quote
+                                   + yytext); }
+'{CHARBODY}*            { addError("unterminated character literal"); }
 
 
 \"                      { g_strBuf = "\"";
                           litLine = tokLine; litCol = tokCol;
-                          BEGIN(STRING_LIT); }                     // opening double quote
+                          BEGIN(STRING_LIT); }
 <STRING_LIT>\"          { g_strBuf += '"';
                           yylloc.first_line = litLine;
                           yylloc.first_column = litCol;
                           BEGIN(INITIAL);
-                          return addTokenText(g_strBuf, TOK_STRING_LITERAL); } // closing double quote
-<STRING_LIT>\\x{HEXDIGIT}{1,2}  { g_strBuf += yytext; }          // hex escape inside string
+                          return addTokenText(g_strBuf, TOK_STRING_LITERAL); }
+<STRING_LIT>\\x{HEXDIGIT}{1,2}  { g_strBuf += yytext; }
 <STRING_LIT>\\(.|\n)    { if (!isValidEscape(yytext[1]))
                               addError(std::string("invalid escape sequence: ")
                                        + yytext);
-                          g_strBuf += yytext; }                   // backslash escape inside string
-<STRING_LIT>[^\\\n"]+   { g_strBuf += yytext; }                  // run of ordinary string characters
+                          g_strBuf += yytext; }
+<STRING_LIT>[^\\\n"]+   { g_strBuf += yytext; }
 <STRING_LIT>\n          { addErrorAt(litLine, litCol,
                                      "unterminated string literal");
-                          BEGIN(INITIAL); }                        // newline before closing quote
+                          BEGIN(INITIAL); }
 <STRING_LIT><<EOF>>     { addErrorAt(litLine, litCol,
                                      "unterminated string literal at end of file");
-                          BEGIN(INITIAL); yyterminate(); }         // EOF before closing quote
+                          BEGIN(INITIAL); yyterminate(); }
 
 
 "++"    { return addToken(TOK_INC); }             
@@ -232,10 +264,69 @@ CHARBODY    ([^'\\\n]|\\.)
 ","     { return addToken(TOK_COMMA); }          
 
 
-.       { addError("illegal character '" + showChar(yytext[0]) + "'"); }  // any unrecognized character
+.       { addError("illegal character '" + showChar(yytext[0]) + "'"); }
 
 %%
-//output
+
+
+int yylex(void) {
+    if (!g_tokenQueue.empty()) {
+        QueuedToken token = g_tokenQueue.front();
+        g_tokenQueue.pop_front();
+        yylval = token.value;
+        yylloc = token.loc;
+        return token.id;
+    }
+    return scanToken();
+}
+
+//puts the parser's lookahead token back (yylval and yylloc still hold it)
+void pushBackToken(int id) {
+    g_tokenQueue.push_front({ id, yylval, yylloc });
+}
+
+//the brace depth before the token that starts at line:col, the depth of the latest token if none does
+int depthAt(int line, int col) {
+    for (size_t i = g_tokenDepths.size(); i-- > 0;) {
+        if (g_tokenDepths[i].line == line && g_tokenDepths[i].col == col) return g_tokenDepths[i].depth;
+    }
+    return g_depthBeforeToken;
+}
+
+static int braceEffect(int id) {
+    return id == TOK_LBRACE ? 1 : id == TOK_RBRACE ? -1 : 0;
+}
+
+//after error recovery, skips or restores braces so the parser resumes at brace depth target
+void resyncBraces(int target) {
+    int depth = g_braceDepth;
+    for (const QueuedToken &token : g_tokenQueue) depth -= braceEffect(token.id);
+    bool skipped = depth > target;
+    while (depth > target) {
+        int id;
+        if (!g_tokenQueue.empty()) {
+            id = g_tokenQueue.front().id;
+            g_tokenQueue.pop_front();
+        } else {
+            id = scanToken();
+            if (id == 0) {
+                pushBackToken(0);
+                return;
+            }
+        }
+        depth += braceEffect(id);
+    }
+    //a skipped body often ends in "};", the ; belongs to it
+    if (skipped) {
+        int next = yylex();
+        if (next != TOK_SEMI) pushBackToken(next);
+    }
+    for (; depth < target; depth++) {
+        YYSTYPE value;
+        value.tok = g_lastRBraceTok;
+        g_tokenQueue.push_front({ TOK_RBRACE, value, yylloc });
+    }
+}
 using namespace std;
 void setDeclType(int index, const std::string &type){
     if(index >= 0 && index < (int)g_tokens.size() && g_tokens[index].declType.empty()){

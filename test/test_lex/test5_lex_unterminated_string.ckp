@@ -1,0 +1,5 @@
+// Tests: unterminated string literal
+int unterminatedString() {
+    char text[] = "never closed;
+    return 0;
+}

@@ -19,7 +19,7 @@ const Constant *intConstant(const Value *value) {
     return c && c->constKind == ConstantKind::Int ? c : nullptr;
 }
 
-//i = phi [init, pre], [i +/- c, latch]
+//matches i = phi [init, pre], [i +/- c, latch]
 bool matchBasicIV(PhiInst *phi, BasicBlock *pre, BasicBlock *latch, BasicIV &iv) {
     unsigned bits = integerBits(phi->getType());
     if ((bits != 32 && bits != 64) || phi->incoming.size() != 2) return false;
@@ -44,8 +44,7 @@ bool matchBasicIV(PhiInst *phi, BasicBlock *pre, BasicBlock *latch, BasicIV &iv)
     return true;
 }
 
-//where an induction variable's update goes in the latch: before the terminator, and before the
-//compare that feeds it when that is right in front of it, so codegen can still fuse compare and branch
+//before the latch terminator and the compare feeding it, so compare and branch can still fuse
 Instruction *updatePoint(BasicBlock *latch) {
     Instruction *term = latch->getTerminator();
     if (term->getOpcode() == Opcode::Br && latch->instructions.size() >= 2) {
@@ -121,7 +120,7 @@ LoopResult IVStrengthReduce::runOnLoop(Loop &loop, LoopContext &ctx) {
                 continue;
             }
 
-            //p = getelementptr T, base, i   or   getelementptr [N x T], base, 0, i
+            //p = getelementptr T, base, i
             if (user->getOpcode() == Opcode::GEP) {
                 GEPInst *g = static_cast<GEPInst *>(user);
                 if (ctx.isDefinedInLoop(g->base, loop) || g->indices.empty() || g->indices.back() != iv.phi) continue;

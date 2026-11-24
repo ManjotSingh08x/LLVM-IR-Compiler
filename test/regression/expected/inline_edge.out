@@ -1,8 +1,0 @@
-static 1 2 3
-divisor 7 97 2 1
-clamp 20 5
-chain 5 25
-swap 2 1
-once 2 count 1
-cond 8
-recursive 110

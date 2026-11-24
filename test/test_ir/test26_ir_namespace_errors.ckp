@@ -1,0 +1,36 @@
+namespace shapes {
+    int sides = 4;
+    class Secret { static int hidden; };
+}
+int shapes::Secret::hidden = 1;
+
+// Tests: a namespace with the name of a variable
+int clash = 3;
+namespace clash { int inside; }
+
+// Tests: the same name declared twice in a namespace
+namespace twice { int x = 1; int x = 2; }
+
+// Tests: defining a function the namespace never declared
+int shapes::volume(int w, int h, int d) { return w * h * d; }
+
+// Tests: defining a namespace variable outside the namespace
+int shapes::sides = 5;
+
+// Tests: a namespace that does not exist
+int unknownNamespace() { return nowhere::x; }
+
+// Tests: a name that is not in the namespace
+int missingMember() { return shapes::corners; }
+
+// Tests: a namespace used as a value
+int namespaceAsValue() { int n = shapes; return n; }
+
+// Tests: a variable used as a type
+int memberAsType() { shapes::sides count; return 0; }
+
+// Tests: a namespace member used without its namespace
+int unqualified() { return sides; }
+
+// Tests: a private static member reached through the namespace
+int privateStatic() { return shapes::Secret::hidden; }

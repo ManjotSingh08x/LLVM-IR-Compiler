@@ -8,7 +8,6 @@ namespace ir {
 
 namespace {
 
-//one line of llvm text for an instruction, used in messages
 std::string describe(const Instruction *inst) {
     std::ostringstream out;
     inst->dump(out);
@@ -29,7 +28,6 @@ bool verifyFunction(const Function &fn, std::string &error) {
     const std::vector<BasicBlock *> &blocks = fn.getBlocks();
     std::set<const BasicBlock *> placed(blocks.begin(), blocks.end());
 
-    //where each placed instruction lives, and its position in its block
     std::map<const Instruction *, size_t> position;
     for (const BasicBlock *block : blocks) {
         for (size_t i = 0; i < block->instructions.size(); i++) {
@@ -37,7 +35,7 @@ bool verifyFunction(const Function &fn, std::string &error) {
         }
     }
 
-    //how many edges run from each block to each other block, repeats counted
+    //edge count from each block to each other block, repeats counted
     std::map<const BasicBlock *, std::map<const BasicBlock *, size_t>> edgesInto;
     for (const BasicBlock *block : blocks) {
         const Instruction *term = block->getTerminator();
@@ -76,7 +74,7 @@ bool verifyFunction(const Function &fn, std::string &error) {
                 return fail(error, block, "the name %" + inst->getName() + " is defined twice");
             }
 
-            //phis: at the top, one entry per incoming edge
+            //phis must be at the top, one entry per incoming edge
             if (inst->getOpcode() == Opcode::Phi) {
                 if (pastPhis) return fail(error, block, "phi '" + describe(inst) + "' is not at the top");
                 const PhiInst *phi = static_cast<const PhiInst *>(inst);
@@ -90,7 +88,6 @@ bool verifyFunction(const Function &fn, std::string &error) {
                 pastPhis = true;
             }
 
-            //operands
             for (const Value *operand : inst->getOperands()) {
                 if (operand == nullptr) {
                     return fail(error, block, "'" + describe(inst) + "' has a missing operand");
@@ -123,7 +120,6 @@ bool verifyFunction(const Function &fn, std::string &error) {
                 }
             }
 
-            //jump targets
             for (const BasicBlock *next : inst->getSuccessors()) {
                 if (next == nullptr || placed.count(next) == 0) {
                     return fail(error, block, "'" + describe(inst) + "' jumps to a block that is not placed");

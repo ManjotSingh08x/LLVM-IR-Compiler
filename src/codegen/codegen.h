@@ -5,12 +5,11 @@
 #include <string>
 
 #include "ir/cfg.h"
-#include "passes/analysis_manager.h"
+#include "pipeline/analysis_manager.h"
 
 namespace codegen {
 
-//writes the module as x86-64 assembly. the ir must have no phis (phi_elim runs first)
-//false when the module uses something the backend cannot lower, with the reason in error
+//writes the module as x86-64 assembly (phis must be gone); false with the reason in error on unsupported ir
 bool emitAssembly(ir::Module &module, passes::AnalysisManager &am, int optLevel, std::ostream &out,
                   std::string &error);
 

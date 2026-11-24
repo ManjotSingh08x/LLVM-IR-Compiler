@@ -1,0 +1,5 @@
+// Tests: missing semicolon after a declaration
+int missingSemicolon() {
+    int value = 10
+    return value;
+}

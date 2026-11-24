@@ -24,7 +24,6 @@ const Value *EscapeInfo::baseOf(const Value *address) {
 }
 
 EscapeInfo::EscapeInfo(const Function &fn) {
-    //every use of every value, found once
     std::map<const Value *, std::vector<const Instruction *>> users;
     std::vector<const Instruction *> allocas;
     for (const BasicBlock *block : fn.getBlocks()) {

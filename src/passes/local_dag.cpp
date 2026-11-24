@@ -31,7 +31,7 @@ bool isPure(const Instruction &inst) {
     }
 }
 
-//a value read from or written to memory, available until something may change that memory
+//a memory value known until something may change that memory
 struct Known {
     Value            *address;
     const sema::Type *type;
@@ -65,7 +65,7 @@ bool removeUnusedValues(Function &fn) {
 bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
     (void)am;
     EscapeInfo escape(fn);
-    std::map<Value *, Value *> replaced;  //an instruction -> the value that stands for it now
+    std::map<Value *, Value *> replaced;  //an instruction -> the value that replaces it
     std::set<Instruction *> dead;
     bool changed = false;
 
@@ -85,8 +85,8 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
 
     for (BasicBlock *block : fn.getBlocks()) {
         std::map<std::string, Instruction *> available;  //value numbers of the block's expressions
-        std::vector<Known> known;                        //memory contents the block knows
-        std::vector<StoreInst *> unread;                 //stores nothing has read yet
+        std::vector<Known> known;
+        std::vector<StoreInst *> unread;
 
         std::vector<Instruction *> order;
         for (std::unique_ptr<Instruction> &inst : block->instructions) order.push_back(inst.get());
@@ -103,7 +103,6 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
             switch (inst->getOpcode()) {
             case Opcode::Load: {
                 LoadInst *load = static_cast<LoadInst *>(inst);
-                //whatever this load reads, earlier stores to it are no longer unread
                 unread.erase(std::remove_if(unread.begin(), unread.end(),
                                             [&](StoreInst *s) { return escape.mayAlias(s->address, load->address); }),
                              unread.end());
@@ -124,7 +123,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
             }
             case Opcode::Store: {
                 StoreInst *store = static_cast<StoreInst *>(inst);
-                //an unread store to the same place is overwritten: it was dead
+                //an unread store to the same place is dead
                 for (size_t i = 0; i < unread.size();) {
                     if (unread[i]->address == store->address &&
                         formatType(unread[i]->getAccessType()) == formatType(store->getAccessType())) {
@@ -157,7 +156,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
             case Opcode::Cast:
             case Opcode::Select:
             case Opcode::GEP: {
-                //folding: every operand a constant (for select, the condition is enough)
+                //fold when every operand is constant (for select, the condition is enough)
                 std::vector<const Constant *> constants;
                 for (Value *operand : inst->getOperands()) constants.push_back(asConstant(operand));
                 if (inst->getOpcode() != Opcode::GEP) {
@@ -172,7 +171,6 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
                     break;
                 }
                 if (rewritten) changed = true;
-                //common subexpressions
                 std::string key = expressionKey(*inst);
                 std::map<std::string, Instruction *>::iterator it = available.find(key);
                 if (it != available.end()) {
@@ -188,7 +186,7 @@ bool LocalDAG::run(Function &fn, Module &module, AnalysisManager &am) {
         }
     }
 
-    //uses in other blocks follow the replacements too, then the replaced instructions go
+    //uses in other blocks follow the replacements too
     for (BasicBlock *block : fn.getBlocks()) {
         for (std::unique_ptr<Instruction> &inst : block->instructions) {
             if (dead.count(inst.get())) continue;

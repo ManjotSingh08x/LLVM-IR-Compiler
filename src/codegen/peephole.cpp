@@ -8,7 +8,7 @@ namespace codegen {
 
 namespace {
 
-//one line split into its parts: "\tmovl\t%eax, -4(%rbp)" -> movl [%eax, -4(%rbp)]
+//one line split into mnemonic and operands
 struct Line {
     enum Kind { Instruction, Label, Other } kind = Other;
     std::string              mnemonic;
@@ -61,7 +61,6 @@ bool isUnconditionalExit(const std::string &m) { return m == "jmp" || m == "ret"
 
 bool isConditionalJump(const std::string &m) { return m.size() > 1 && m[0] == 'j' && m != "jmp"; }
 
-//what an instruction does to the flags as far as a rewrite is concerned
 enum class Flags { Neutral, Writes, Reads, Unknown };
 
 Flags flagEffect(const std::string &m) {
@@ -75,9 +74,9 @@ Flags flagEffect(const std::string &m) {
                                      "ucomis", "comis", "idiv", "div" };
     for (const char *w : writers) {
         if (startsWith(m, w)) {
-            //xorps/xorpd, andps... are sse logic ops that leave the flags alone
+            //sse logic ops leave the flags alone
             if ((startsWith(m, "xorp") || startsWith(m, "andp") || startsWith(m, "orp")) ) return Flags::Neutral;
-            //sub/add on sse registers (subsd, addss...) leave the flags alone
+            //sse add and sub leave the flags alone
             if ((startsWith(m, "adds") || startsWith(m, "subs") || startsWith(m, "addp") || startsWith(m, "subp")) &&
                 m.size() > 4) {
                 return Flags::Neutral;
@@ -107,7 +106,6 @@ bool flagsDeadAfter(const std::vector<Line> &lines, size_t i) {
     return true;
 }
 
-//the 32-bit name of a 64-bit general register
 std::string low32(const std::string &reg) {
     static const std::map<std::string, std::string> names = {
         { "%rax", "%eax" }, { "%rbx", "%ebx" }, { "%rcx", "%ecx" }, { "%rdx", "%edx" },
@@ -126,7 +124,6 @@ bool isGeneral32(const std::string &reg) {
     return false;
 }
 
-//the opposite condition code of a jump: jl -> jge
 std::string invertJump(const std::string &m) {
     static const std::map<std::string, std::string> opposite = {
         { "je", "jne" }, { "jne", "je" }, { "jl", "jge" }, { "jge", "jl" }, { "jg", "jle" }, { "jle", "jg" },
@@ -216,7 +213,6 @@ bool sweep(AsmLines &text) {
         if (l.operands.size() == 2) {
             const std::string &a = l.operands[0], &b = l.operands[1];
 
-            //mov R, R
             if (isFullCopy(m) && a == b) {
                 drop[i] = true;
                 changed = true;

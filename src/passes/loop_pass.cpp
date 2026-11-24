@@ -33,7 +33,7 @@ BasicBlock *redirectPredecessors(Function &fn, BasicBlock *target, const std::ve
         fn.placeBlockAfter(middle, last);
     }
 
-    //phis: the entries from preds now arrive through middle, merged when they differ
+    //phi entries from preds now arrive through middle, merged when they differ
     for (std::unique_ptr<Instruction> &inst : target->instructions) {
         if (inst->getOpcode() != Opcode::Phi) break;
         PhiInst *phi = static_cast<PhiInst *>(inst.get());
@@ -64,7 +64,7 @@ BasicBlock *redirectPredecessors(Function &fn, BasicBlock *target, const std::ve
 
 namespace {
 
-//the blocks a use reads its value in: a phi reads each entry at the end of that entry's block
+//a phi reads each entry at the end of that entry's block
 std::vector<std::pair<Instruction *, BasicBlock *>> usesOf(const Instruction *def, const DefUse &defUse) {
     std::vector<std::pair<Instruction *, BasicBlock *>> uses;
     for (Instruction *user : defUse.users(def)) {
@@ -103,7 +103,6 @@ bool formLCSSA(Function &fn, const Loop &loop, const Dominators &doms, bool &cha
         }
     }
     for (Instruction *def : defs) {
-        //the outside uses, each with the exit block that dominates it
         std::vector<std::pair<std::pair<Instruction *, BasicBlock *>, BasicBlock *>> outside;
         bool usable = true;
         for (const std::pair<Instruction *, BasicBlock *> &use : usesOf(def, defUse)) {
@@ -128,7 +127,6 @@ bool formLCSSA(Function &fn, const Loop &loop, const Dominators &doms, bool &cha
             BasicBlock *exit = entry.second;
             PhiInst *&phi = exitPhis[exit];
             if (phi == nullptr) {
-                //one entry per edge into the exit; every one of them comes from inside the loop
                 for (BasicBlock *pred : exit->predecessors) {
                     if (!doms.dominates(def->getParent(), pred)) usable = false;
                 }
@@ -162,14 +160,13 @@ bool LoopPass::isUsable(const Loop &loop, const Function &fn) {
 
 bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
     bool changedAny = false;
-    //each fix changes the cfg, so the loops are found again after it
+    //each fix changes the cfg, so the loops are found again
     for (;;) {
         bool changed = false;
         const LoopInfo &info = am.getLoops(fn);
         for (Loop *loop : info.innermostFirst()) {
             if (!isUsable(*loop, fn)) continue;
 
-            //preheader: one outside predecessor that only jumps to the header
             if (loop->preheader() == nullptr) {
                 redirectPredecessors(fn, loop->header, loop->outsidePredecessors(),
                                      loop->header->getName() + ".preheader", loop->header);
@@ -177,14 +174,13 @@ bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
                 break;
             }
 
-            //one latch: every back edge goes through one block
             if (loop->latches.size() > 1) {
                 redirectPredecessors(fn, loop->header, loop->latches, loop->header->getName() + ".latch", nullptr);
                 changed = true;
                 break;
             }
 
-            //dedicated exits: an exit also entered from outside gets its own block for the loop's edges
+            //dedicated exits: an exit also entered from outside gets its own block
             for (BasicBlock *exit : loop->exits) {
                 std::vector<BasicBlock *> inside;
                 bool outside = false;
@@ -210,7 +206,7 @@ bool LoopPass::canonicalize(Function &fn, AnalysisManager &am) {
 }
 
 bool LoopPass::closeLoops(Function &fn, AnalysisManager &am) {
-    //new phis invalidate the cached analyses, so loops are looked up again by header each time
+    //new phis invalidate the analyses, so loops are looked up by header each time
     std::vector<BasicBlock *> headers;
     for (Loop *loop : am.getLoops(fn).innermostFirst()) {
         if (isUsable(*loop, fn)) headers.push_back(loop->header);

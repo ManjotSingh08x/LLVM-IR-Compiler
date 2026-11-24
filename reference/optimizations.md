@@ -536,7 +536,7 @@ Two fixes were needed before it paid off:
 
     Build it as a separate backend path, selected only at -O3, and keep the §8.6 path unchanged for -O0 to -O2. That way a bug in the colouring allocator cannot break the lower levels, and both paths can be checked against each other.
 
-10. **Testing for each level.** For every level in `run.sh`:
+10. **Testing for each level.** For every level in `run_tests.sh`:
     - check `<stem>.opt.ll` with clang's verifier (for -O1 and above);
     - link and run `.s`, and compare with `test/expected`.
 

@@ -55,7 +55,7 @@ bool AsmWriter::write(std::ostream &out) {
 
     pool.emit(out);
 
-    //the function irgen lists in @llvm.global_ctors runs before main
+    //the global constructor function runs before main
     if (module.globalInit) {
         out << "\n\t.section\t.init_array,\"aw\",@init_array\n";
         out << "\t.p2align\t3\n";
@@ -92,7 +92,6 @@ void AsmWriter::writeGlobal(std::ostream &out, const ir::GlobalVariable *global)
     out << "\t.size\t" << name << ", " << size << "\n";
 }
 
-//one initializer as data directives, records padded between fields as the layout says
 void AsmWriter::writeConstant(std::ostream &out, const ir::Constant *constant, const sema::Type *type) {
     switch (constant->constKind) {
     case ir::ConstantKind::Int:

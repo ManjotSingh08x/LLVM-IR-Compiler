@@ -1,0 +1,32 @@
+// Tests: const global used as an array size
+const int SIZE = 3;
+int squares[SIZE];
+
+// Tests: const parameter and const reference parameter
+int scaled(const int n, const int &factor) {
+    return n * factor;
+}
+
+int main() {
+    // Tests: const local and pointer to const
+    const int limit = 10;
+    int values[SIZE] = {4, 5, 6};
+    const int *read = values;
+
+    // Tests: const pointer
+    int *const fixed = values;
+    fixed[0] = limit;
+
+    // Tests: const reference bound to a temporary
+    const int &temp = limit * 2;
+
+    // Tests: const integer as a case label
+    int kind = 3;
+    switch (kind) {
+        case SIZE: kind = 100; break;
+        default: kind = 0;
+    }
+
+    printf("%d %d %d %d %d\n", read[0], read[2], scaled(5, limit), temp, kind);
+    return 0;
+}

@@ -88,8 +88,6 @@ bool isCompare(BinaryOpKind op) {
     }
 }
 
-//  operands and successors 
-
 std::vector<Value *> Instruction::getOperands() const {
     std::vector<Value *> result;
     for (Value **slot : const_cast<Instruction *>(this)->operandSlots()) result.push_back(*slot);
@@ -114,7 +112,6 @@ void Instruction::replaceSuccessor(BasicBlock *from, BasicBlock *to) {
     }
 }
 
-//ret void has no operand
 std::vector<Value **> ReturnInst::operandSlots() {
     if (returnValue == nullptr) return {};
     return { &returnValue };
@@ -181,8 +178,6 @@ void PhiInst::replaceIncomingBlock(BasicBlock *from, BasicBlock *to) {
     }
 }
 
-//  dump 
-
 void ReturnInst::dump(std::ostream &out) const {
     if (returnValue == nullptr) {
         out << "  ret void\n";
@@ -233,7 +228,6 @@ void CallInst::dump(std::ostream &out) const {
     out << "  ";
     if (!type->is(sema::TypeKind::Void)) out << "%" << name << " = ";
     out << "call ";
-    //a variadic callee is written with its full type
     if (calleeType->isVariadic) {
         out << formatType(calleeType);
     } else {

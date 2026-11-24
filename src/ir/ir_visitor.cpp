@@ -1,6 +1,5 @@
-#include "ir/ir_visitor.h"
-
 //the passes over the program, function bodies and globals
+#include "ir/ir_visitor.h"
 
 namespace ir {
 
@@ -23,8 +22,6 @@ void IRVisitor::generate(ast::Program *program) {
     for (size_t i = 0; i < localRecords.size(); i++) emitDefinitions(localRecords[i]);
     emitSynthesizedStructors();
 }
-
-//  pass 1 
 
 void IRVisitor::collectScope(sema::Scope *scope) {
     for (const std::unique_ptr<sema::Symbol> &symbol : scope->symbols) {
@@ -71,11 +68,8 @@ Function *IRVisitor::functionFor(const sema::FunctionSymbol *fn) {
     return function;
 }
 
-//  pass 2 
-
 void IRVisitor::emitGlobalVariables(ast::Program *program) { emitGlobalVariables(program->decls); }
 
-//file scope, and each namespace's declarations in turn
 void IRVisitor::emitGlobalVariables(const ast::NodeList<ast::Decl> &decls) {
     for (const std::unique_ptr<ast::Decl> &decl : decls) {
         if (decl->getKind() == ast::ASTKind::VarDecl) emitGlobalVariable(static_cast<ast::VarDecl *>(decl.get()));
@@ -106,8 +100,7 @@ void IRVisitor::emitGlobalVariable(ast::VarDecl *decl) {
 
     GlobalVariable *global = nullptr;
     if (symbol->parentRecord) {
-        //int Counter::total = 0; defines the static member made in pass 1. a definition without a value
-        //keeps the one given in the class, or zero
+        //defines a static member made earlier, without a value it keeps the in-class one or zero
         if (decl->initStyle == ast::InitStyle::None && !sema::asRecord(type)) return;
         global = module.findGlobal(symbol->mangledName);
     } else {
@@ -158,8 +151,6 @@ void IRVisitor::emitGlobalInitializers() {
     }
     finishFunction();
 }
-
-//  pass 3 
 
 //only the defining declaration gets a body, in-class methods are found via the record
 void IRVisitor::emitDefinitions(ast::Decl *decl) {
@@ -228,8 +219,6 @@ void IRVisitor::emitSynthesizedStructors() {
         emitFunction(info);
     }
 }
-
-//  function bodies 
 
 void IRVisitor::startFunction(Function *fn, const sema::Type *returnType) {
     contexts.push_back(std::unique_ptr<FunctionContext>(new FunctionContext()));

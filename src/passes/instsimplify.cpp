@@ -3,7 +3,7 @@
 #include <map>
 #include <set>
 
-#include "passes/dfa_framework.h"
+#include "dataflow/dfa_framework.h"
 #include "passes/fold.h"
 #include "passes/local_dag.h"
 
@@ -18,13 +18,12 @@ bool isAssociative(BinaryOpKind op) {
            op == BinaryOpKind::Or || op == BinaryOpKind::Xor;
 }
 
-//(x op c1) op c2 -> x op (c1 op c2). inst is rewritten in place, the inner instruction stays for
-//its other users (unused, it goes with the dead values)
+//(x op c1) op c2 -> x op (c1 op c2), rewriting inst in place
 bool reassociate(Module &module, Instruction &inst) {
     if (inst.getOpcode() != Opcode::Binary) return false;
     BinaryInst &outer = static_cast<BinaryInst &>(inst);
     if (integerBits(outer.operandType) < 8) return false;
-    //(x << a) << b -> x << (a + b) while a + b stays below the width (a strength-reduced x * 2^k * 2^j)
+    //(x << a) << b -> x << (a + b) while a + b stays below the width
     if (outer.op == BinaryOpKind::Shl && outer.lhs->getKind() == ValueKind::Instruction) {
         const Constant *b = asConstant(outer.rhs);
         Instruction *lhs = static_cast<Instruction *>(outer.lhs);
@@ -87,7 +86,6 @@ bool InstSimplify::run(Function &fn, Module &module, AnalysisManager &am) {
             return value;
         };
         bool changed = false;
-        //reverse postorder: definitions come before their uses, back edges aside
         for (BasicBlock *block : reversePostorder(fn)) {
             for (std::unique_ptr<Instruction> &owned : block->instructions) {
                 Instruction *inst = owned.get();

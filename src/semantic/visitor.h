@@ -5,7 +5,7 @@
 
 namespace ast {
 
-//llvm StmtVisitor style: visit() dispatches to visitX, falling back to the node's family
+//visit() dispatches to visitX, falling back to the visit of the node's family
 template <class Derived, class RetTy = void>
 class ASTVisitor {
 public:
@@ -69,7 +69,6 @@ public:
         return RetTy();
     }
 
-    //family fallbacks
     RetTy visitDecl(Decl *) { return RetTy(); }
     RetTy visitStmt(Stmt *) { return RetTy(); }
     RetTy visitExpr(Expr *) { return RetTy(); }

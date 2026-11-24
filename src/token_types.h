@@ -4,7 +4,7 @@
 #include <cctype>
 #include <string>
 #include <unordered_map>
-#include "ast/ast.h"  //the token value union refers to ast types
+#include "ast/ast.h"
 #include "declarator.h"
 #include "parser.tab.h"
 

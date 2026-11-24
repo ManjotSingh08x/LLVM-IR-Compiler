@@ -1,0 +1,22 @@
+// Tests: peephole turns a compare with zero into test, and zeroing into xor (-O1 and up)
+int countNonZero(int *data, int n) {
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        if (data[i] != 0) count++;
+    }
+    return count;
+}
+
+int main() {
+    int data[5] = {0, 3, 0, 7, 1};
+    printf("non-zero %d\n", countNonZero(data, 5));
+    return 0;
+}
+
+// ASM-O0-LABEL: {{.*}}countNonZero{{.*}}:
+// ASM-O0: cmpl $0, %eax
+// ASM-GE1-LABEL: {{.*}}countNonZero{{.*}}:
+// ASM-GE1: xorl %eax, %eax
+// ASM-GE1: testl %eax, %eax
+// ASM-GE1-NOT: cmpl $0,
+// ASM-GE1: {{^}}main:

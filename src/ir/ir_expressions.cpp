@@ -1,10 +1,9 @@
+//expressions lower via emitLValue (the address) or emitRValue (the value)
 #include "ir/ir_visitor.h"
 
 #include <cstdlib>
 
 #include "semantic/constants.h"
-
-//expressions lower via emitLValue (the address) or emitRValue (the value)
 
 namespace ir {
 
@@ -15,8 +14,6 @@ bool isPointerLike(const sema::Type *type) {
 }
 
 } // namespace
-
-//  lvalues and rvalues 
 
 Value *IRVisitor::emitRValue(ast::Expr *expr) {
     //an object in memory: compute where it is, then read it
@@ -135,8 +132,7 @@ Value *IRVisitor::emitLValue(ast::Expr *expr) {
     return materialize(emitRValue(expr), expr->type);
 }
 
-//jumping code (dragon book 6.6): && and || in a condition branch straight to the targets, the bool
-//they would compute is never made. conditions already carry a ToBool cast
+//&& and || in a condition branch straight to the targets without making a bool
 void IRVisitor::emitBranch(ast::Expr *expr, BasicBlock *ifTrue, BasicBlock *ifFalse) {
     switch (expr->getKind()) {
     case ast::ASTKind::ParenExpr:
@@ -185,8 +181,6 @@ Value *IRVisitor::materialize(Value *value, const sema::Type *type) {
     builder.createStore(type, value, temp);
     return temp;
 }
-
-//  names, members and subscripts 
 
 Value *IRVisitor::emitDeclRefAddress(ast::DeclRefExpr *node) {
     sema::Symbol *symbol = node->symbol;
@@ -244,12 +238,18 @@ Value *IRVisitor::emitMemberAddress(ast::MemberExpr *node) {
 
 //a[i]: getelementptr on the decayed base pointer
 Value *IRVisitor::emitSubscriptAddress(ast::ArraySubscriptExpr *node) {
-    Value *base = emitRValue(node->base.get());
-    Value *index = emitRValue(node->index.get());
+    //the left operand is evaluated first, as written in the source
+    Value *base = nullptr;
+    Value *index = nullptr;
+    if (node->reversed) {
+        index = emitRValue(node->index.get());
+        base = emitRValue(node->base.get());
+    } else {
+        base = emitRValue(node->base.get());
+        index = emitRValue(node->index.get());
+    }
     return builder.createElementGEP(node->type, base, index);
 }
-
-//  operators 
 
 Value *IRVisitor::emitUnary(ast::UnaryExpr *node) {
     switch (node->op) {
@@ -264,11 +264,9 @@ Value *IRVisitor::emitUnary(ast::UnaryExpr *node) {
         return builder.createBinary(BinaryOpKind::Xor, node->type, emitRValue(node->operand.get()),
                                     module.getInt(node->type, -1));
     case ast::UnaryOp::LogicalNot:
-        //the operand is already a bool: flip it
         return builder.createBinary(BinaryOpKind::Xor, sema::boolType(), emitRValue(node->operand.get()),
                                     module.getBool(true));
     case ast::UnaryOp::AddrOf:
-        //the address of x is the value of &x
         return emitLValue(node->operand.get());
     case ast::UnaryOp::PostInc:
     case ast::UnaryOp::PostDec:
@@ -461,7 +459,6 @@ Value *IRVisitor::emitAssign(ast::AssignExpr *node) {
     Value *result = nullptr;
 
     if (const sema::PointerType *pointer = sema::asPointer(targetType)) {
-        //p += n, p -= n
         Value *count = value;
         if (node->op == ast::AssignOp::SubAssign) {
             count = builder.createBinary(BinaryOpKind::Sub, node->value->type, module.getInt(node->value->type, 0), value);
@@ -520,8 +517,6 @@ Value *IRVisitor::emitConditional(ast::ConditionalExpr *node, bool wantAddress) 
     if (!hasValue) return nullptr;
     return builder.createLoad(slotType, slot);
 }
-
-//  implicit conversions 
 
 Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
     ast::Expr *sub = node->sub.get();
@@ -582,7 +577,6 @@ Value *IRVisitor::emitCast(ast::ImplicitCastExpr *node) {
 Value *IRVisitor::emitArithmeticConversion(Value *value, const sema::Type *from, const sema::Type *to) {
     if (from->getKind() == to->getKind()) return value;
 
-    //to bool: compare with zero
     if (to->is(sema::TypeKind::Bool)) {
         if (sema::isFloating(from)) {
             return builder.createBinary(BinaryOpKind::FCmpUNE, from, value, module.getFloat(from, 0.0));

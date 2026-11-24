@@ -1,0 +1,40 @@
+// Tests: recursive function
+int factorial(int n) {
+    if (n <= 1) return 1;
+    return n * factorial(n - 1);
+}
+
+// Tests: reference parameters
+void swap(int &x, int &y) {
+    int t = x;
+    x = y;
+    y = t;
+}
+
+// Tests: function declared before its definition
+int twice(int x);
+
+// Tests: function returning a pointer to an array
+int table[2][3] = {{1, 2, 3}, {4, 5, 6}};
+int (*rowAt(int i))[3] {
+    return &table[i];
+}
+
+int main() {
+    int a = 1, b = 2;
+    swap(a, b);
+
+    // Tests: lambda with captures
+    int base = 10;
+    auto addBase = [base](int x) { return x + base; };
+    auto bump = [&base]() { base++; };
+    bump();
+
+    printf("%d %d %d %d %d %d\n", factorial(5), a, b, twice(4), addBase(1), (*rowAt(1))[2]);
+    printf("%d\n", base);
+    return 0;
+}
+
+int twice(int x) {
+    return x * 2;
+}

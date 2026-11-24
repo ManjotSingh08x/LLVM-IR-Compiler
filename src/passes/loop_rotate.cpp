@@ -15,7 +15,7 @@ bool hasPhi(const BasicBlock *block) {
     return !block->instructions.empty() && block->instructions.front()->getOpcode() == Opcode::Phi;
 }
 
-//instructions that can be run once more before the loop without changing anything
+//instructions that can run once more before the loop without changing anything
 bool isCopyable(const Instruction &inst) {
     switch (inst.getOpcode()) {
     case Opcode::Load:
@@ -59,8 +59,7 @@ LoopResult LoopRotate::runOnLoop(Loop &loop, LoopContext &ctx) {
         }
     }
 
-    //the guard: a copy of the header's work at the end of the preheader. what the header reads from
-    //outside the loop dominates the header, so it is already available there
+    //the guard: a copy of the header's work at the end of the preheader
     ValueMap copies;
     Instruction *preTerm = pre->getTerminator();
     for (size_t i = 0; i + 1 < header->instructions.size(); i++) {
@@ -77,7 +76,7 @@ LoopResult LoopRotate::runOnLoop(Loop &loop, LoopContext &ctx) {
     BranchInst *guard = trueStays ? new BranchInst(condition, body, exit) : new BranchInst(condition, exit, body);
     pre->append(std::unique_ptr<Instruction>(guard));
 
-    //the old header now runs after the latch: move it there in the layout so the latch falls into it
+    //place the old header after the latch so the latch falls into it
     ctx.fn.removeBlock(header);
     ctx.fn.placeBlockAfter(header, latch);
 

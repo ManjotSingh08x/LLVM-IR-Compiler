@@ -1,0 +1,21 @@
+// Tests: sink moves a computation into the only branch that uses it (-O2 and up)
+int report(int a, int b, bool verbose) {
+    int detail = a * b + 7;
+    if (verbose) {
+        return detail;
+    }
+    return 0;
+}
+
+int main() {
+    printf("%d %d\n", report(3, 4, true), report(3, 4, false));
+    return 0;
+}
+
+// IR-O1-LABEL: define i32 @{{.*}}report
+// IR-O1: mul i32 %a, %b
+// IR-O1: br i1 %verbose
+// IR-GE2-LABEL: define i32 @{{.*}}report
+// IR-GE2: br i1 %verbose
+// IR-GE2: if.then:
+// IR-GE2-NEXT: mul i32 %a, %b

@@ -4,8 +4,6 @@
 
 namespace ir {
 
-//BasicBlock
-
 void BasicBlock::append(std::unique_ptr<Instruction> inst) {
     inst->setParent(this);
     instructions.push_back(std::move(inst));
@@ -111,8 +109,6 @@ void BasicBlock::dump(std::ostream &out) const {
     for (const std::unique_ptr<Instruction> &inst : instructions) inst->dump(out);
 }
 
-//Function
-
 Argument *Function::addArgument(const sema::Type *type, const std::string &baseName) {
     Argument *arg = new Argument(type, uniqueName(baseName), this, args.size());
     args.push_back(std::unique_ptr<Argument>(arg));
@@ -210,7 +206,7 @@ void Function::discard(std::unique_ptr<Instruction> inst) {
 void Function::finalizeCFG(Module &module) {
     if (layout.empty()) return;
 
-    //1. every block that can be reached from entry, following the edges
+    //find every block reachable from entry
     std::set<BasicBlock *> reached;
     std::vector<BasicBlock *> work;
     work.push_back(layout.front());
@@ -225,7 +221,7 @@ void Function::finalizeCFG(Module &module) {
         }
     }
 
-    //2. keep only reachable blocks, appending any that were never written into
+    //keep only reachable blocks, appending any that were never written into
     std::vector<BasicBlock *> kept;
     for (BasicBlock *block : layout) {
         if (reached.count(block)) kept.push_back(block);
@@ -247,7 +243,7 @@ void Function::finalizeCFG(Module &module) {
         block->predecessors = preds;
     }
 
-    //3. a block that runs off its end returns the zero value
+    //a block that runs off its end returns the zero value
     const sema::Type *returnType = fnType->returnType;
     for (BasicBlock *block : layout) {
         if (block->isTerminated()) continue;
@@ -285,8 +281,6 @@ void Function::dump(std::ostream &out) const {
     }
     out << "}\n";
 }
-
-//Module
 
 const sema::Type *Module::pointerType() {
     if (genericPointer == nullptr) genericPointer = symTab.pointerTo(sema::voidType());

@@ -1,0 +1,28 @@
+int main() {
+    int a = 10, b = 3;
+
+    // Tests: operator precedence and parentheses
+    int p1 = a + b * 2;
+    int p2 = (a + b) * 2;
+
+    // Tests: compound assignments
+    int c = a;
+    c += 5; c -= 2; c *= 3; c /= 2; c %= 7;
+
+    // Tests: prefix and postfix increment
+    int x = 5;
+    int pre = ++x;
+    int post = x++;
+
+    // Tests: ternary operator
+    int big = a > b ? a : b;
+
+    // Tests: casts and sizeof
+    double half = (double)a / 4;
+    int whole = (int)3.9;
+    int size = sizeof(int);
+
+    printf("%d %d %d %d %d %d %d\n", p1, p2, c, pre, post, x, big);
+    printf("%.2f %d %d\n", half, whole, size);
+    return 0;
+}

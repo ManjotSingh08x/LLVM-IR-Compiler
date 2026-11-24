@@ -13,7 +13,7 @@
 #include "ir/cfg.h"
 #include "ir/ir_visitor.h"
 #include "codegen/codegen.h"
-#include "passes/pipeline.h"
+#include "pipeline/pipeline.h"
 #include "semantic/diagnostics.h"
 #include "semantic/symbolbuilder.h"
 #include "semantic/symbols.h"
@@ -25,20 +25,34 @@ using ast::NodeList;
 int yylex(void);
 void yyerror(const char *message);
 
+//error recovery helpers from lexer.l
+int  depthAt(int line, int col);
+void pushBackToken(int id);
+void resyncBraces(int target);
+
+//for the "error ;" rules: brings the token stream back to the brace depth where recovery started
+#define RESYNC_AFTER_ERROR(at)                                 \
+    do {                                                       \
+        int target = depthAt((at).first_line, (at).first_column); \
+        if (yychar != YYEMPTY) {                               \
+            pushBackToken(yychar);                             \
+            yyclearin;                                         \
+        }                                                      \
+        resyncBraces(target);                                  \
+    } while (0)
+
 extern FILE *yyin;
 
 size_t lexicalErrorCount();
 void printTable();
 void printErrors(const char *filename);
 
-//structs
 struct SyntaxError {
     std::string message;
     int         line;
     int         col;
 };
 
-//globals
 static std::vector<SyntaxError> g_syntaxErrors;
 static const char *g_filename = NULL;
 static std::unique_ptr<ast::Program> g_program;
@@ -46,6 +60,25 @@ static std::unique_ptr<ast::Program> g_program;
 void        setDeclType(int index, const std::string &type);
 void        replaceDeclType(int index, const std::string &type);
 std::string lexemeAt(int index);
+
+static bool isHexDigit(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+//joins adjacent string literals, padding a trailing one-digit \x so the join does not extend it
+static void joinStringLiteral(ast::StringLiteral *left, const std::string &right) {
+    std::string &spelling = left->spelling;
+    spelling.pop_back();  //closing quote
+    size_t n = spelling.size();
+    if (n >= 3 && spelling[n - 3] == '\\' && spelling[n - 2] == 'x' && isHexDigit(spelling[n - 1])
+        && right.size() > 1 && isHexDigit(right[1])) {
+        //a backslash before the \x would make it a literal \ then x, so count the backslashes
+        size_t slashes = 0;
+        while (slashes < n - 2 && spelling[n - 3 - slashes] == '\\') slashes++;
+        if (slashes % 2 == 1) spelling.insert(n - 1, "0");
+    }
+    spelling += right.substr(1);  //without its opening quote
+}
 
 //names in a declaration, held until the type name is known
 static std::vector<int> g_pendingNames;
@@ -68,8 +101,6 @@ static std::string typeNameAt(int index) {
     }
     return name;
 }
-
-//ast construction helpers, nodes take ownership of their children
 
 //line and column of a location, as the last two constructor arguments
 #define LOC(at) (at).first_line, (at).first_column
@@ -118,7 +149,7 @@ static ast::TypeSpec *typeSpec(ast::TypeSpecKind kind, int tok, int line, int co
     return new ast::TypeSpec(kind, lexemeAt(tok), tok, line, col);
 }
 
-//one builtin integer type from its specifiers, a syntax error for a combination C does not allow
+//one builtin integer type from its specifiers, or a syntax error for an invalid combination
 static ast::TypeSpec *integerTypeSpec(std::vector<int> *toks, int line, int col) {
     int ints = 0, chars = 0, shorts = 0, longs = 0, unsigneds = 0, signeds = 0;
     for (int tok : *toks) {
@@ -142,7 +173,7 @@ static ast::TypeSpec *integerTypeSpec(std::vector<int> *toks, int line, int col)
     return new ast::TypeSpec(ast::TypeSpecKind::Builtin, name, first, line, col);
 }
 
-//the type name a declared name shows in the token table: INT, UNSIGNED LONG, DOG
+//the type name a declared name shows in the token table
 static std::string typeNameOf(const ast::TypeSpec *spec) {
     if (spec->specKind != ast::TypeSpecKind::Builtin) return typeNameAt(spec->tokIndex);
     std::string name = spec->name;
@@ -167,8 +198,6 @@ static ast::QualifiedName memberName(int classTok, const std::string &member, in
     return name;
 }
 
-//declarator types: built outside in, with a null inner as the hole for the type name
-
 //puts piece into the hole of chain
 static std::unique_ptr<ast::TypeSpec> plug(std::unique_ptr<ast::TypeSpec> chain,
                                            std::unique_ptr<ast::TypeSpec> piece) {
@@ -183,8 +212,7 @@ static std::unique_ptr<ast::TypeSpec> wrapper(ast::TypeSpecKind kind, int line, 
     return std::unique_ptr<ast::TypeSpec>(new ast::TypeSpec(kind, nullptr, line, col));
 }
 
-//one pointer per star around the hole, the last star outermost: * *const is Pointer const -> Pointer
-//-> (hole). stars holds each star's const flag in source order and is freed, null for none
+//one pointer per star around the hole, the last star outermost; stars is freed
 static std::unique_ptr<ast::TypeSpec> pointers(std::vector<int> *stars, int line, int col) {
     std::unique_ptr<ast::TypeSpec> chain;
     if (stars == nullptr) return chain;
@@ -205,7 +233,6 @@ static ast::TypeSpec *scopedTypeSpec(ast::QualifiedName *name, int line, int col
     return type;
 }
 
-//N::f, Counter::total as a value
 static ast::DeclRefExpr *scopedRef(ast::QualifiedName *name, int line, int col) {
     ast::DeclRefExpr *ref = new ast::DeclRefExpr(name->parts.back(), line, col);
     ref->qualifier.assign(name->parts.begin(), name->parts.end() - 1);
@@ -213,7 +240,6 @@ static ast::DeclRefExpr *scopedRef(ast::QualifiedName *name, int line, int col) 
     return ref;
 }
 
-//a qualified name with one more part
 static ast::QualifiedName *extendName(ast::QualifiedName *name, const std::string &part, int tok) {
     name->parts.push_back(part);
     name->lastTok = tok;
@@ -265,12 +291,34 @@ static Declarator *plainDeclarator(ast::QualifiedName *name, int line, int col, 
     return makeDeclarator(name, line, col, plug(arrays(dims, line, col), pointers(stars, line, col)), init);
 }
 
-//&name, then dimensions
 static Declarator *referenceDeclarator(ast::QualifiedName *name, int line, int col,
                                        NodeList<ast::Expr> *dims, Initializer *init) {
     return makeDeclarator(name, line, col,
                           plug(arrays(dims, line, col), wrapper(ast::TypeSpecKind::Reference, line, col)),
                           init);
+}
+
+//(*name[dims])target: the arrays around the name, then the pointers, then what they point to
+static std::unique_ptr<ast::TypeSpec> pointerChain(NodeList<ast::Expr> *dims, std::vector<int> *stars,
+                                                   std::unique_ptr<ast::TypeSpec> target, int line, int col) {
+    return plug(plug(arrays(dims, line, col), pointers(stars, line, col)), std::move(target));
+}
+
+//shows a function pointer name, or an array of them, as a procedure in the token table
+static void markPointerName(int nameTok, NodeList<ast::Expr> *dims) {
+    if (dims->empty()) setDeclType(nameTok, "PROCEDURE");
+    else pendName(nameTok);
+}
+
+//a function returning a pointer to an array or function, int (*f(int))[3]; body is null for a declaration
+static ast::FunctionDecl *makeParenFunction(ast::TypeSpec *typeName, Declarator *head, ast::CompoundStmt *body) {
+    std::unique_ptr<ast::TypeSpec> function = std::move(head->type);
+    std::unique_ptr<ast::TypeSpec> returnType = plug(std::move(function->inner), own(typeName));
+    ast::FunctionDecl *decl = new ast::FunctionDecl(std::move(returnType), std::move(head->name),
+                                                    std::move(function->params), own(body),
+                                                    head->line, head->col);
+    delete head;
+    return decl;
 }
 
 //pointers before a parenthesised declarator belong to the type inside it
@@ -424,7 +472,7 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
 %type <base>     base_specifier
 %type <op>       access_specifier assignment_operator capture_default
 %type <type>     simple_type builtin_type struct_type type_specifier allocation_type type_name
-%type <dtor>     abstract_declarator_opt
+%type <dtor>     abstract_declarator_opt abstract_declarator direct_abstract_declarator paren_function_head
 %type <qname>    qualified_name scoped_name
 %type <params>   parameter_list_opt parameter_list
 %type <param>    parameter_declaration
@@ -447,7 +495,7 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
 %type <expr>     bitwise_xor_expression bitwise_and_expression equality_expression
 %type <expr>     relational_expression shift_expression additive_expression
 %type <expr>     multiplicative_expression unary_expression delete_operand cast_expression
-%type <expr>     postfix_expression primary_expression lambda_expression
+%type <expr>     postfix_expression primary_expression lambda_expression string_literal
 %type <newExpr>  allocation_suffix_opt
 %type <captures> capture_list
 %type <capture>  capture
@@ -478,7 +526,7 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
     multiplicative_expression unary_expression delete_operand
     postfix_expression primary_expression lambda_expression
     allocation_suffix_opt capture_list capture integer_specifiers type_name abstract_declarator_opt
-    cast_expression
+    abstract_declarator direct_abstract_declarator paren_function_head string_literal cast_expression
 
 %nonassoc IDENTIFIER_EXPRESSION
 %nonassoc TOK_STAR TOK_BITAND
@@ -489,7 +537,6 @@ static NodeList<ast::Decl> *makeTypedefs(NodeList<ast::Decl> *decls) {
 
 %%
 
-//top level
 program
     : translation_unit                { g_program.reset(new ast::Program(take($1))); }
     ;
@@ -511,10 +558,9 @@ external_item
     | typedef_declaration             { $$ = $1; }
     | static_item                     { $$ = $1; }
     | namespace_definition            { $$ = single($1); }
-    | error TOK_SEMI                  { yyerrok; $$ = new NodeList<ast::Decl>(); }
+    | error TOK_SEMI                  { yyerrok; RESYNC_AFTER_ERROR(@1); $$ = new NodeList<ast::Decl>(); }
     ;
 
-//namespace N { ... } at file scope or inside another namespace
 namespace_definition
     : TOK_NAMESPACE TOK_IDENTIFIER TOK_LBRACE translation_unit TOK_RBRACE
                                       { setDeclType($2, "NAMESPACE");
@@ -557,6 +603,12 @@ record_definition
                                                       { setDeclType($2, "STRUCT");
                                                         $$ = new ast::RecordDecl(false, lexemeAt($2), takeValue($3),
                                                                                  take($5), LOC(@1)); }
+    //the ; after the body is missing: the error is reported and parsing goes on after the body
+    | TOK_STRUCT TOK_IDENTIFIER inheritance_opt TOK_LBRACE record_items_opt TOK_RBRACE error
+                                                      { yyerrok;
+                                                        setDeclType($2, "STRUCT");
+                                                        $$ = new ast::RecordDecl(false, lexemeAt($2), takeValue($3),
+                                                                                 take($5), LOC(@1)); }
     | TOK_STRUCT TOK_IDENTIFIER TOK_SEMI              { setDeclType($2, "STRUCT");
                                                         ast::RecordDecl *forward = new ast::RecordDecl(
                                                             false, lexemeAt($2), {}, NodeList<ast::Decl>(), LOC(@1));
@@ -574,9 +626,13 @@ class_definition
                                                       { setDeclType($2, "CLASS");
                                                         $$ = new ast::RecordDecl(true, lexemeAt($2), takeValue($3),
                                                                                  take($5), LOC(@1)); }
+    | TOK_CLASS TOK_IDENTIFIER inheritance_opt TOK_LBRACE class_items_opt TOK_RBRACE error
+                                                      { yyerrok;
+                                                        setDeclType($2, "CLASS");
+                                                        $$ = new ast::RecordDecl(true, lexemeAt($2), takeValue($3),
+                                                                                 take($5), LOC(@1)); }
     ;
 
-//the access specifier is optional and several bases may be listed
 inheritance_opt
     : /* empty */                     { $$ = new std::vector<ast::BaseSpecifier>(); }
     | TOK_COLON base_list             { $$ = $2; }
@@ -652,10 +708,10 @@ member_item
     | declaration                     { $$ = $1; }
     | typedef_declaration             { $$ = $1; }
     | static_item                     { $$ = $1; }
-    | error TOK_SEMI                  { yyerrok; $$ = new NodeList<ast::Decl>(); }
+    | error TOK_SEMI                  { yyerrok; RESYNC_AFTER_ERROR(@1); $$ = new NodeList<ast::Decl>(); }
     ;
 
-//int, char, short, long, unsigned and signed in any order: unsigned long int, short unsigned, signed char
+//integer type keywords in any order, such as unsigned long int
 integer_specifiers
     : integer_specifier                                 { $$ = new std::vector<int>{ $1 }; }
     | integer_specifiers integer_specifier              { $$ = $1; $$->push_back($2); }
@@ -665,7 +721,6 @@ integer_specifier
     : TOK_INT | TOK_CHAR | TOK_SHORT | TOK_LONG | TOK_UNSIGNED | TOK_SIGNED
     ;
 
-//declarations
 simple_type
     : builtin_type                    { $$ = $1; }
     | TOK_CONST builtin_type          { $$ = constQualified($2); }
@@ -692,13 +747,11 @@ type_specifier
     | scoped_name TOK_CONST                           { $$ = constQualified(scopedTypeSpec($1, LOC(@1))); }
     ;
 
-//two or more parts: N::Dog, A::B::f
 scoped_name
     : TOK_IDENTIFIER TOK_SCOPE TOK_IDENTIFIER         { $$ = extendName(nameOf($1), lexemeAt($3), $3); }
     | scoped_name TOK_SCOPE TOK_IDENTIFIER            { $$ = extendName($1, lexemeAt($3), $3); }
     ;
 
-//struct Node, const struct Node, struct Node const
 struct_type
     : TOK_STRUCT TOK_IDENTIFIER                       { $$ = typeSpec(ast::TypeSpecKind::Struct, $2, LOC(@1)); }
     | TOK_CONST TOK_STRUCT TOK_IDENTIFIER             { $$ = constQualified(typeSpec(ast::TypeSpecKind::Struct, $3, LOC(@2))); }
@@ -721,6 +774,12 @@ function_definition
                                                       { setDeclType($3->lastTok, "PROCEDURE");
                                                         $$ = new ast::FunctionDecl(own(withPointers($1, $2)), takeValue($3),
                                                                                    take($5), own($7), LOC(@3)); }
+    | simple_type paren_function_head compound_statement
+                                                      { $$ = makeParenFunction($1, $2, $3); }
+    | struct_type paren_function_head compound_statement
+                                                      { $$ = makeParenFunction($1, $2, $3); }
+    | type_specifier pointer paren_function_head compound_statement
+                                                      { $$ = makeParenFunction(withPointers($1, $2), $3, $4); }
     ;
 
 function_declaration
@@ -732,9 +791,28 @@ function_declaration
                                                       { setDeclType($3->lastTok, "PROCEDURE");
                                                         $$ = new ast::FunctionDecl(own(withPointers($1, $2)), takeValue($3),
                                                                                    take($5), nullptr, LOC(@3)); }
+    | simple_type paren_function_head TOK_SEMI       { $$ = makeParenFunction($1, $2, nullptr); }
+    | struct_type paren_function_head TOK_SEMI       { $$ = makeParenFunction($1, $2, nullptr); }
+    | type_specifier pointer paren_function_head TOK_SEMI
+                                                      { $$ = makeParenFunction(withPointers($1, $2), $3, nullptr); }
     ;
 
-//one or more stars, each maybe followed by const: * *const
+//a function returning a pointer to an array or function: (*name(params))[3], (*name(params))(params)
+paren_function_head
+    : TOK_LPAREN pointer qualified_name TOK_LPAREN parameter_list_opt TOK_RPAREN TOK_RPAREN array_dimensions
+                                                      { setDeclType($3->lastTok, "PROCEDURE");
+                                                        $$ = makeDeclarator($3, LOC(@3),
+                                                                            plug(plug(functionOf($5, LOC(@4)), pointers($2, LOC(@1))),
+                                                                                 arrays($8, LOC(@8))),
+                                                                            nullptr); }
+    | TOK_LPAREN pointer qualified_name TOK_LPAREN parameter_list_opt TOK_RPAREN TOK_RPAREN
+      TOK_LPAREN parameter_list_opt TOK_RPAREN        { setDeclType($3->lastTok, "PROCEDURE");
+                                                        $$ = makeDeclarator($3, LOC(@3),
+                                                                            plug(plug(functionOf($5, LOC(@4)), pointers($2, LOC(@1))),
+                                                                                 functionOf($9, LOC(@8))),
+                                                                            nullptr); }
+    ;
+
 pointer
     : TOK_STAR                                        { $$ = new std::vector<int>{ 0 }; }
     | TOK_STAR TOK_CONST                              { $$ = new std::vector<int>{ 1 }; }
@@ -759,7 +837,7 @@ parameter_declaration
 
 parameter_declarator_opt
     : /* empty */                                     { $$ = nullptr; }
-    | pointer                                         { $$ = plainDeclarator(nullptr, LOC(@1), $1, nullptr, nullptr); }
+    | abstract_declarator                             { $$ = $1; }
     | TOK_IDENTIFIER array_dimensions_opt             { pendName($1);
                                                         $$ = plainDeclarator(nameOf($1), LOC(@1), 0, $2, nullptr); }
     | pointer TOK_IDENTIFIER array_dimensions_opt     { pendName($2);
@@ -770,16 +848,17 @@ parameter_declarator_opt
     | pointer parenthesized_parameter_declarator      { $$ = addPointers($2, $1); }
     ;
 
+//(*f)(int), (*p)[3], (*fs[2])(int), (*rows[2])[3] and (&r)[3]. unnamed ones are abstract declarators
 parenthesized_parameter_declarator
-    : TOK_LPAREN pointer parameter_name_opt TOK_RPAREN
-      TOK_LPAREN parameter_list_opt TOK_RPAREN        { setDeclType($3, "PROCEDURE");
+    : TOK_LPAREN pointer TOK_IDENTIFIER array_dimensions_opt TOK_RPAREN
+      TOK_LPAREN parameter_list_opt TOK_RPAREN        { markPointerName($3, $4);
                                                         $$ = makeDeclarator(nameOf($3), LOC(@1),
-                                                                            plug(pointers($2, LOC(@1)), functionOf($6, LOC(@5))),
+                                                                            pointerChain($4, $2, functionOf($7, LOC(@6)), LOC(@1)),
                                                                             nullptr); }
-    | TOK_LPAREN pointer parameter_name_opt TOK_RPAREN array_dimensions
+    | TOK_LPAREN pointer TOK_IDENTIFIER array_dimensions_opt TOK_RPAREN array_dimensions
                                                       { pendName($3);
                                                         $$ = makeDeclarator(nameOf($3), LOC(@1),
-                                                                            plug(pointers($2, LOC(@1)), arrays($5, LOC(@5))),
+                                                                            pointerChain($4, $2, arrays($6, LOC(@6)), LOC(@1)),
                                                                             nullptr); }
     | TOK_LPAREN TOK_BITAND parameter_name_opt TOK_RPAREN array_dimensions
                                                       { pendName($3);
@@ -811,7 +890,6 @@ parenthesized_declarator
                                                         $$ = makeVarDecls($1, single(addPointers($3, $2))); }
     ;
 
-//typedef takes any declarator: typedef int *IntPtr, Row[3]
 typedef_declaration
     : TOK_TYPEDEF declaration                         { $$ = makeTypedefs($2); }
     | TOK_TYPEDEF named_parenthesized_declaration     { $$ = makeTypedefs($2); }
@@ -824,19 +902,19 @@ named_parenthesized_declaration
                                                                           single($2)); }
     ;
 
-//(*f)(params), (*p)[3] and (&r)[3], with any number of stars inside
+//(*f)(params), (*p)[3] and (&r)[3] with any number of stars, and arrays of those pointers
 paren_suffix
-    : TOK_LPAREN pointer TOK_IDENTIFIER TOK_RPAREN
+    : TOK_LPAREN pointer TOK_IDENTIFIER array_dimensions_opt TOK_RPAREN
       TOK_LPAREN parameter_list_opt TOK_RPAREN initializer_opt
-                                                      { setDeclType($3, "PROCEDURE");
+                                                      { markPointerName($3, $4);
                                                         $$ = makeDeclarator(nameOf($3), LOC(@3),
-                                                                            plug(pointers($2, LOC(@3)), functionOf($6, LOC(@5))),
-                                                                            $8); }
-    | TOK_LPAREN pointer TOK_IDENTIFIER TOK_RPAREN array_dimensions initializer_opt
+                                                                            pointerChain($4, $2, functionOf($7, LOC(@6)), LOC(@3)),
+                                                                            $9); }
+    | TOK_LPAREN pointer TOK_IDENTIFIER array_dimensions_opt TOK_RPAREN array_dimensions initializer_opt
                                                       { pendName($3);
                                                         $$ = makeDeclarator(nameOf($3), LOC(@3),
-                                                                            plug(pointers($2, LOC(@3)), arrays($5, LOC(@5))),
-                                                                            $6); }
+                                                                            pointerChain($4, $2, arrays($6, LOC(@6)), LOC(@3)),
+                                                                            $7); }
     | TOK_LPAREN TOK_BITAND TOK_IDENTIFIER TOK_RPAREN array_dimensions initializer_opt
                                                       { pendName($3);
                                                         $$ = makeDeclarator(nameOf($3), LOC(@3),
@@ -874,7 +952,6 @@ array_dimensions
                                                       { $$ = append($1, $3); }
     ;
 
-//both copy initialisation, int a = 1, and list initialisation, int a{1}
 initializer_opt
     : /* empty */                     { $$ = nullptr; }
     | TOK_ASSIGN initializer          { $$ = new Initializer{ ast::InitStyle::Copy, own($2) }; }
@@ -903,7 +980,6 @@ initializer_list
                                       { $$ = append($1, $3); }
     ;
 
-//local declarations
 local_declaration
     : local_declaration_body TOK_SEMI { $$ = new ast::DeclStmt(take($1), LOC(@1)); }
     | record_definition               { $$ = new ast::DeclStmt(take(single<ast::Decl>($1)), LOC(@1)); }
@@ -969,7 +1045,6 @@ named_type_declarator
                                                         $$ = referenceDeclarator(nameOf($2), LOC(@2), $3, $4); }
     ;
 
-//statements
 compound_statement
     : TOK_LBRACE block_items_opt TOK_RBRACE
                                       { $$ = new ast::CompoundStmt(take($2), LOC(@1)); }
@@ -983,7 +1058,9 @@ block_items_opt
 block_item
     : local_declaration               { $$ = $1; }
     | statement                       { $$ = $1; }
-    | error TOK_SEMI                  { yyerrok; $$ = nullptr; }
+    | error TOK_SEMI                  { yyerrok; RESYNC_AFTER_ERROR(@1); $$ = nullptr; }
+    //a broken statement head such as "if x {" or "while x {": the block itself is still parsed
+    | error compound_statement        { yyerrok; $$ = $2; }
     ;
 
 statement
@@ -1050,7 +1127,6 @@ labeled_statement
     | TOK_DEFAULT TOK_COLON statement { $$ = new ast::DefaultStmt(own($3), LOC(@1)); }
     ;
 
-//expressions
 expression_opt
     : /* empty */                     { $$ = nullptr; }
     | expression                      { $$ = $1; }
@@ -1174,23 +1250,36 @@ type_name
     | struct_type abstract_declarator_opt             { $$ = typeName($1, $2); }
     ;
 
-//a declarator with no name: *, [3], *[3], (*)[3], **(*)[3] and (*)(int)
+//a declarator with no name, as in C: *, [3], (*)[3], (*)(int)
 abstract_declarator_opt
     : /* empty */                                     { $$ = nullptr; }
-    | pointer                                         { $$ = plainDeclarator(nullptr, LOC(@1), $1, nullptr, nullptr); }
-    | array_dimensions                                { $$ = plainDeclarator(nullptr, LOC(@1), 0, $1, nullptr); }
-    | pointer array_dimensions                        { $$ = plainDeclarator(nullptr, LOC(@1), $1, $2, nullptr); }
-    | TOK_LPAREN pointer TOK_RPAREN array_dimensions  { $$ = makeDeclarator(nullptr, LOC(@1),
-                                                                            plug(pointers($2, LOC(@1)), arrays($4, LOC(@4))),
-                                                                            nullptr); }
-    | pointer TOK_LPAREN pointer TOK_RPAREN array_dimensions
-                                                      { $$ = addPointers(makeDeclarator(nullptr, LOC(@2),
-                                                                                        plug(pointers($3, LOC(@2)), arrays($5, LOC(@5))),
-                                                                                        nullptr), $1); }
-    | TOK_LPAREN pointer TOK_RPAREN TOK_LPAREN parameter_list_opt TOK_RPAREN
-                                                      { $$ = makeDeclarator(nullptr, LOC(@1),
-                                                                            plug(pointers($2, LOC(@1)), functionOf($5, LOC(@4))),
-                                                                            nullptr); }
+    | abstract_declarator                             { $$ = $1; }
+    ;
+
+abstract_declarator
+    : pointer                                         { $$ = plainDeclarator(nullptr, LOC(@1), $1, nullptr, nullptr); }
+    | pointer direct_abstract_declarator              { $$ = addPointers($2, $1); }
+    | direct_abstract_declarator                      { $$ = $1; }
+    ;
+
+//a bare function type such as int (int) is left out, it would clash with (abstract_declarator)
+direct_abstract_declarator
+    : TOK_LPAREN abstract_declarator TOK_RPAREN       { $$ = $2; }
+    | TOK_LPAREN abstract_declarator TOK_RPAREN TOK_LPAREN parameter_list_opt TOK_RPAREN
+                                                      { $$ = $2;
+                                                        $$->type = plug(std::move($$->type), functionOf($5, LOC(@4))); }
+    | TOK_LBRACKET expression_opt TOK_RBRACKET        { $$ = makeDeclarator(nullptr, LOC(@1),
+                                                                            arrays(single($2), LOC(@1)), nullptr); }
+    | direct_abstract_declarator TOK_LBRACKET expression_opt TOK_RBRACKET
+                                                      { $$ = $1;
+                                                        $$->type = plug(std::move($$->type), arrays(single($3), LOC(@2))); }
+    ;
+
+string_literal
+    : TOK_STRING_LITERAL              { $$ = new ast::StringLiteral(lexemeAt($1), LOC(@1)); }
+    | string_literal TOK_STRING_LITERAL
+                                      { joinStringLiteral(static_cast<ast::StringLiteral *>($1), lexemeAt($2));
+                                        $$ = $1; }
     ;
 
 unary_expression
@@ -1302,7 +1391,7 @@ primary_expression
     | TOK_INT_LITERAL                 { $$ = new ast::IntLiteral(lexemeAt($1), LOC(@1)); }
     | TOK_FLOAT_LITERAL               { $$ = new ast::FloatLiteral(lexemeAt($1), LOC(@1)); }
     | TOK_CHAR_LITERAL                { $$ = new ast::CharLiteral(lexemeAt($1), LOC(@1)); }
-    | TOK_STRING_LITERAL              { $$ = new ast::StringLiteral(lexemeAt($1), LOC(@1)); }
+    | string_literal                  { $$ = $1; }
     | TOK_TRUE                        { $$ = new ast::BoolLiteral(true, LOC(@1)); }
     | TOK_FALSE                       { $$ = new ast::BoolLiteral(false, LOC(@1)); }
     | TOK_NULL                        { $$ = new ast::NullLiteral(LOC(@1)); }
@@ -1343,7 +1432,6 @@ capture
 
 %%
 
-//output
 void yyerror(const char *message) {
     if (lexicalErrorCount() != 0) return;
 
@@ -1380,7 +1468,6 @@ static std::ofstream openOutput(const char *sourcePath, const std::string &suffi
     return file;
 }
 
-//writes the tree to outputs/<source name>-ast.txt
 static void writeAst(const char *sourcePath) {
     std::ofstream astFile = openOutput(sourcePath, "-ast.txt");
     if (!astFile) return;
@@ -1388,9 +1475,8 @@ static void writeAst(const char *sourcePath) {
     printer.print(g_program.get());
 }
 
-//what the command line asked for, besides the source file
 struct DriverOptions {
-    int  optLevel = 0;            //-O0 .. -O3
+    int  optLevel = 0;
     bool verifyEach = false;      //--verify-each: check the ir after every pass that changed it
     bool tracePasses = false;     //--trace-passes: write <stem>.passes.ll
     bool dumpCallGraph = false;   //--dump-callgraph: write <stem>.callgraph.txt
@@ -1461,7 +1547,6 @@ static bool analyze(const char *sourcePath, const DriverOptions &options) {
     return true;
 }
 
-//main
 int main(int argc, char **argv) {
     const std::string usage = std::string("usage: ") + argv[0] +
                               " [-O0|-O1|-O2|-O3] [--verify-each] [--trace-passes] [--dump-callgraph]"

@@ -18,7 +18,6 @@ std::vector<PhiInst *> phisOf(BasicBlock *block) {
     return phis;
 }
 
-//the preheader's "br header" becomes "br cond, onTrue, onFalse"
 void branchPreheader(BasicBlock *pre, Value *cond, BasicBlock *onTrue, BasicBlock *onFalse) {
     pre->erase(pre->getTerminator());
     pre->append(std::unique_ptr<Instruction>(new BranchInst(cond, onTrue, onFalse)));
@@ -34,7 +33,7 @@ bool unswitchTrivially(Loop &loop, BasicBlock *pre, BranchInst *br, LoopContext 
     BasicBlock *exit = trueLeaves ? br->target : br->falseTarget;
     BasicBlock *stay = trueLeaves ? br->falseTarget : br->target;
 
-    //the values the exit's phis get when leaving from the header, as they are in the preheader
+    //the values the exit's phis get when leaving from the header
     std::vector<std::pair<PhiInst *, Value *>> entries;
     for (PhiInst *phi : phisOf(exit)) {
         Value *value = phi->getIncomingValueFor(header);
@@ -53,7 +52,7 @@ bool unswitchTrivially(Loop &loop, BasicBlock *pre, BranchInst *br, LoopContext 
     return true;
 }
 
-//copy the loop: the original runs when cond is true, the copy when it is false
+//the original loop runs when cond is true, the copy when it is false
 bool unswitchByCopy(Loop &loop, BasicBlock *pre, BasicBlock *block, BranchInst *br, LoopContext &ctx) {
     size_t size = 0;
     for (BasicBlock *b : loop.blocks) size += b->instructions.size();
@@ -88,7 +87,7 @@ bool unswitchByCopy(Loop &loop, BasicBlock *pre, BasicBlock *block, BranchInst *
     }
     for (Instruction *inst : copies) remapInstruction(*inst, map);
 
-    //the exits' loop-closed phis: the copy's exiting blocks bring the copy's values
+    //the copy's exiting blocks add entries to the exits' loop-closed phis
     for (BasicBlock *exit : loop.exits) {
         for (PhiInst *phi : phisOf(exit)) {
             std::vector<std::pair<Value *, BasicBlock *>> added;

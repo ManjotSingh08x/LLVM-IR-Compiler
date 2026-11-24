@@ -1,6 +1,0 @@
-sum 0 0 4950
-down 0 0 5
-break 0 147
-nested 0 20
-do 1 5 until 0 4
-call 8 and 3 2

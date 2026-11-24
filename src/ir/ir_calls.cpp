@@ -1,6 +1,5 @@
-#include "ir/ir_visitor.h"
-
 //calls of every kind, and lambdas
+#include "ir/ir_visitor.h"
 
 namespace ir {
 
@@ -13,9 +12,7 @@ ast::Expr *withoutParens(ast::Expr *expr) {
 
 } // namespace
 
-//  calls 
-
-//callee order: named function, lambda, function lvalue, function pointer
+//tries the callee as a named function, lambda, function lvalue, then function pointer
 Value *IRVisitor::emitCall(ast::CallExpr *node) {
     if (node->function) return emitDirectCall(node, node->function);
 
@@ -84,8 +81,6 @@ std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signatur
     }
     return values;
 }
-
-//  lambdas: a closure struct of captures plus a function taking it 
 
 const sema::FunctionType *IRVisitor::lambdaSignature(const ast::LambdaExpr *lambda) {
     const sema::FunctionType *signature = sema::asClosure(lambda->type)->signature;

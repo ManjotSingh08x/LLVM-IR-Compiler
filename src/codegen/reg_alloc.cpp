@@ -64,14 +64,14 @@ Reg RegisterAllocator::allocate(const ir::Value *value, bool isFloat, const Next
 
     Reg  chosen = pool[0];
     bool found = false;
-    //1. an empty register
+    //an empty register first
     for (size_t i = 0; i < count && !found; i++) {
         if (!holds.count(pool[i])) {
             chosen = pool[i];
             found = true;
         }
     }
-    //2. otherwise the register whose value is needed furthest away (dead values first)
+    //otherwise the register whose value is needed furthest away (dead values first)
     if (!found) {
         long furthest = -2;
         for (size_t i = 0; i < count; i++) {

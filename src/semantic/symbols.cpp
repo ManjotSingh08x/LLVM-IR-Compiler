@@ -1,9 +1,6 @@
 #include "semantic/symbols.h"
 
-
 namespace sema {
-
-//scope
 
 Scope *Scope::addChild(ScopeKind childKind, int childLine, int childCol) {
     children.emplace_back(new Scope(childKind, this, childLine, childCol));
@@ -111,8 +108,6 @@ QualifierTarget resolveQualifier(Scope *from, const std::vector<std::string> &qu
     return target;
 }
 
-//symbol table
-
 SymbolTable::SymbolTable() : root(new Scope(ScopeKind::Global, nullptr, 1, 1)) {}
 
 const Type *SymbolTable::keep(Type *type) {
@@ -169,8 +164,6 @@ ClosureType *SymbolTable::closureType(ast::LambdaExpr *lambda) {
     return closure;
 }
 
-//dump
-
 namespace {
 
 const char *scopeKindName(ScopeKind kind) {
@@ -194,7 +187,6 @@ const char *accessName(ast::AccessKind access) {
     }
     return "";
 }
-
 
 const char *symbolKindName(const Symbol &symbol) {
     switch (symbol.kind) {

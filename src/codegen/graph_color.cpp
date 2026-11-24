@@ -8,8 +8,7 @@ namespace codegen {
 
 namespace {
 
-//the registers handed out, in order of preference: caller-saved ones first (no prologue save),
-//rax, rcx and rdx last (isel's fixed sequences use them most)
+//registers in order of preference: caller-saved first, rax, rcx and rdx last
 const std::vector<Reg> kIntColors = { Reg::RSI, Reg::RDI, Reg::R8,  Reg::R9,  Reg::R10, Reg::R11, Reg::RCX,
                                       Reg::RDX, Reg::RAX, Reg::RBX, Reg::R12, Reg::R13, Reg::R14, Reg::R15 };
 const std::vector<Reg> kFloatColors = {
@@ -199,8 +198,7 @@ private:
         stats.coalesced++;
     }
 
-    //two phases: every virtual pair first (briggs), then virtual into physical (george). merging a
-    //value into a fixed register early would stop it merging with the other values it is copied to
+    //all virtual pairs first, then virtual into physical
     void coalesce() {
         coalescePhase(false);
         coalescePhase(true);
@@ -217,8 +215,7 @@ private:
                 if (!isVirtual(a) && !isVirtual(b)) continue;
                 if ((!isVirtual(a) || !isVirtual(b)) != withPhysical) continue;
                 if (!isVirtual(a) || !isVirtual(b)) {
-                    //george: the virtual one joins the physical one when none of its neighbours could
-                    //be hurt: each is pre-coloured, of low degree, or already next to the physical one
+                    //merge when every neighbour is pre-coloured, of low degree, or already next to the physical one
                     Reg phys = isVirtual(a) ? b : a;
                     Reg virt = isVirtual(a) ? a : b;
                     bool safe = true;
@@ -232,7 +229,7 @@ private:
                     merged = true;
                     continue;
                 }
-                //briggs: fewer than k neighbours of significant degree after the merge
+                //merge when fewer than k neighbours have significant degree afterwards
                 std::set<Reg> neighbours = adj[a];
                 neighbours.insert(adj[b].begin(), adj[b].end());
                 size_t significant = 0;
@@ -315,8 +312,7 @@ private:
         return it == colours.end() ? root : it->second;
     }
 
-    //a slot per spilled node; each instruction that reads one of its registers loads it into a new
-    //short-lived register first, each that writes one stores it after
+    //a stack slot per spilled node, with a load before each read and a store after each write
     void spill(const std::vector<Reg> &nodes) {
         std::map<Reg, long long> slotOf;
         for (Reg n : nodes) {

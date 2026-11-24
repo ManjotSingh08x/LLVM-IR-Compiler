@@ -1,3 +1,4 @@
+//puts every loop in canonical form: a preheader, one latch and dedicated exits
 #ifndef PASSES_LOOP_SIMPLIFY_H
 #define PASSES_LOOP_SIMPLIFY_H
 
@@ -5,9 +6,6 @@
 
 namespace passes {
 
-//puts every loop in the shape the loop passes after it rely on, on ssa: a preheader, one latch and
-//dedicated exits (the LoopPass canonical form, with the phis kept right), and loop-closed ssa
-//(formLCSSA). it changes nothing else
 class LoopSimplify : public LoopPass {
 public:
     const char *name() const override { return "loop_simplify"; }

@@ -22,7 +22,7 @@ int digitValue(char c) {
 long long readChar(const std::string &text, size_t &i) {
     if (text[i] != '\\') return (unsigned char)text[i++];
 
-    i++;  //the backslash
+    i++;
     char c = text[i++];
     switch (c) {
     case 'n':  return '\n';
@@ -124,13 +124,13 @@ double floatLiteral(const std::string &spelling, const Type *&type) {
 }
 
 long long charLiteralValue(const std::string &spelling) {
-    size_t i = 1;  //past the opening quote
+    size_t i = 1;
     return readChar(spelling, i);
 }
 
 size_t stringLiteralLength(const std::string &spelling) {
     size_t length = 0;
-    size_t i = 1;  //past the opening quote
+    size_t i = 1;
     while (i + 1 < spelling.size()) {
         readChar(spelling, i);
         length++;
@@ -140,7 +140,7 @@ size_t stringLiteralLength(const std::string &spelling) {
 
 std::string decodeStringLiteral(const std::string &spelling) {
     std::string bytes;
-    size_t i = 1;  //past the opening quote
+    size_t i = 1;
     while (i + 1 < spelling.size()) {
         bytes += (char)readChar(spelling, i);
     }
@@ -151,8 +151,7 @@ namespace {
 
 bool evaluate(const ast::Expr *expr, long long &value);
 
-//const int N = 4; makes N a constant wherever it is used, as in C++. const int x = x + 1 names
-//itself, so the depth is bounded
+//a const variable with a constant initializer is a constant, the depth bound stops self-reference
 bool constVariableValue(const Symbol *symbol, long long &value) {
     static int depth = 0;
     if (symbol == nullptr || symbol->kind != SymbolKind::Variable || !symbol->type->isConst()

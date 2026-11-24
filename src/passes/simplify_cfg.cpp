@@ -18,7 +18,6 @@ std::vector<PhiInst *> phisOf(BasicBlock *block) {
     return phis;
 }
 
-//an edge from -> to went away: each phi of to loses one entry for from
 void dropOneEntry(BasicBlock *to, BasicBlock *from) {
     for (PhiInst *phi : phisOf(to)) {
         for (size_t i = 0; i < phi->incoming.size(); i++) {
@@ -35,7 +34,6 @@ bool isIntConstant(const Value *value) {
            static_cast<const Constant *>(value)->constKind == ConstantKind::Int;
 }
 
-//br i1 <constant>, br c, L, L and switch <constant> become br L
 bool foldConstantBranches(Function &fn) {
     bool changed = false;
     for (BasicBlock *block : fn.getBlocks()) {
@@ -70,10 +68,7 @@ bool foldConstantBranches(Function &fn) {
     return changed;
 }
 
-//a block that is only "br L" is skipped: whoever jumps to it jumps to L. when L has phis, the
-//entry for the skipped block becomes one entry per edge from each of its predecessors (the value
-//dominates the skipped block, so it dominates the end of those predecessors too). not done when
-//a predecessor already jumps to L itself: its phi entries could not tell the two paths apart
+//not done when a predecessor already jumps to L: its phi entries could not tell the paths apart
 bool bypassEmptyBlocks(Function &fn) {
     for (BasicBlock *block : fn.getBlocks()) {
         if (block == fn.getEntryBlock() || block->instructions.size() != 1) continue;
@@ -113,7 +108,6 @@ bool bypassEmptyBlocks(Function &fn) {
     return false;
 }
 
-//blocks entry does not reach are dropped, with the phi entries they fed
 bool removeUnreachableBlocks(Function &fn) {
     std::set<BasicBlock *> reached;
     std::vector<BasicBlock *> work(1, fn.getEntryBlock());
@@ -140,8 +134,7 @@ bool removeUnreachableBlocks(Function &fn) {
     return !dead.empty();
 }
 
-//b -> s with s entered only from b: s's phis (one entry each) become their value, the rest of s
-//moves to the end of b, and s's successors' phis name b instead of s
+//b -> s with s entered only from b: s is merged into b
 bool mergeStraightLines(Function &fn) {
     for (BasicBlock *block : fn.getBlocks()) {
         Instruction *term = block->getTerminator();
@@ -179,7 +172,6 @@ bool mergeStraightLines(Function &fn) {
 
 } // namespace
 
-//replaces block's terminator with br target; every other outgoing edge loses its phi entries
 void branchTo(BasicBlock *block, BasicBlock *target) {
     std::vector<BasicBlock *> old = block->getTerminator()->getSuccessors();
     bool kept = false;

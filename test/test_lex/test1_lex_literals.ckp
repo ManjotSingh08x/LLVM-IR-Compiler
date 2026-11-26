@@ -1,0 +1,32 @@
+int main() {
+    // Tests: integer literal forms
+    int dec = 42;
+    int hex = 0x1F;
+    int oct = 017;
+    int bin = 0b1010;
+    long big = 5000000000L;
+    unsigned int u = 4000000000u;
+
+    // Tests: floating-point literal forms
+    double d1 = 3.25;
+    double d2 = 1.5e-3;
+    double d3 = .5;
+    double d4 = 2.;
+
+    // Tests: character literals and escape sequences
+    char c1 = 'a';
+    char c2 = '\'';
+    char c3 = '\\';
+    char c4 = '\x41';
+    char c5 = '\?';
+
+    // Tests: string literals and adjacent strings joined into one
+    char s1[] = "tab\tquote\"end";
+    char s2[] = "joined " "together";
+
+    printf("%d %d %d %d %ld %u\n", dec, hex, oct, bin, big, u);
+    printf("%.2f %.4f %.1f %.1f\n", d1, d2, d3, d4);
+    printf("%c %c %c %c %c\n", c1, c2, c3, c4, c5);
+    printf("%s %s\n", s1, s2);
+    return 0;
+}

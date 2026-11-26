@@ -5,23 +5,20 @@
 #include <string>
 #include <vector>
 
-//semantic results are held by pointer so the ast does not depend on semantic headers
 namespace sema {
 class Type;
 class Symbol;
 class FunctionSymbol;
 class RecordSymbol;
 class Scope;
-} // namespace sema
+}
 
 namespace ast {
 
-//one kind per concrete node, First/Last markers bound each family
 enum class ASTKind {
     Program,
     TypeSpec,
 
-    //declarations
     VarDecl,
     FirstDecl = VarDecl,
     ParamDecl,
@@ -31,9 +28,9 @@ enum class ASTKind {
     RecordDecl,
     AccessSpecDecl,
     TypedefDecl,
-    LastDecl = TypedefDecl,
+    NamespaceDecl,
+    LastDecl = NamespaceDecl,
 
-    //statements
     CompoundStmt,
     FirstStmt = CompoundStmt,
     DeclStmt,
@@ -52,7 +49,6 @@ enum class ASTKind {
     DefaultStmt,
     LastStmt = DefaultStmt,
 
-    //expressions
     IntLiteral,
     FirstExpr = IntLiteral,
     FloatLiteral,
@@ -67,6 +63,7 @@ enum class ASTKind {
     BinaryExpr,
     AssignExpr,
     ConditionalExpr,
+    CommaExpr,
     CallExpr,
     ArraySubscriptExpr,
     MemberExpr,
@@ -74,15 +71,15 @@ enum class ASTKind {
     DeleteExpr,
     InitListExpr,
     LambdaExpr,
+    CastExpr,
+    SizeofExpr,
     ImplicitCastExpr,
     LastExpr = ImplicitCastExpr
 };
 
-//an owning list of child nodes
 template <class T>
 using NodeList = std::vector<std::unique_ptr<T>>;
 
-//base of every node: a fixed kind and the source location it is reported at
 class ASTNode {
 public:
     virtual ~ASTNode() = default;
@@ -106,7 +103,6 @@ private:
     const ASTKind kind;
 };
 
-//family bases
 class Decl : public ASTNode {
 protected:
     using ASTNode::ASTNode;
@@ -117,7 +113,6 @@ protected:
     using ASTNode::ASTNode;
 };
 
-//filled by the type checker: the type and whether the expression is an lvalue
 class Expr : public ASTNode {
 public:
     const sema::Type *type = nullptr;
@@ -127,17 +122,15 @@ protected:
     using ASTNode::ASTNode;
 };
 
-//the whole translation unit
 class Program : public ASTNode {
 public:
     explicit Program(NodeList<Decl> decls)
         : ASTNode(ASTKind::Program, 1, 1), decls(std::move(decls)) {}
 
-
     NodeList<Decl> decls;
-    sema::Scope   *scope = nullptr;  //the global scope
+    sema::Scope   *scope = nullptr;
 };
 
-} // namespace ast
+}
 
 #endif

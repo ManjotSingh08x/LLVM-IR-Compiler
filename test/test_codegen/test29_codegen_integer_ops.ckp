@@ -1,0 +1,32 @@
+int main() {
+    int a = -20, b = 6;
+
+    // Tests: signed division and remainder
+    printf("%d %d\n", a / b, a % b);
+
+    // Tests: division by a power of two rounds toward zero
+    printf("%d %d %d\n", a / 4, a % 4, a / 8);
+
+    // Tests: arithmetic and logical shifts
+    unsigned int u = 0x80000000u;
+    printf("%d %u %d\n", a >> 2, u >> 4, 1 << 10);
+
+    // Tests: char, short and long widths
+    char c = 100;
+    c = c + 100;
+    short s = 30000;
+    s = s + 10000;
+    long big = 3000000000L * 3;
+    printf("%d %d %ld\n", c, s, big);
+
+    // Tests: unsigned short wraps around
+    unsigned short us = 65535;
+    us = us + 1;
+    printf("%d\n", us);
+
+    // Tests: unsigned comparison
+    unsigned int small = 1;
+    unsigned int large = 4000000000u;
+    printf("%d\n", small < large);
+    return 0;
+}

@@ -40,9 +40,6 @@ Instruction *IRBuilder::insert(Instruction *inst) {
     return inst;
 }
 
-//  memory 
-
-//allocas go at the top of entry so they run once per call and dominate every use
 AllocaInst *IRBuilder::createEntryAlloca(const sema::Type *type, const std::string &baseName) {
     AllocaInst *inst = new AllocaInst(type, module.pointerType(), function->uniqueName(baseName));
     function->getEntryBlock()->insertAlloca(std::unique_ptr<Instruction>(inst));
@@ -75,8 +72,6 @@ Value *IRBuilder::createElementGEP(const sema::Type *elementType, Value *base, V
     return createGEP(elementType, base, indices);
 }
 
-//  values 
-
 Value *IRBuilder::createBinary(BinaryOpKind op, const sema::Type *operandType, Value *lhs, Value *rhs) {
     const sema::Type *resultType = isCompare(op) ? sema::boolType() : operandType;
     return insert(new BinaryInst(op, operandType, lhs, rhs, resultType, tempName()));
@@ -100,15 +95,33 @@ Value *IRBuilder::createSelect(Value *condition, Value *ifTrue, Value *ifFalse, 
     return insert(new SelectInst(condition, ifTrue, ifFalse, type, tempName()));
 }
 
-Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *calleeType, const std::vector<Value *> &args) {
+Value *IRBuilder::createCall(Value *callee, const sema::FunctionType *sourceType, const std::vector<Value *> &args) {
     if (callee->getKind() == ValueKind::Function && isReachable()) {
         static_cast<Function *>(callee)->isUsed = true;
     }
-    std::string name = calleeType->returnType->is(sema::TypeKind::Void) ? "" : tempName();
-    return insert(new CallInst(callee, calleeType, args, name));
+    const sema::Type *resultType = sourceType->returnType;
+    std::vector<Value *> abiArgs;
+    AllocaInst *result = nullptr;
+    if (isPassedByAddress(resultType)) {
+        result = createEntryAlloca(resultType, "agg.result");
+        abiArgs.push_back(result);
+    }
+    for (size_t i = 0; i < args.size(); i++) {
+        const sema::Type *param = i < sourceType->params.size() ? sourceType->params[i] : nullptr;
+        if (param && isPassedByAddress(param)) {
+            AllocaInst *copy = createEntryAlloca(param, "agg.arg");
+            createStore(param, args[i], copy);
+            abiArgs.push_back(copy);
+        } else {
+            abiArgs.push_back(args[i]);
+        }
+    }
+    const sema::FunctionType *abiType = module.abiSignature(sourceType);
+    std::string name = abiType->returnType->is(sema::TypeKind::Void) ? "" : tempName();
+    Value *call = insert(new CallInst(callee, abiType, abiArgs, name));
+    if (result) return createLoad(resultType, result);
+    return call;
 }
-
-//  terminators, edges are recorded only for branches really written 
 
 void IRBuilder::createRet(const sema::Type *returnType, Value *value) {
     insert(new ReturnInst(returnType, value));
@@ -145,7 +158,6 @@ void IRBuilder::addSwitchCase(SwitchInst *inst, long long value, BasicBlock *tar
     BasicBlock::addEdge(inst->getParent(), target);
 }
 
-//the default starts as the switch end and moves to the default label once seen
 void IRBuilder::setSwitchDefault(SwitchInst *inst, BasicBlock *target) {
     if (inst == nullptr) return;
     BasicBlock *from = inst->getParent();
@@ -166,4 +178,4 @@ void IRBuilder::setSwitchDefault(SwitchInst *inst, BasicBlock *target) {
     BasicBlock::addEdge(from, target);
 }
 
-} // namespace ir
+}

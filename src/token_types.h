@@ -4,7 +4,7 @@
 #include <cctype>
 #include <string>
 #include <unordered_map>
-#include "ast/ast.h"  //the token value union refers to ast types
+#include "ast/ast.h"
 #include "declarator.h"
 #include "parser.tab.h"
 
@@ -35,7 +35,9 @@ inline const std::unordered_map<std::string, int>& keywordTable() {
     static const std::unordered_map<std::string, int> kw = {
         {"int", TOK_INT}, {"char", TOK_CHAR}, {"float", TOK_FLOAT},
         {"double", TOK_DOUBLE}, {"void", TOK_VOID}, {"bool", TOK_BOOL},
-        {"auto", TOK_AUTO},
+        {"auto", TOK_AUTO}, {"long", TOK_LONG}, {"unsigned", TOK_UNSIGNED},
+        {"signed", TOK_SIGNED}, {"short", TOK_SHORT}, {"const", TOK_CONST},
+        {"namespace", TOK_NAMESPACE},
         {"if", TOK_IF}, {"else", TOK_ELSE}, {"for", TOK_FOR},
         {"while", TOK_WHILE}, {"do", TOK_DO}, {"switch", TOK_SWITCH},
         {"case", TOK_CASE}, {"default", TOK_DEFAULT}, {"break", TOK_BREAK},
@@ -45,9 +47,9 @@ inline const std::unordered_map<std::string, int>& keywordTable() {
         {"new", TOK_NEW}, {"delete", TOK_DELETE}, {"true", TOK_TRUE},
         {"false", TOK_FALSE}, {"this", TOK_THIS}, {"null", TOK_NULL}, {"nullptr", TOK_NULL},
         {"sizeof", TOK_SIZEOF}, {"static", TOK_STATIC},
-        {"typedef", TOK_TYPEDEF}, {"until", TOK_UNTIL}
+        {"typedef", TOK_TYPEDEF}, {"until", TOK_UNTIL}, {"static_cast", TOK_STATIC_CAST}
     };
     return kw;
 }
 
-#endif 
+#endif

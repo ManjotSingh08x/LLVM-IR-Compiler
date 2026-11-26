@@ -5,7 +5,6 @@
 
 namespace ast {
 
-//llvm StmtVisitor style: visit() dispatches to visitX, falling back to the node's family
 template <class Derived, class RetTy = void>
 class ASTVisitor {
 public:
@@ -24,6 +23,7 @@ public:
         case ASTKind::RecordDecl:         return derived().visitRecordDecl(static_cast<RecordDecl *>(node));
         case ASTKind::AccessSpecDecl:     return derived().visitAccessSpecDecl(static_cast<AccessSpecDecl *>(node));
         case ASTKind::TypedefDecl:        return derived().visitTypedefDecl(static_cast<TypedefDecl *>(node));
+        case ASTKind::NamespaceDecl:      return derived().visitNamespaceDecl(static_cast<NamespaceDecl *>(node));
 
         case ASTKind::CompoundStmt:       return derived().visitCompoundStmt(static_cast<CompoundStmt *>(node));
         case ASTKind::DeclStmt:           return derived().visitDeclStmt(static_cast<DeclStmt *>(node));
@@ -54,6 +54,7 @@ public:
         case ASTKind::BinaryExpr:         return derived().visitBinaryExpr(static_cast<BinaryExpr *>(node));
         case ASTKind::AssignExpr:         return derived().visitAssignExpr(static_cast<AssignExpr *>(node));
         case ASTKind::ConditionalExpr:    return derived().visitConditionalExpr(static_cast<ConditionalExpr *>(node));
+        case ASTKind::CommaExpr:          return derived().visitCommaExpr(static_cast<CommaExpr *>(node));
         case ASTKind::CallExpr:           return derived().visitCallExpr(static_cast<CallExpr *>(node));
         case ASTKind::ArraySubscriptExpr: return derived().visitArraySubscriptExpr(static_cast<ArraySubscriptExpr *>(node));
         case ASTKind::MemberExpr:         return derived().visitMemberExpr(static_cast<MemberExpr *>(node));
@@ -61,12 +62,13 @@ public:
         case ASTKind::DeleteExpr:         return derived().visitDeleteExpr(static_cast<DeleteExpr *>(node));
         case ASTKind::InitListExpr:       return derived().visitInitListExpr(static_cast<InitListExpr *>(node));
         case ASTKind::LambdaExpr:         return derived().visitLambdaExpr(static_cast<LambdaExpr *>(node));
+        case ASTKind::CastExpr:           return derived().visitCastExpr(static_cast<CastExpr *>(node));
+        case ASTKind::SizeofExpr:         return derived().visitSizeofExpr(static_cast<SizeofExpr *>(node));
         case ASTKind::ImplicitCastExpr:   return derived().visitImplicitCastExpr(static_cast<ImplicitCastExpr *>(node));
         }
         return RetTy();
     }
 
-    //family fallbacks
     RetTy visitDecl(Decl *) { return RetTy(); }
     RetTy visitStmt(Stmt *) { return RetTy(); }
     RetTy visitExpr(Expr *) { return RetTy(); }
@@ -82,6 +84,7 @@ public:
     RetTy visitRecordDecl(RecordDecl *node) { return derived().visitDecl(node); }
     RetTy visitAccessSpecDecl(AccessSpecDecl *node) { return derived().visitDecl(node); }
     RetTy visitTypedefDecl(TypedefDecl *node) { return derived().visitDecl(node); }
+    RetTy visitNamespaceDecl(NamespaceDecl *node) { return derived().visitDecl(node); }
 
     RetTy visitCompoundStmt(CompoundStmt *node) { return derived().visitStmt(node); }
     RetTy visitDeclStmt(DeclStmt *node) { return derived().visitStmt(node); }
@@ -112,6 +115,7 @@ public:
     RetTy visitBinaryExpr(BinaryExpr *node) { return derived().visitExpr(node); }
     RetTy visitAssignExpr(AssignExpr *node) { return derived().visitExpr(node); }
     RetTy visitConditionalExpr(ConditionalExpr *node) { return derived().visitExpr(node); }
+    RetTy visitCommaExpr(CommaExpr *node) { return derived().visitExpr(node); }
     RetTy visitCallExpr(CallExpr *node) { return derived().visitExpr(node); }
     RetTy visitArraySubscriptExpr(ArraySubscriptExpr *node) { return derived().visitExpr(node); }
     RetTy visitMemberExpr(MemberExpr *node) { return derived().visitExpr(node); }
@@ -119,12 +123,14 @@ public:
     RetTy visitDeleteExpr(DeleteExpr *node) { return derived().visitExpr(node); }
     RetTy visitInitListExpr(InitListExpr *node) { return derived().visitExpr(node); }
     RetTy visitLambdaExpr(LambdaExpr *node) { return derived().visitExpr(node); }
+    RetTy visitCastExpr(CastExpr *node) { return derived().visitExpr(node); }
+    RetTy visitSizeofExpr(SizeofExpr *node) { return derived().visitExpr(node); }
     RetTy visitImplicitCastExpr(ImplicitCastExpr *node) { return derived().visitExpr(node); }
 
 private:
     Derived &derived() { return *static_cast<Derived *>(this); }
 };
 
-} // namespace ast
+}
 
 #endif

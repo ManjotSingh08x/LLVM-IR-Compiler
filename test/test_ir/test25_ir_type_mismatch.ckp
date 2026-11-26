@@ -1,0 +1,11 @@
+struct Point {
+    int x;
+    int y;
+};
+
+// Tests: assigning a structure to an int
+int typeMismatch() {
+    Point p = {1, 2};
+    int value = p;
+    return value;
+}

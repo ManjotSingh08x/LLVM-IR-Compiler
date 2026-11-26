@@ -1,0 +1,8 @@
+int add(int a, int b) {
+    return a + b;
+}
+
+// Tests: calling a function with the wrong number of arguments
+int wrongArgumentCount() {
+    return add(1, 2, 3);
+}

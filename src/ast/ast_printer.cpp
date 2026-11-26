@@ -16,6 +16,7 @@ const char *kindName(ASTKind kind) {
     case ASTKind::RecordDecl:         return "RecordDecl";
     case ASTKind::AccessSpecDecl:     return "AccessSpecDecl";
     case ASTKind::TypedefDecl:        return "TypedefDecl";
+    case ASTKind::NamespaceDecl:      return "NamespaceDecl";
     case ASTKind::CompoundStmt:       return "CompoundStmt";
     case ASTKind::DeclStmt:           return "DeclStmt";
     case ASTKind::ExprStmt:           return "ExprStmt";
@@ -44,6 +45,7 @@ const char *kindName(ASTKind kind) {
     case ASTKind::BinaryExpr:         return "BinaryExpr";
     case ASTKind::AssignExpr:         return "AssignExpr";
     case ASTKind::ConditionalExpr:    return "ConditionalExpr";
+    case ASTKind::CommaExpr:          return "CommaExpr";
     case ASTKind::CallExpr:           return "CallExpr";
     case ASTKind::ArraySubscriptExpr: return "ArraySubscriptExpr";
     case ASTKind::MemberExpr:         return "MemberExpr";
@@ -51,6 +53,8 @@ const char *kindName(ASTKind kind) {
     case ASTKind::DeleteExpr:         return "DeleteExpr";
     case ASTKind::InitListExpr:       return "InitListExpr";
     case ASTKind::LambdaExpr:         return "LambdaExpr";
+    case ASTKind::CastExpr:           return "CastExpr";
+    case ASTKind::SizeofExpr:         return "SizeofExpr";
     case ASTKind::ImplicitCastExpr:   return "ImplicitCastExpr";
     }
     return "Unknown";
@@ -104,6 +108,11 @@ const char *opSpelling(AssignOp op) {
     case AssignOp::MulAssign: return "*=";
     case AssignOp::DivAssign: return "/=";
     case AssignOp::RemAssign: return "%=";
+    case AssignOp::ShlAssign: return "<<=";
+    case AssignOp::ShrAssign: return ">>=";
+    case AssignOp::AndAssign: return "&=";
+    case AssignOp::OrAssign:  return "|=";
+    case AssignOp::XorAssign: return "^=";
     }
     return "?";
 }
@@ -134,14 +143,14 @@ std::string paramList(const TypeSpec *fn) {
     return out + ")";
 }
 
-//spells a written type C style, built outside in: int **(*)[10], int (*)(int)
 std::string typeString(const TypeSpec *type, const std::string &inside) {
     if (type == nullptr) return "?" + inside;
     switch (type->specKind) {
     case TypeSpecKind::Builtin:
     case TypeSpecKind::Named:
     case TypeSpecKind::Struct: {
-        std::string name = type->specKind == TypeSpecKind::Struct ? "struct " + type->name : type->name;
+        std::string name = qualifiedSpelling(type->qualifier, type->name);
+        if (type->specKind == TypeSpecKind::Struct) name = "struct " + name;
         if (inside.empty()) return name;
         if (inside[0] == '*' || inside[0] == '&') return name + inside;
         return name + " " + inside;
@@ -201,14 +210,18 @@ const char *castKindName(CastKind kind) {
     case CastKind::FunctionToPointer:  return "function-to-pointer";
     case CastKind::NullToPointer:      return "null-to-pointer";
     case CastKind::DerivedToBase:      return "derived-to-base";
+    case CastKind::BaseToDerived:      return "base-to-derived";
     case CastKind::PointerToVoid:      return "pointer-to-void";
+    case CastKind::PointerCast:        return "pointer";
+    case CastKind::PointerToIntegral:  return "pointer-to-integral";
+    case CastKind::IntegralToPointer:  return "integral-to-pointer";
     }
     return "";
 }
 
 std::string quoted(const std::string &text) { return "'" + text + "'"; }
 
-} // namespace
+}
 
 void ASTPrinter::line(const ASTNode &node, const std::string &attrs) {
     out << std::string(depth * 2, ' ');
@@ -245,8 +258,6 @@ void ASTPrinter::initChildren(VarDecl *node) {
     children("arg", node->ctorArgs);
 }
 
-//program and type
-
 void ASTPrinter::visitProgram(Program *node) {
     line(*node, "");
     children(nullptr, node->decls);
@@ -255,8 +266,6 @@ void ASTPrinter::visitProgram(Program *node) {
 void ASTPrinter::visitTypeSpec(TypeSpec *node) {
     line(*node, quoted(typeString(node)));
 }
-
-//declarations
 
 void ASTPrinter::visitVarDecl(VarDecl *node) {
     std::string attrs = node->name.str() + " " + quoted(typeString(node->type.get()));
@@ -305,7 +314,7 @@ void ASTPrinter::visitRecordDecl(RecordDecl *node) {
         if (node->bases[i].access != AccessKind::None) {
             attrs += std::string(accessName(node->bases[i].access)) + " ";
         }
-        attrs += node->bases[i].name;
+        attrs += qualifiedSpelling(node->bases[i].qualifier, node->bases[i].name);
     }
     line(*node, attrs);
     children("member", node->members);
@@ -315,12 +324,15 @@ void ASTPrinter::visitAccessSpecDecl(AccessSpecDecl *node) {
     line(*node, accessName(node->access));
 }
 
+void ASTPrinter::visitNamespaceDecl(NamespaceDecl *node) {
+    line(*node, node->name);
+    children(nullptr, node->decls);
+}
+
 void ASTPrinter::visitTypedefDecl(TypedefDecl *node) {
     line(*node, node->name + " " + quoted(typeString(node->type.get())));
     typeChildren(node->type.get());
 }
-
-//statements
 
 void ASTPrinter::visitCompoundStmt(CompoundStmt *node) {
     line(*node, "");
@@ -397,8 +409,6 @@ void ASTPrinter::visitDefaultStmt(DefaultStmt *node) {
     child(nullptr, node->sub.get());
 }
 
-//expressions
-
 void ASTPrinter::visitIntLiteral(IntLiteral *node) { line(*node, node->spelling); }
 
 void ASTPrinter::visitFloatLiteral(FloatLiteral *node) { line(*node, node->spelling); }
@@ -421,7 +431,7 @@ void ASTPrinter::visitNullLiteral(NullLiteral *node) { line(*node, ""); }
 
 void ASTPrinter::visitThisExpr(ThisExpr *node) { line(*node, ""); }
 
-void ASTPrinter::visitDeclRefExpr(DeclRefExpr *node) { line(*node, node->name); }
+void ASTPrinter::visitDeclRefExpr(DeclRefExpr *node) { line(*node, qualifiedSpelling(node->qualifier, node->name)); }
 
 void ASTPrinter::visitParenExpr(ParenExpr *node) {
     line(*node, "");
@@ -452,6 +462,12 @@ void ASTPrinter::visitConditionalExpr(ConditionalExpr *node) {
     child("false", node->falseExpr.get());
 }
 
+void ASTPrinter::visitCommaExpr(CommaExpr *node) {
+    line(*node, "");
+    child("left", node->lhs.get());
+    child("right", node->rhs.get());
+}
+
 void ASTPrinter::visitCallExpr(CallExpr *node) {
     line(*node, std::to_string(node->args.size()) + " arg(s)");
     child("callee", node->callee.get());
@@ -459,7 +475,7 @@ void ASTPrinter::visitCallExpr(CallExpr *node) {
 }
 
 void ASTPrinter::visitArraySubscriptExpr(ArraySubscriptExpr *node) {
-    line(*node, "");
+    line(*node, node->reversed ? "(reversed)" : "");
     child("base", node->base.get());
     child("index", node->index.get());
 }
@@ -501,9 +517,23 @@ void ASTPrinter::visitLambdaExpr(LambdaExpr *node) {
     child("body", node->body.get());
 }
 
+void ASTPrinter::visitCastExpr(CastExpr *node) {
+    line(*node, std::string(node->isStatic ? "static_cast " : "") + quoted(typeString(node->target.get())));
+    child(nullptr, node->sub.get());
+}
+
+void ASTPrinter::visitSizeofExpr(SizeofExpr *node) {
+    if (node->typeOperand) {
+        line(*node, quoted(typeString(node->typeOperand.get())) + " " + std::to_string(node->size));
+    } else {
+        line(*node, std::to_string(node->size));
+        child(nullptr, node->exprOperand.get());
+    }
+}
+
 void ASTPrinter::visitImplicitCastExpr(ImplicitCastExpr *node) {
     line(*node, castKindName(node->castKind));
     child(nullptr, node->sub.get());
 }
 
-} // namespace ast
+}

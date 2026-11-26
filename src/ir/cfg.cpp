@@ -4,8 +4,6 @@
 
 namespace ir {
 
-//BasicBlock
-
 void BasicBlock::append(std::unique_ptr<Instruction> inst) {
     inst->setParent(this);
     instructions.push_back(std::move(inst));
@@ -46,6 +44,41 @@ void BasicBlock::erase(Instruction *inst) {
     }
 }
 
+std::unique_ptr<Instruction> BasicBlock::detach(Instruction *inst) {
+    for (size_t i = 0; i < instructions.size(); i++) {
+        if (instructions[i].get() != inst) continue;
+        if (i < allocaCount) allocaCount--;
+        std::unique_ptr<Instruction> owned = std::move(instructions[i]);
+        instructions.erase(instructions.begin() + i);
+        owned->setParent(nullptr);
+        return owned;
+    }
+    return nullptr;
+}
+
+BasicBlock *BasicBlock::splitAt(Instruction *inst, const std::string &label) {
+    size_t at = 0;
+    while (at < instructions.size() && instructions[at].get() != inst) at++;
+    BasicBlock *tail = parent->createBlock(label);
+    parent->placeBlockAfter(tail, this);
+    for (size_t i = at; i < instructions.size(); i++) {
+        instructions[i]->setParent(tail);
+        tail->instructions.push_back(std::move(instructions[i]));
+    }
+    instructions.erase(instructions.begin() + at, instructions.end());
+    if (allocaCount > instructions.size()) allocaCount = instructions.size();
+
+    if (Instruction *term = tail->getTerminator()) {
+        for (BasicBlock *next : term->getSuccessors()) {
+            for (std::unique_ptr<Instruction> &phi : next->instructions) {
+                if (phi->getOpcode() != Opcode::Phi) break;
+                static_cast<PhiInst *>(phi.get())->replaceIncomingBlock(this, tail);
+            }
+        }
+    }
+    return tail;
+}
+
 Instruction *BasicBlock::getTerminator() const {
     if (!isTerminated()) return nullptr;
     return instructions.back().get();
@@ -58,7 +91,7 @@ void BasicBlock::addEdge(BasicBlock *from, BasicBlock *to) {
 
 void BasicBlock::dump(std::ostream &out) const {
     out << name << ":";
-    //predecessors are written as a comment, as clang does
+
     if (!predecessors.empty()) {
         out << "  ; preds = ";
         std::set<const BasicBlock *> written;
@@ -74,8 +107,6 @@ void BasicBlock::dump(std::ostream &out) const {
     out << "\n";
     for (const std::unique_ptr<Instruction> &inst : instructions) inst->dump(out);
 }
-
-//Function
 
 Argument *Function::addArgument(const sema::Type *type, const std::string &baseName) {
     Argument *arg = new Argument(type, uniqueName(baseName), this, args.size());
@@ -124,12 +155,36 @@ void Function::removeBlock(BasicBlock *block) {
     }
 }
 
+void Function::placeBlockBefore(BasicBlock *block, BasicBlock *pos) {
+    if (block->isPlaced) return;
+    for (size_t i = 0; i < layout.size(); i++) {
+        if (layout[i] == pos) {
+            layout.insert(layout.begin() + i, block);
+            block->isPlaced = true;
+            return;
+        }
+    }
+    placeBlock(block);
+}
+
+void Function::placeBlockAfter(BasicBlock *block, BasicBlock *pos) {
+    if (block->isPlaced) return;
+    for (size_t i = 0; i < layout.size(); i++) {
+        if (layout[i] == pos) {
+            layout.insert(layout.begin() + i + 1, block);
+            block->isPlaced = true;
+            return;
+        }
+    }
+    placeBlock(block);
+}
+
 void Function::recomputeCFG() {
     for (BasicBlock *block : layout) {
         block->predecessors.clear();
         block->successors.clear();
     }
-    //only edges between placed blocks count, a removed block is no longer in the graph
+
     std::set<const BasicBlock *> placed(layout.begin(), layout.end());
     for (BasicBlock *block : layout) {
         Instruction *term = block->getTerminator();
@@ -150,7 +205,6 @@ void Function::discard(std::unique_ptr<Instruction> inst) {
 void Function::finalizeCFG(Module &module) {
     if (layout.empty()) return;
 
-    //1. every block that can be reached from entry, following the edges
     std::set<BasicBlock *> reached;
     std::vector<BasicBlock *> work;
     work.push_back(layout.front());
@@ -165,7 +219,6 @@ void Function::finalizeCFG(Module &module) {
         }
     }
 
-    //2. keep only reachable blocks, appending any that were never written into
     std::vector<BasicBlock *> kept;
     for (BasicBlock *block : layout) {
         if (reached.count(block)) kept.push_back(block);
@@ -178,7 +231,6 @@ void Function::finalizeCFG(Module &module) {
     }
     layout = kept;
 
-    //a removed block can no longer be a predecessor
     for (BasicBlock *block : layout) {
         std::vector<BasicBlock *> preds;
         for (BasicBlock *pred : block->predecessors) {
@@ -187,7 +239,6 @@ void Function::finalizeCFG(Module &module) {
         block->predecessors = preds;
     }
 
-    //3. a block that runs off its end returns the zero value
     const sema::Type *returnType = fnType->returnType;
     for (BasicBlock *block : layout) {
         if (block->isTerminated()) continue;
@@ -225,8 +276,6 @@ void Function::dump(std::ostream &out) const {
     }
     out << "}\n";
 }
-
-//Module
 
 const sema::Type *Module::pointerType() {
     if (genericPointer == nullptr) genericPointer = symTab.pointerTo(sema::voidType());
@@ -311,11 +360,24 @@ GlobalVariable *Module::getStringLiteral(const std::string &bytesWithNull) {
     return global;
 }
 
-Function *Module::createFunction(const std::string &name, const sema::FunctionType *fnType, Linkage linkage) {
-    Function *fn = new Function(name, fnType, pointerType(), linkage);
+Function *Module::createFunction(const std::string &name, const sema::FunctionType *sourceType, Linkage linkage) {
+    Function *fn = new Function(name, abiSignature(sourceType), pointerType(), linkage);
     functions.push_back(std::unique_ptr<Function>(fn));
     functionMap[name] = fn;
     return fn;
+}
+
+const sema::FunctionType *Module::abiSignature(const sema::FunctionType *sourceType) {
+    std::vector<const sema::Type *> params;
+    const sema::Type *returnType = sourceType->returnType;
+    if (isPassedByAddress(returnType)) {
+        params.push_back(pointerType());
+        returnType = sema::voidType();
+    }
+    for (const sema::Type *param : sourceType->params) {
+        params.push_back(isPassedByAddress(param) ? pointerType() : param);
+    }
+    return symTab.functionType(returnType, params, sourceType->isVariadic);
 }
 
 Function *Module::findFunction(const std::string &name) const {
@@ -327,7 +389,7 @@ Function *Module::getRuntimeMalloc() {
     Function *fn = findFunction("malloc");
     if (fn) return fn;
     std::vector<const sema::Type *> params;
-    params.push_back(int64Type());
+    params.push_back(sema::longType());
     return createFunction("malloc", symTab.functionType(pointerType(), params, false), Linkage::External);
 }
 
@@ -362,13 +424,11 @@ void Module::dump(std::ostream &out) const {
     if (!globals.empty()) out << "\n";
     for (const std::unique_ptr<GlobalVariable> &global : globals) global->dump(out);
 
-    //the function listed here runs before main starts
     if (globalInit) {
         out << "@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] "
             << "[{ i32, ptr, ptr } { i32 65535, ptr @" << globalInit->getName() << ", ptr null }]\n";
     }
 
-    //a declaration is only written for a function the program uses
     for (const std::unique_ptr<Function> &fn : functions) {
         if (!fn->isDefinition() && !fn->isUsed) continue;
         out << "\n";
@@ -376,4 +436,4 @@ void Module::dump(std::ostream &out) const {
     }
 }
 
-} // namespace ir
+}

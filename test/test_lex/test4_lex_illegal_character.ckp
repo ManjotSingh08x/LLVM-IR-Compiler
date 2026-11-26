@@ -1,0 +1,5 @@
+// Tests: illegal character
+int illegalCharacter() {
+    int x = 5 @ 3;
+    return x;
+}

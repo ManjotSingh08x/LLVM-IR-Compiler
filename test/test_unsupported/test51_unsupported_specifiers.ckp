@@ -1,0 +1,8 @@
+// Tests: extern (unsupported)
+extern int counter;
+
+// Tests: constexpr (unsupported)
+constexpr int SIZE = 4;
+
+// Tests: static_assert (unsupported)
+static_assert(sizeof(int) == 4, "int is 4 bytes");

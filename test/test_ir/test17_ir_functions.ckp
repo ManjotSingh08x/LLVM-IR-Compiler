@@ -1,0 +1,35 @@
+// Tests: recursion
+int fib(int n) {
+    return n < 2 ? n : fib(n - 1) + fib(n - 2);
+}
+
+// Tests: static local variable
+int nextId() {
+    static int id = 0;
+    id++;
+    return id;
+}
+
+int square(int x) { return x * x; }
+int negate(int x) { return -x; }
+
+// Tests: function pointer parameter
+int apply(int (*f)(int), int x) {
+    return f(x);
+}
+
+int main() {
+    nextId();
+    nextId();
+
+    // Tests: lambda capturing by value and by reference
+    int scale = 3;
+    int total = 0;
+    auto times = [scale](int x) { return x * scale; };
+    auto addTo = [&total](int x) { total += x; };
+    addTo(4);
+    addTo(5);
+
+    printf("%d %d %d %d %d %d\n", fib(10), nextId(), apply(square, 6), apply(negate, 6), times(7), total);
+    return 0;
+}

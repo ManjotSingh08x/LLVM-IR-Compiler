@@ -1,0 +1,26 @@
+int main() {
+    // Tests: integer division and remainder with negative numbers
+    int a = -17, b = 5;
+    int q = a / b;
+    int r = a % b;
+
+    // Tests: implicit conversion from int to double
+    double avg = (10 + 15 + 20) / 3.0;
+    double mixed = a + 0.5;
+
+    // Tests: conversion from double to int truncates
+    int truncated = (int)avg;
+
+    // Tests: char arithmetic
+    char next = 'a' + 2;
+
+    // Tests: unsigned wrap-around
+    unsigned int u = 0;
+    u = u - 1;
+
+    // Tests: bool from a comparison
+    bool positive = a > 0;
+
+    printf("%d %d %.2f %.1f %d %c %u %d\n", q, r, avg, mixed, truncated, next, u, positive);
+    return 0;
+}

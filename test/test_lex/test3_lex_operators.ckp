@@ -1,0 +1,23 @@
+int main() {
+    int a = 7, b = 3, c;
+
+    // Tests: longest match for operators written without spaces
+    c = a+++b;
+    c = a---b;
+    c = a>>1;
+    c <<= 2;
+    c >>= 1;
+
+    // Tests: two-character operators
+    bool t = (a <= b || a >= b) && a != b;
+    bool e = a == b;
+
+    // Tests: arrow and scope operators
+    struct Point { int x; };
+    Point p;
+    Point *pp = &p;
+    pp->x = 5;
+
+    printf("%d %d %d %d %d %d\n", a, b, c, t, e, p.x);
+    return 0;
+}

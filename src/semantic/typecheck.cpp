@@ -34,7 +34,10 @@ const char *accessWord(ast::AccessKind access) {
     return access == ast::AccessKind::Private ? "private" : "protected";
 }
 
-//a local variable or parameter, which a lambda must capture to use
+const Type *indexType(const Type *index) {
+    return isUnsigned(promote(index)) || integerSize(index) == 8 ? longType() : intType();
+}
+
 bool isLocal(const Symbol *symbol) {
     if (symbol->kind == SymbolKind::Parameter) return true;
     if (symbol->kind != SymbolKind::Variable || symbol->isStatic) return false;
@@ -42,7 +45,6 @@ bool isLocal(const Symbol *symbol) {
     return kind == ScopeKind::Function || kind == ScopeKind::Block || kind == ScopeKind::Lambda;
 }
 
-//inside the record or a record nested in it, which may use its private members
 bool isWithin(const RecordSymbol *context, const RecordSymbol *record) {
     for (; context != nullptr; context = context->outer) {
         if (context == record) return true;
@@ -50,7 +52,6 @@ bool isWithin(const RecordSymbol *context, const RecordSymbol *record) {
     return false;
 }
 
-//a base link is accessible from here: public always, private in derived, protected in further derived
 bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, const BaseClass &base) {
     if (base.access == ast::AccessKind::Private) return isWithin(here, derived);
     if (base.access == ast::AccessKind::Protected) {
@@ -59,7 +60,6 @@ bool isBaseAccessible(const RecordSymbol *here, const RecordSymbol *derived, con
     return true;
 }
 
-//how many base subobjects of this type derived holds, more than one is ambiguous
 unsigned countBasePaths(const RecordSymbol *derived, const RecordSymbol *base) {
     unsigned total = 0;
     for (const BaseClass &parent : derived->bases) {
@@ -72,7 +72,6 @@ unsigned countBasePaths(const RecordSymbol *derived, const RecordSymbol *base) {
     return total;
 }
 
-//the chain of bases walked from derived down to base, the first one found
 bool findBaseChain(const RecordSymbol *derived, const RecordSymbol *base, std::vector<BaseClass> &chain) {
     for (const BaseClass &parent : derived->bases) {
         chain.push_back(parent);
@@ -98,6 +97,31 @@ ast::Expr *withoutParens(ast::Expr *expr) {
     return expr;
 }
 
+bool isConstObject(const ast::MemberExpr *node) {
+    const Type *base = node->base->type;
+    if (!node->isArrow) return base->isConst();
+    const PointerType *pointer = asPointer(base);
+    return pointer && pointer->pointee->isConst();
+}
+
+bool isConstObjectType(const Type *type) {
+    while (asArray(type)) type = asArray(type)->element;
+    return type->isConst();
+}
+
+const Symbol *constField(const RecordSymbol *record) {
+    for (const Symbol *field : record->fields) {
+        const Type *type = field->type;
+        while (asArray(type)) type = asArray(type)->element;
+        if (type->isConst()) return field;
+        if (asRecord(type) && constField(asRecord(type))) return field;
+    }
+    for (const BaseClass &base : record->bases) {
+        if (const Symbol *field = constField(base.record)) return field;
+    }
+    return nullptr;
+}
+
 std::string argumentTypes(const ast::NodeList<ast::Expr> &args) {
     std::string out = "(";
     for (size_t i = 0; i < args.size(); i++) {
@@ -107,30 +131,39 @@ std::string argumentTypes(const ast::NodeList<ast::Expr> &args) {
     return out + ")";
 }
 
-} // namespace
+}
 
 void TypeChecker::check(ast::Program *program) {
     current = program->scope;
-    for (const std::unique_ptr<ast::Decl> &decl : program->decls) {
-        switch (decl->getKind()) {
-        case ast::ASTKind::RecordDecl:
-            checkRecord(static_cast<ast::RecordDecl *>(decl.get()));
-            break;
-        case ast::ASTKind::FunctionDecl:
-        case ast::ASTKind::ConstructorDecl:
-        case ast::ASTKind::DestructorDecl:
-            checkFunction(static_cast<ast::FunctionDecl *>(decl.get()));
-            break;
-        case ast::ASTKind::VarDecl:
-            checkVarDecl(static_cast<ast::VarDecl *>(decl.get()));
-            break;
-        default:
-            break;
-        }
-    }
+    for (const std::unique_ptr<ast::Decl> &decl : program->decls) checkTopLevel(decl.get());
 }
 
-//declarations
+void TypeChecker::checkTopLevel(ast::Decl *decl) {
+    switch (decl->getKind()) {
+    case ast::ASTKind::RecordDecl:
+        checkRecord(static_cast<ast::RecordDecl *>(decl));
+        break;
+    case ast::ASTKind::FunctionDecl:
+    case ast::ASTKind::ConstructorDecl:
+    case ast::ASTKind::DestructorDecl:
+        checkFunction(static_cast<ast::FunctionDecl *>(decl));
+        break;
+    case ast::ASTKind::VarDecl:
+        checkVarDecl(static_cast<ast::VarDecl *>(decl));
+        break;
+    case ast::ASTKind::NamespaceDecl: {
+        ast::NamespaceDecl *space = static_cast<ast::NamespaceDecl *>(decl);
+        if (space->scope == nullptr) break;
+        Scope *saved = current;
+        current = space->scope;
+        for (const std::unique_ptr<ast::Decl> &member : space->decls) checkTopLevel(member.get());
+        current = saved;
+        break;
+    }
+    default:
+        break;
+    }
+}
 
 void TypeChecker::checkRecord(ast::RecordDecl *node) {
     if (node->scope == nullptr) return;
@@ -145,7 +178,6 @@ void TypeChecker::checkRecord(ast::RecordDecl *node) {
             checkFunction(static_cast<ast::FunctionDecl *>(member.get()));
             break;
         case ast::ASTKind::VarDecl: {
-            //a member initializer, int start{0}, is checked in the record's scope
             Scope *saved = current;
             current = node->scope;
             checkVarDecl(static_cast<ast::VarDecl *>(member.get()));
@@ -169,6 +201,17 @@ void TypeChecker::checkFunction(ast::FunctionDecl *node) {
     context.returnType = fn->signature()->returnType;
     current = node->scope;
 
+    if (isIncompleteRecord(context.returnType)) {
+        diags.error(node->line, node->col, "'" + node->name.str() + "' returns the incomplete type '"
+                                               + typeToString(context.returnType) + "'");
+    }
+    for (const Type *param : fn->signature()->params) {
+        if (isIncompleteRecord(param)) {
+            diags.error(node->line, node->col, "'" + node->name.str() + "' takes the incomplete type '"
+                                                   + typeToString(param) + "'");
+        }
+    }
+
     visit(node->body.get());
     resolveGotos(current);
     context = saved;
@@ -190,7 +233,6 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     Symbol *symbol = node->symbol;
     if (symbol == nullptr) return;
 
-    //auto takes its initializer's decayed type
     if (symbol->type->is(TypeKind::Auto)) {
         std::unique_ptr<ast::Expr> *value = &node->init;
         if (node->initStyle == ast::InitStyle::Brace) {
@@ -208,11 +250,13 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
             return;
         }
         check(*value);
-        const Type *deduced = decayValue(*value);
+        const Type *deduced = unqualified(decayValue(*value));
         if (deduced->is(TypeKind::Void) || deduced->is(TypeKind::Null)) {
             diags.error(node->line, node->col, "'auto' cannot be deduced from a value of type '"
                                                    + typeToString(deduced) + "'");
             deduced = errorType();
+        } else if (symbol->type->isConst()) {
+            deduced = table.constOf(deduced);
         }
         if (node->initStyle == ast::InitStyle::Brace) node->init->type = deduced;
         symbol->type = deduced;
@@ -224,10 +268,12 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     RecordSymbol *record = asRecord(type);
     switch (node->initStyle) {
     case ast::InitStyle::None:
+        if (isConstObjectType(type) && !record && symbol->kind == SymbolKind::Variable && !symbol->parentRecord) {
+            diags.error(node->line, node->col, "the const variable '" + node->name.str() + "' must be initialised");
+        }
         if (record) {
             node->constructor = construct(record, node->ctorArgs, node->line, node->col);
         } else if (const ArrayType *array = asArray(type)) {
-            //every element of an array of objects is default constructed
             while (asArray(array->element)) array = asArray(array->element);
             if (RecordSymbol *element = asRecord(array->element)) {
                 node->constructor = construct(element, node->ctorArgs, node->line, node->col);
@@ -256,15 +302,12 @@ void TypeChecker::checkVarDecl(ast::VarDecl *node) {
     }
 }
 
-//initialisation
-
 void TypeChecker::initFromValue(std::unique_ptr<ast::Expr> &value, const Type *type) {
     if (value->getKind() == ast::ASTKind::InitListExpr) {
         initFromList(static_cast<ast::InitListExpr *>(value.get()), type);
         return;
     }
 
-    //a char array may be filled from a string literal that fits, \0 included
     if (const ArrayType *array = asArray(type)) {
         if (value->getKind() == ast::ASTKind::StringLiteral && array->element->is(TypeKind::Char)) {
             check(value);
@@ -287,9 +330,9 @@ void TypeChecker::initFromValue(std::unique_ptr<ast::Expr> &value, const Type *t
     convert(value, type, "initialisation");
 }
 
-//{ ... } for an array, a record or a single value
 void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     list->type = type;
+    if (isError(type)) return;
     std::string what = "'" + typeToString(type) + "'";
 
     if (const ArrayType *array = asArray(type)) {
@@ -301,13 +344,11 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     }
 
     if (RecordSymbol *record = asRecord(type)) {
-        //a class with constructors takes the list as constructor arguments
         if (!record->constructors.empty()) {
             for (std::unique_ptr<ast::Expr> &item : list->inits) check(item);
             list->constructor = construct(record, list->inits, list->line, list->col);
             return;
         }
-        //otherwise the list fills the fields in order
         if (!record->bases.empty()) {
             diags.error(list->line, list->col, "brace initialisation of " + what + ", which has base classes, is not supported");
             return;
@@ -320,7 +361,6 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
         return;
     }
 
-    //a single value: int a{5}, int b{}, Point *p{&q}
     if (list->inits.size() > 1) {
         diags.error(list->line, list->col, "too many initializers for " + what);
         return;
@@ -338,7 +378,6 @@ void TypeChecker::initFromList(ast::InitListExpr *list, const Type *type) {
     }
 }
 
-//the constructor for these arguments, null for implicit ones
 FunctionSymbol *TypeChecker::construct(RecordSymbol *record, ast::NodeList<ast::Expr> &args, int line, int col) {
     if (record->constructors.empty()) {
         if (args.empty()) return nullptr;
@@ -367,11 +406,9 @@ FunctionSymbol *TypeChecker::construct(RecordSymbol *record, ast::NodeList<ast::
     return ctor;
 }
 
-//names
-
 TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, int col) {
     Lookup result;
-    std::vector<Scope *> lambdas;  //the lambdas left on the way out
+    std::vector<Scope *> lambdas;
 
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Record) {
@@ -383,7 +420,6 @@ TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, i
         }
 
         if (const std::vector<Symbol *> *found = scope->find(name)) {
-            //only what is declared before the use, builtins have no position
             for (Symbol *symbol : *found) {
                 bool before = symbol->line < line || (symbol->line == line && symbol->col < col);
                 if (symbol->line == 0 || before) result.symbols.push_back(symbol);
@@ -400,7 +436,32 @@ TypeChecker::Lookup TypeChecker::lookupName(const std::string &name, int line, i
     return result;
 }
 
-//own members first, then each base, ambiguous when found through two
+TypeChecker::Lookup TypeChecker::lookupRef(ast::DeclRefExpr *node) {
+    if (node->qualifier.empty()) return lookupName(node->name, node->line, node->col);
+
+    Lookup result;
+    std::string spelled = ast::qualifiedSpelling(node->qualifier, node->name);
+    QualifierTarget target = resolveQualifier(current, node->qualifier, node->line, node->col);
+    if (!target.error.empty()) {
+        diags.error(node->line, node->col, target.error);
+        result.reported = true;
+        return result;
+    }
+    if (target.record) {
+        if (lookupMember(target.record, node->name, result)) result.namingRecord = target.record;
+    } else if (const std::vector<Symbol *> *found = target.scope->find(node->name)) {
+        for (Symbol *symbol : *found) {
+            bool before = symbol->line < node->line || (symbol->line == node->line && symbol->col < node->col);
+            if (symbol->line == 0 || before) result.symbols.push_back(symbol);
+        }
+    }
+    if (result.symbols.empty()) {
+        diags.error(node->line, node->col, "no member named '" + node->name + "' in " + target.spelling());
+        result.reported = true;
+    }
+    return result;
+}
+
 bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lookup &result) {
     if (const std::vector<Symbol *> *found = record->members->find(name)) {
         result.symbols = *found;
@@ -412,7 +473,6 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     for (const BaseClass &base : record->bases) {
         Lookup inBase;
         if (!lookupMember(base.record, name, inBase)) continue;
-        //every base is its own subobject, so a second path is ambiguous
         if (found) {
             result.ambiguous = true;
             continue;
@@ -427,7 +487,6 @@ bool TypeChecker::lookupMember(RecordSymbol *record, const std::string &name, Lo
     return found;
 }
 
-//a local used in a lambda must be captured by it and every enclosing lambda
 void TypeChecker::captureVariable(Symbol *symbol, const std::vector<Scope *> &lambdas, int line, int col) {
     for (Scope *scope : lambdas) {
         ast::LambdaExpr *lambda = scope->lambda;
@@ -446,7 +505,6 @@ void TypeChecker::captureVariable(Symbol *symbol, const std::vector<Scope *> &la
     }
 }
 
-//the record this points at, or null with an error when there is no this
 RecordSymbol *TypeChecker::thisRecord(int line, int col) {
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Lambda) {
@@ -465,13 +523,12 @@ RecordSymbol *TypeChecker::thisRecord(int line, int col) {
             if (scope->function && scope->function->isMethod()) return scope->function->parentRecord;
             break;
         }
-        if (scope->kind == ScopeKind::Record || scope->kind == ScopeKind::Global) break;
+        if (scope->kind == ScopeKind::Record || scope->kind == ScopeKind::Global || scope->kind == ScopeKind::Namespace) break;
     }
     diags.error(line, col, "'this' can only be used inside a non-static member function");
     return nullptr;
 }
 
-//a member named without an object belongs to this
 bool TypeChecker::memberOfThis(Symbol *member, int line, int col) {
     RecordSymbol *record = thisRecord(line, col);
     if (record == nullptr) return false;
@@ -483,7 +540,6 @@ bool TypeChecker::memberOfThis(Symbol *member, int line, int col) {
     return true;
 }
 
-//the record whose members the code being checked may see, for access rules
 RecordSymbol *TypeChecker::contextRecord() {
     for (Scope *scope = current; scope != nullptr; scope = scope->parent) {
         if (scope->kind == ScopeKind::Record) return scope->record;
@@ -491,7 +547,6 @@ RecordSymbol *TypeChecker::contextRecord() {
     return nullptr;
 }
 
-//private members are usable in their record, protected also in derived records
 void TypeChecker::checkAccess(Symbol *member, const Lookup &lookup, int line, int col) {
     RecordSymbol *owner = member->parentRecord;
     if (owner == nullptr) return;
@@ -523,7 +578,7 @@ void TypeChecker::checkAccess(Symbol *member, const Lookup &lookup, int line, in
 
 const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &lookup) {
     if (lookup.symbols.empty()) {
-        diags.error(node->line, node->col, "use of undeclared identifier '" + node->name + "'");
+        if (!lookup.reported) diags.error(node->line, node->col, "use of undeclared identifier '" + node->name + "'");
         return setType(node, errorType(), false);
     }
     if (lookup.ambiguous) {
@@ -537,6 +592,10 @@ const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &loo
     case SymbolKind::Record:
     case SymbolKind::Typedef:
         diags.error(node->line, node->col, "'" + node->name + "' is a type, not a value");
+        return setType(node, errorType(), false);
+
+    case SymbolKind::Namespace:
+        diags.error(node->line, node->col, "'" + node->name + "' is a namespace, not a value");
         return setType(node, errorType(), false);
 
     case SymbolKind::Function: {
@@ -570,7 +629,6 @@ const Type *TypeChecker::finishDeclRef(ast::DeclRefExpr *node, const Lookup &loo
     return setType(node, errorType(), false);
 }
 
-//checks the object of a member access and finds the member in its record
 bool TypeChecker::findMember(ast::MemberExpr *node, Lookup &result) {
     const Type *base = check(node->base);
     if (isError(base)) return false;
@@ -586,6 +644,10 @@ bool TypeChecker::findMember(ast::MemberExpr *node, Lookup &result) {
         diags.error(node->line, node->col, std::string("'") + (node->isArrow ? "->" : ".") + node->member
                                                + "' needs " + (node->isArrow ? "a pointer to " : "")
                                                + "a class or struct, not '" + typeToString(base) + "'");
+        return false;
+    }
+    if (!record->isComplete) {
+        diags.error(node->line, node->col, "member access into incomplete type '" + record->qualifiedName() + "'");
         return false;
     }
     if (!lookupMember(record, node->member, result)) {
@@ -614,14 +676,12 @@ const Type *TypeChecker::finishMember(ast::MemberExpr *node, const Lookup &looku
         return setType(node, errorType(), false);
     }
     checkAccess(symbol, lookup, node->line, node->col);
-    //through a pointer the member is an lvalue, with . when the object is, static always
     bool isLValue = node->isArrow || node->base->isLValue || symbol->kind == SymbolKind::Variable;
-    return setType(node, symbol->type, isLValue);
+    const Type *type = symbol->type;
+    if (symbol->kind == SymbolKind::Field && isConstObject(node) && !asReference(type)) type = table.constOf(type);
+    return setType(node, type, isLValue);
 }
 
-//calls
-
-//the best overload: no argument converts worse and at least one better
 FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> &candidates,
                                             ast::NodeList<ast::Expr> &args, const std::string &name,
                                             int line, int col) {
@@ -630,17 +690,17 @@ FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> 
     }
 
     std::vector<FunctionSymbol *> viable;
-    std::vector<std::vector<ConversionRank>> ranks;
+    std::vector<std::vector<int>> ranks;
     for (FunctionSymbol *candidate : candidates) {
         const FunctionType *signature = candidate->signature();
         if (args.size() < signature->params.size()) continue;
         if (args.size() > signature->params.size() && !signature->isVariadic) continue;
-        std::vector<ConversionRank> rank;
+        std::vector<int> rank;
         bool fits = true;
         for (size_t i = 0; i < signature->params.size() && fits; i++) {
-            Conversion conversion = findConversion(args[i]->type, args[i]->isLValue, signature->params[i], table);
+            Conversion conversion = conversionOf(args[i].get(), signature->params[i]);
             fits = conversion.rank != ConversionRank::Impossible;
-            rank.push_back(conversion.rank);
+            rank.push_back((int)conversion.rank * 2 + (conversion.addsConst ? 1 : 0));
         }
         if (!fits) continue;
         viable.push_back(candidate);
@@ -677,7 +737,6 @@ FunctionSymbol *TypeChecker::chooseOverload(const std::vector<FunctionSymbol *> 
     return nullptr;
 }
 
-//converts each argument to its parameter, variadic extras get the C promotions
 void TypeChecker::applyArguments(const FunctionType *signature, ast::NodeList<ast::Expr> &args,
                                  const std::string &name, int line, int col) {
     if (args.size() < signature->params.size() || (args.size() > signature->params.size() && !signature->isVariadic)) {
@@ -704,10 +763,12 @@ void TypeChecker::applyArguments(const FunctionType *signature, ast::NodeList<as
 
 const Type *TypeChecker::callResult(ast::CallExpr *node, const FunctionType *signature) {
     const Type *result = signature->returnType;
+    if (isIncompleteRecord(result)) {
+        diags.error(node->line, node->col, "the call returns the incomplete type '" + typeToString(result) + "'");
+        return setType(node, errorType(), false);
+    }
     return setType(node, stripReference(result), asReference(result) != nullptr);
 }
-
-//values
 
 const Type *TypeChecker::check(std::unique_ptr<ast::Expr> &expr) {
     if (!expr) return errorType();
@@ -715,7 +776,6 @@ const Type *TypeChecker::check(std::unique_ptr<ast::Expr> &expr) {
     return type ? type : errorType();
 }
 
-//array and function decay, for every operator but & and sizeof
 const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     if (expr->type->is(TypeKind::Array)) {
         wrap(expr, ast::CastKind::ArrayToPointer, decay(expr->type, table));
@@ -725,7 +785,6 @@ const Type *TypeChecker::decayValue(std::unique_ptr<ast::Expr> &expr) {
     return expr->type;
 }
 
-//Derived -> Base needs the base to be accessible, as member access does
 void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line, int col,
                                       const std::string &what) {
     const PointerType *fromPointer = asPointer(from);
@@ -757,11 +816,21 @@ void TypeChecker::checkBaseConversion(const Type *from, const Type *to, int line
     }
 }
 
+Conversion TypeChecker::conversionOf(ast::Expr *expr, const Type *to) {
+    const PointerType *pointer = asPointer(unqualified(to));
+    if (withoutParens(expr)->getKind() == ast::ASTKind::StringLiteral && pointer
+        && pointer->pointee->is(TypeKind::Char) && !pointer->pointee->isConst()) {
+        return findConversion(table.arrayOf(charType(), asArray(expr->type)->size), true, to, table);
+    }
+    return findConversion(expr->type, expr->isLValue, to, table);
+}
+
 bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, const std::string &what) {
-    Conversion conversion = findConversion(expr->type, expr->isLValue, to, table);
+    Conversion conversion = conversionOf(expr.get(), to);
     if (conversion.rank == ConversionRank::Impossible) {
         if (asReference(to) && !expr->isLValue && !isError(expr->type)) {
-            diags.error(expr->line, expr->col, "a reference in " + what + " must be bound to an object, not a value");
+            diags.error(expr->line, expr->col, "a reference in " + what + " must be bound to an object, not a value"
+                                                   + " (only a const reference binds to a temporary)");
         } else {
             diags.error(expr->line, expr->col, "cannot convert '" + typeToString(expr->type) + "' to '"
                                                    + typeToString(to) + "' in " + what);
@@ -774,8 +843,7 @@ bool TypeChecker::convert(std::unique_ptr<ast::Expr> &expr, const Type *to, cons
             checkBaseConversion(expr->type, step.result, expr->line, expr->col, what);
         }
         wrap(expr, step.kind, step.result);
-        //a reference binds to the base part of the same object
-        if (bindsReference) expr->isLValue = true;
+        if (bindsReference && step.kind == ast::CastKind::DerivedToBase) expr->isLValue = true;
     }
     return true;
 }
@@ -796,12 +864,23 @@ void TypeChecker::checkCondition(std::unique_ptr<ast::Expr> &cond, const std::st
     convert(cond, boolType(), what);
 }
 
-//something that may be assigned to or incremented
 bool TypeChecker::checkModifiable(ast::Expr *expr, const std::string &what) {
     if (isError(expr->type)) return false;
     if (!expr->isLValue || asArray(expr->type) || asFunction(expr->type) || asClosure(expr->type)) {
         diags.error(expr->line, expr->col, "the operand of " + what + " must be a variable that can be changed");
         return false;
+    }
+    if (expr->type->isConst()) {
+        diags.error(expr->line, expr->col, "the operand of " + what + " is const ('" + typeToString(expr->type)
+                                               + "') and cannot be changed");
+        return false;
+    }
+    if (RecordSymbol *record = asRecord(expr->type)) {
+        if (const Symbol *field = constField(record)) {
+            diags.error(expr->line, expr->col, "'" + record->qualifiedName() + "' cannot be assigned because its member '"
+                                                   + field->name + "' is const");
+            return false;
+        }
     }
     return true;
 }
@@ -811,8 +890,6 @@ const Type *TypeChecker::setType(ast::Expr *node, const Type *type, bool isLValu
     node->isLValue = isLValue;
     return type;
 }
-
-//statements
 
 const Type *TypeChecker::visitCompoundStmt(ast::CompoundStmt *node) {
     Scope *saved = current;
@@ -825,6 +902,7 @@ const Type *TypeChecker::visitCompoundStmt(ast::CompoundStmt *node) {
 const Type *TypeChecker::visitDeclStmt(ast::DeclStmt *node) {
     for (const std::unique_ptr<ast::Decl> &decl : node->decls) {
         if (decl->getKind() == ast::ASTKind::VarDecl) checkVarDecl(static_cast<ast::VarDecl *>(decl.get()));
+        if (decl->getKind() == ast::ASTKind::RecordDecl) checkRecord(static_cast<ast::RecordDecl *>(decl.get()));
     }
     return nullptr;
 }
@@ -843,17 +921,18 @@ const Type *TypeChecker::visitIfStmt(ast::IfStmt *node) {
 
 const Type *TypeChecker::visitSwitchStmt(ast::SwitchStmt *node) {
     const Type *type = check(node->cond);
+    SwitchInfo info;
     if (!isError(type)) {
         const Type *value = decayValue(node->cond);
         if (isIntegral(value)) {
-            convert(node->cond, promote(value), "a switch condition");
+            info.condType = promote(value);
+            convert(node->cond, info.condType, "a switch condition");
         } else {
             diags.error(node->cond->line, node->cond->col, "a switch condition must be an integer, not '"
                                                                + typeToString(value) + "'");
         }
     }
 
-    SwitchInfo info;
     context.switches.push_back(&info);
     context.breakables++;
     visit(node->body.get());
@@ -897,15 +976,17 @@ const Type *TypeChecker::visitForStmt(ast::ForStmt *node) {
     return nullptr;
 }
 
-//a lambda's return type comes from its first return, later ones must match
 const Type *TypeChecker::visitReturnStmt(ast::ReturnStmt *node) {
     if (context.lambda) {
         const Type *type = voidType();
         if (node->value) {
             check(node->value);
-            type = decayValue(node->value);
+            type = unqualified(decayValue(node->value));
         }
-        if (isError(type)) return nullptr;
+        if (isError(type)) {
+            if (context.returnType == nullptr) context.returnType = errorType();
+            return nullptr;
+        }
         if (context.returnType == nullptr) {
             context.returnType = type;
         } else if (!isSameType(context.returnType, type)) {
@@ -946,7 +1027,6 @@ const Type *TypeChecker::visitContinueStmt(ast::ContinueStmt *node) {
     return nullptr;
 }
 
-//gotos are resolved after the whole function, labels may come later
 const Type *TypeChecker::visitGotoStmt(ast::GotoStmt *node) {
     context.gotos.push_back(node);
     return nullptr;
@@ -965,8 +1045,9 @@ const Type *TypeChecker::visitCaseStmt(ast::CaseStmt *node) {
     } else if (!isError(type) && (!isIntegral(type) || !evaluateConstant(node->value.get(), value))) {
         diags.error(node->value->line, node->value->col, "a case value must be an integer constant");
     } else if (!isError(type)) {
-        node->constant = value;
         SwitchInfo *info = context.switches.back();
+        value = wrapToType(value, info->condType);
+        node->constant = value;
         if (info->values.count(value)) {
             diags.error(node->line, node->col, "duplicate case value " + std::to_string(value));
         }
@@ -988,24 +1069,26 @@ const Type *TypeChecker::visitDefaultStmt(ast::DefaultStmt *node) {
     return nullptr;
 }
 
-//expressions
-
 const Type *TypeChecker::visitIntLiteral(ast::IntLiteral *node) {
     long long value;
-    if (!intLiteralValue(node->spelling, value)) {
-        diags.error(node->line, node->col, "integer literal " + node->spelling + " is too large for int");
+    const Type *type = nullptr;
+    if (!intLiteral(node->spelling, value, type)) {
+        diags.error(node->line, node->col, "integer literal " + node->spelling + " is too large for its type");
     }
-    return setType(node, intType(), false);
+    return setType(node, type, false);
 }
 
-const Type *TypeChecker::visitFloatLiteral(ast::FloatLiteral *node) { return setType(node, doubleType(), false); }
+const Type *TypeChecker::visitFloatLiteral(ast::FloatLiteral *node) {
+    const Type *type = nullptr;
+    floatLiteral(node->spelling, type);
+    return setType(node, type, false);
+}
 
 const Type *TypeChecker::visitCharLiteral(ast::CharLiteral *node) { return setType(node, charType(), false); }
 
-//a string literal is an array of its characters and the closing \0
 const Type *TypeChecker::visitStringLiteral(ast::StringLiteral *node) {
     uint64_t size = stringLiteralLength(node->spelling) + 1;
-    return setType(node, table.arrayOf(charType(), size), true);
+    return setType(node, table.arrayOf(table.constOf(charType()), size), true);
 }
 
 const Type *TypeChecker::visitBoolLiteral(ast::BoolLiteral *node) { return setType(node, boolType(), false); }
@@ -1019,7 +1102,7 @@ const Type *TypeChecker::visitThisExpr(ast::ThisExpr *node) {
 }
 
 const Type *TypeChecker::visitDeclRefExpr(ast::DeclRefExpr *node) {
-    return finishDeclRef(node, lookupName(node->name, node->line, node->col));
+    return finishDeclRef(node, lookupRef(node));
 }
 
 const Type *TypeChecker::visitParenExpr(ast::ParenExpr *node) {
@@ -1113,9 +1196,9 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     std::string invalid = "invalid operands to '" + std::string(opSpelling(node->op)) + "' ('"
                         + typeToString(left) + "' and '" + typeToString(right) + "')";
 
-    //both numbers: convert to the common type
     if (isArithmetic(left) && isArithmetic(right)) {
         const Type *common = commonArithmeticType(promote(left), promote(right));
+        if (node->op == ast::BinaryOp::Shl || node->op == ast::BinaryOp::Shr) common = promote(left);
         switch (node->op) {
         case ast::BinaryOp::Rem:
         case ast::BinaryOp::BitAnd:
@@ -1147,28 +1230,27 @@ const Type *TypeChecker::visitBinaryExpr(ast::BinaryExpr *node) {
     }
 
     switch (node->op) {
-    //pointer arithmetic: pointer +/- int and pointer - pointer
     case ast::BinaryOp::Add:
         if (isObjectPointer(left) && isIntegral(right)) {
-            convert(node->rhs, intType(), "an operand");
-            return setType(node, left, false);
+            convert(node->rhs, indexType(right), "an operand");
+            return setType(node, unqualified(left), false);
         }
         if (isIntegral(left) && isObjectPointer(right)) {
-            convert(node->lhs, intType(), "an operand");
-            return setType(node, right, false);
+            convert(node->lhs, indexType(left), "an operand");
+            return setType(node, unqualified(right), false);
         }
         break;
     case ast::BinaryOp::Sub:
         if (isObjectPointer(left) && isIntegral(right)) {
-            convert(node->rhs, intType(), "an operand");
-            return setType(node, left, false);
+            convert(node->rhs, indexType(right), "an operand");
+            return setType(node, unqualified(left), false);
         }
-        if (isObjectPointer(left) && isObjectPointer(right) && isSameType(left, right)) {
+        if (isObjectPointer(left) && isObjectPointer(right)
+            && isSameType(unqualified(asPointer(left)->pointee), unqualified(asPointer(right)->pointee))) {
             return setType(node, intType(), false);
         }
         break;
 
-    //pointers compare with the same type, a base, void or null
     case ast::BinaryOp::Eq:
     case ast::BinaryOp::Ne:
     case ast::BinaryOp::Lt:
@@ -1211,27 +1293,40 @@ const Type *TypeChecker::visitAssignExpr(ast::AssignExpr *node) {
     case ast::AssignOp::SubAssign:
         value = decayValue(node->value);
         if (isObjectPointer(target) && isIntegral(value)) {
-            convert(node->value, intType(), "an assignment");
+            convert(node->value, indexType(value), "an assignment");
             break;
         }
-        //fall through, numbers on both sides
     case ast::AssignOp::MulAssign:
     case ast::AssignOp::DivAssign:
-    case ast::AssignOp::RemAssign: {
+    case ast::AssignOp::RemAssign:
+    case ast::AssignOp::ShlAssign:
+    case ast::AssignOp::ShrAssign:
+    case ast::AssignOp::AndAssign:
+    case ast::AssignOp::OrAssign:
+    case ast::AssignOp::XorAssign: {
         value = decayValue(node->value);
-        bool integers = node->op == ast::AssignOp::RemAssign;
+        bool integers = node->op != ast::AssignOp::AddAssign && node->op != ast::AssignOp::SubAssign
+                     && node->op != ast::AssignOp::MulAssign && node->op != ast::AssignOp::DivAssign;
         bool fits = integers ? isIntegral(target) && isIntegral(value) : isArithmetic(target) && isArithmetic(value);
         if (!fits) {
             diags.error(node->line, node->col, "invalid operands to a compound assignment ('" + typeToString(target)
                                                    + "' and '" + typeToString(value) + "')");
             return setType(node, errorType(), false);
         }
-        //x op= v: both sides meet in their common type, only the result converts back
-        convert(node->value, commonArithmeticType(promote(target), promote(value)), "an assignment");
+        bool shift = node->op == ast::AssignOp::ShlAssign || node->op == ast::AssignOp::ShrAssign;
+        convert(node->value, shift ? promote(target) : commonArithmeticType(promote(target), promote(value)),
+                "an assignment");
         break;
     }
     }
     return setType(node, target, true);
+}
+
+const Type *TypeChecker::visitCommaExpr(ast::CommaExpr *node) {
+    const Type *left = check(node->lhs);
+    const Type *right = check(node->rhs);
+    if (isError(left) || isError(right)) return setType(node, errorType(), false);
+    return setType(node, right, node->rhs->isLValue);
 }
 
 const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
@@ -1240,7 +1335,6 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
     const Type *f = check(node->falseExpr);
     if (isError(t) || isError(f)) return setType(node, errorType(), false);
 
-    //both the same object: the result names it
     if (isSameType(t, f) && node->trueExpr->isLValue && node->falseExpr->isLValue && !asArray(t)) {
         return setType(node, t, true);
     }
@@ -1254,6 +1348,8 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
         convert(node->falseExpr, common, "a ?: branch");
         return setType(node, common, false);
     }
+    t = unqualified(t);
+    f = unqualified(f);
     if (isSameType(t, f)) return setType(node, t, false);
     if (findConversion(f, false, t, table).rank != ConversionRank::Impossible && !isArithmetic(t)) {
         convert(node->falseExpr, t, "a ?: branch");
@@ -1268,7 +1364,6 @@ const Type *TypeChecker::visitConditionalExpr(ast::ConditionalExpr *node) {
     return setType(node, errorType(), false);
 }
 
-//calls by name or member use overload resolution, other callees are values
 const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
     for (std::unique_ptr<ast::Expr> &arg : node->args) check(arg);
 
@@ -1280,8 +1375,8 @@ const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
 
     if (callee->getKind() == ast::ASTKind::DeclRefExpr) {
         ast::DeclRefExpr *ref = static_cast<ast::DeclRefExpr *>(callee);
-        lookup = lookupName(ref->name, ref->line, ref->col);
-        name = ref->name;
+        lookup = lookupRef(ref);
+        name = ast::qualifiedSpelling(ref->qualifier, ref->name);
         if (lookup.symbols.empty() || lookup.symbols[0]->kind != SymbolKind::Function || lookup.ambiguous) {
             finishDeclRef(ref, lookup);
         }
@@ -1303,12 +1398,17 @@ const Type *TypeChecker::visitCallExpr(ast::CallExpr *node) {
             setType(callee, errorType(), false);
             return setType(node, errorType(), false);
         }
-        //a method named without an object is called on this
         if (!viaMember && fn->isMethod() && !memberOfThis(fn, node->line, node->col)) {
             setType(callee, errorType(), false);
             return setType(node, errorType(), false);
         }
         checkAccess(fn, lookup, node->line, node->col);
+        if (viaMember && fn->isMethod() && isConstObject(static_cast<ast::MemberExpr *>(callee))) {
+            diags.error(node->line, node->col, "'" + name + "' cannot be called on a const object"
+                                                   " (const member functions are not supported)");
+            setType(callee, errorType(), false);
+            return setType(node, errorType(), false);
+        }
 
         if (viaMember) {
             static_cast<ast::MemberExpr *>(callee)->symbol = fn;
@@ -1346,6 +1446,12 @@ const Type *TypeChecker::visitArraySubscriptExpr(ast::ArraySubscriptExpr *node) 
     const Type *index = check(node->index);
     if (isError(base) || isError(index)) return setType(node, errorType(), false);
 
+    if (isIntegral(base) && (index->is(TypeKind::Array) || asPointer(index))) {
+        std::swap(node->base, node->index);
+        std::swap(base, index);
+        node->reversed = true;
+    }
+
     base = decayValue(node->base);
     if (!isObjectPointer(base)) {
         diags.error(node->line, node->col, "a value of type '" + typeToString(base) + "' cannot be indexed");
@@ -1357,7 +1463,7 @@ const Type *TypeChecker::visitArraySubscriptExpr(ast::ArraySubscriptExpr *node) 
                                                              + typeToString(index) + "'");
         return setType(node, errorType(), false);
     }
-    convert(node->index, intType(), "an index");
+    convert(node->index, indexType(index), "an index");
     return setType(node, asPointer(base)->pointee, true);
 }
 
@@ -1401,7 +1507,6 @@ const Type *TypeChecker::visitNewExpr(ast::NewExpr *node) {
 
     case ast::NewForm::Array:
     case ast::NewForm::ArrayInit: {
-        //new T[n][3][4]: inner sizes must be constants, the result is int (*)[3][4]
         const Type *count = check(node->dims[0]);
         if (!isError(count)) {
             count = decayValue(node->dims[0]);
@@ -1447,7 +1552,6 @@ const Type *TypeChecker::visitDeleteExpr(ast::DeleteExpr *node) {
     return setType(node, voidType(), false);
 }
 
-//a brace list has no type of its own, initFromList handles it
 const Type *TypeChecker::visitInitListExpr(ast::InitListExpr *node) {
     if (node->type) return node->type;
     diags.error(node->line, node->col, "a brace list can only initialise a variable");
@@ -1457,7 +1561,6 @@ const Type *TypeChecker::visitInitListExpr(ast::InitListExpr *node) {
 const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
     ClosureType *closure = table.closureType(node);
 
-    //the capture list is resolved where the lambda is written, outside its body
     for (ast::LambdaCapture &capture : node->captures) {
         if (capture.kind == ast::LambdaCapture::Kind::This) {
             if (hasCapture(node, ast::LambdaCapture::Kind::This, "")) {
@@ -1496,9 +1599,9 @@ const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
 
     std::vector<const Type *> params;
     for (const std::unique_ptr<ast::ParamDecl> &param : node->params) {
-        params.push_back(param->symbol ? param->symbol->type : errorType());
+        params.push_back(param->symbol ? unqualified(param->symbol->type) : errorType());
     }
-    const Type *returnType = context.returnType ? context.returnType : voidType();
+    const Type *returnType = context.returnType ? unqualified(context.returnType) : voidType();
     closure->signature = table.functionType(returnType, params, false);
 
     context = saved;
@@ -1506,7 +1609,85 @@ const Type *TypeChecker::visitLambdaExpr(ast::LambdaExpr *node) {
     return setType(node, closure, false);
 }
 
-//casts are only made by this pass, after their operand has been checked
+const Type *TypeChecker::visitCastExpr(ast::CastExpr *node) {
+    const Type *target = node->target->resolved;
+    const Type *type = check(node->sub);
+    if (isError(type) || isError(target)) return setType(node, errorType(), false);
+    if (target->is(TypeKind::Void)) return setType(node, voidType(), false);
+
+    const Type *value = decayValue(node->sub);
+    bool isPointerValue = asPointer(value) || value->is(TypeKind::Null);
+    if (isSameType(value, target)) return setType(node, target, false);
+    bool implicit = findConversion(value, node->sub->isLValue, target, table).rank != ConversionRank::Impossible;
+    const PointerType *fromPointer = asPointer(value);
+    const PointerType *toPointer = asPointer(target);
+    RecordSymbol *fromRecord = fromPointer ? asRecord(unqualified(fromPointer->pointee)) : nullptr;
+    RecordSymbol *toRecord = toPointer ? asRecord(unqualified(toPointer->pointee)) : nullptr;
+    bool downcast = fromRecord && toRecord && fromRecord != toRecord && isDerivedFrom(toRecord, fromRecord);
+    if (node->isStatic && !implicit) {
+        bool allowed = fromPointer && toPointer && !(fromPointer->pointee->isConst() && !toPointer->pointee->isConst()) &&
+                       (downcast || unqualified(fromPointer->pointee)->is(TypeKind::Void) ||
+                        unqualified(toPointer->pointee)->is(TypeKind::Void));
+        if (!allowed) {
+            diags.error(node->line, node->col,
+                        "static_cast cannot convert '" + typeToString(value) + "' to '" + typeToString(target) + "'");
+            return setType(node, errorType(), false);
+        }
+    }
+    if (implicit) {
+        convert(node->sub, target, "a cast");
+    } else if (downcast) {
+        wrap(node->sub, ast::CastKind::BaseToDerived, target);
+    } else if (asPointer(target) && isPointerValue) {
+        wrap(node->sub, ast::CastKind::PointerCast, target);
+    } else if (asPointer(target) && isIntegral(value)) {
+        convert(node->sub, longType(), "a cast");
+        wrap(node->sub, ast::CastKind::IntegralToPointer, target);
+    } else if (isIntegral(target) && isPointerValue) {
+        wrap(node->sub, ast::CastKind::PointerToIntegral, target);
+    } else {
+        diags.error(node->line, node->col, "cannot cast '" + typeToString(value) + "' to '" + typeToString(target) + "'");
+        return setType(node, errorType(), false);
+    }
+    return setType(node, target, false);
+}
+
+const Type *TypeChecker::sizeofOperand(std::unique_ptr<ast::Expr> &expr) {
+    if (expr->getKind() != ast::ASTKind::ParenExpr) return check(expr);
+    ast::ParenExpr *paren = static_cast<ast::ParenExpr *>(expr.get());
+    if (paren->sub->getKind() != ast::ASTKind::DeclRefExpr) return check(expr);
+
+    ast::DeclRefExpr *ref = static_cast<ast::DeclRefExpr *>(paren->sub.get());
+    Lookup lookup = lookupRef(ref);
+    if (!lookup.symbols.empty() && !lookup.ambiguous) {
+        Symbol *symbol = lookup.symbols[0];
+        const Type *named = nullptr;
+        if (symbol->kind == SymbolKind::Record) named = table.recordType(static_cast<RecordSymbol *>(symbol));
+        if (symbol->kind == SymbolKind::Typedef) named = symbol->type;
+        if (named) {
+            ref->symbol = symbol;
+            setType(ref, named, false);
+            return setType(paren, named, false);
+        }
+    }
+    const Type *type = finishDeclRef(ref, lookup);
+    return setType(paren, type, ref->isLValue);
+}
+
+const Type *TypeChecker::visitSizeofExpr(ast::SizeofExpr *node) {
+    const Type *operand = node->typeOperand ? node->typeOperand->resolved : stripReference(sizeofOperand(node->exprOperand));
+    if (isError(operand)) return setType(node, ulongType(), false);
+    const ArrayType *array = asArray(operand);
+    bool incomplete = operand->is(TypeKind::Void) || operand->is(TypeKind::Function) || (array && array->size == 0) ||
+                      (asRecord(operand) && !asRecord(operand)->isComplete);
+    if (incomplete) {
+        diags.error(node->line, node->col, "sizeof needs a complete object type, not '" + typeToString(operand) + "'");
+        return setType(node, ulongType(), false);
+    }
+    node->size = layout.sizeOf(operand);
+    return setType(node, ulongType(), false);
+}
+
 const Type *TypeChecker::visitImplicitCastExpr(ast::ImplicitCastExpr *node) { return node->type; }
 
-} // namespace sema
+}

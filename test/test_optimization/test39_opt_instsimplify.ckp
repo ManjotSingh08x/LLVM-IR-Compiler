@@ -1,0 +1,21 @@
+// Tests: instsimplify turns (x + 1) + 2 across blocks into x + 3 (-O2 and up)
+int adjust(int x, int n) {
+    int y = x + 1;
+    if (n > 0) {
+        printf("positive\n");
+    }
+    return y + 2;
+}
+
+int main() {
+    printf("%d\n", adjust(10, 1));
+    return 0;
+}
+
+// IR-O1-LABEL: define i32 @{{.*}}adjust
+// IR-O1: add i32 %x, 1
+// IR-O1: add i32 %{{.*}}, 2
+// IR-GE2-LABEL: define i32 @{{.*}}adjust
+// IR-GE2: add i32 %x, 3
+// IR-GE2-NOT: add i32
+// IR-GE2: ret i32

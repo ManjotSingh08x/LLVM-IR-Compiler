@@ -1,0 +1,33 @@
+struct Item {
+    int id;
+    double price;
+};
+
+int main() {
+    // Tests: array of structures
+    Item items[3];
+    for (int i = 0; i < 3; i++) {
+        items[i].id = i + 1;
+        items[i].price = 1.5 * (i + 1);
+    }
+
+    // Tests: heap array
+    int *squares = new int[4];
+    for (int i = 0; i < 4; i++) squares[i] = i * i;
+
+    // Tests: two-dimensional array indexed in a loop
+    int grid[3][3];
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            grid[r][c] = r * 3 + c;
+
+    // Tests: pointer to pointer
+    int value = 7;
+    int *p = &value;
+    int **pp = &p;
+    **pp = 9;
+
+    printf("%d %.1f %d %d %d\n", items[2].id, items[1].price, squares[3], grid[2][1], value);
+    delete[] squares;
+    return 0;
+}

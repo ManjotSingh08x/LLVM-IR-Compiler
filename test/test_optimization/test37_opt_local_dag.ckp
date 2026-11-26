@@ -1,0 +1,21 @@
+// Tests: local_dag computes a repeated expression in a block once, and folds constants (-O1 and up)
+int area(int w, int h) {
+    int first = w * h;
+    int second = w * h;
+    int fixed = 4 * 25;
+    return first + second + fixed;
+}
+
+int main() {
+    printf("area %d\n", area(3, 5));
+    return 0;
+}
+
+// IR-O0-LABEL: define i32 @{{.*}}area
+// IR-O0: mul i32 %
+// IR-O0: mul i32 %
+// IR-O0: mul i32 4, 25
+// IR-GE1-LABEL: define i32 @{{.*}}area
+// IR-GE1: mul i32 %w, %h
+// IR-GE1-NOT: mul i32
+// IR-GE1: add i32 %{{.*}}, 100

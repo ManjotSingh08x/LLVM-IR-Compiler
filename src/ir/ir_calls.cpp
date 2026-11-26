@@ -1,6 +1,5 @@
-#include "ir/ir_visitor.h"
 
-//calls of every kind, and lambdas
+#include "ir/ir_visitor.h"
 
 namespace ir {
 
@@ -11,11 +10,8 @@ ast::Expr *withoutParens(ast::Expr *expr) {
     return expr;
 }
 
-} // namespace
+}
 
-//  calls 
-
-//callee order: named function, lambda, function lvalue, function pointer
 Value *IRVisitor::emitCall(ast::CallExpr *node) {
     if (node->function) return emitDirectCall(node, node->function);
 
@@ -28,7 +24,7 @@ Value *IRVisitor::emitCall(ast::CallExpr *node) {
         args.push_back(emitAddressOf(callee));
         std::vector<Value *> rest = emitArguments(closure->signature, node->args);
         args.insert(args.end(), rest.begin(), rest.end());
-        return builder.createCall(fn, fn->fnType, args);
+        return builder.createCall(fn, lambdaSignature(closure->lambda), args);
     }
 
     const sema::FunctionType *signature = sema::asFunction(calleeType);
@@ -42,7 +38,6 @@ Value *IRVisitor::emitCall(ast::CallExpr *node) {
     return builder.createCall(target, signature, emitArguments(signature, node->args));
 }
 
-//a method takes the object, converted to the method's class, as its first argument
 Value *IRVisitor::emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn) {
     std::vector<Value *> args;
     ast::Expr *callee = withoutParens(node->callee.get());
@@ -60,23 +55,21 @@ Value *IRVisitor::emitDirectCall(ast::CallExpr *node, sema::FunctionSymbol *fn) 
                 record = sema::asRecord(member->base->type);
             }
         } else {
-            //a method named without an object is called on this
+
             object = ctx().thisPtr;
             record = ctx().thisRecord;
         }
         args.push_back(adjustToBase(object, record, fn->parentRecord, false));
     } else if (callee->getKind() == ast::ASTKind::MemberExpr) {
-        //a static method through an object: no this, but the object is still evaluated
+
         emitIgnored(static_cast<ast::MemberExpr *>(callee)->base.get());
     }
 
     std::vector<Value *> rest = emitArguments(fn->signature(), node->args);
     args.insert(args.end(), rest.begin(), rest.end());
-    Function *function = functionFor(fn);
-    return builder.createCall(function, function->fnType, args);
+    return builder.createCall(functionFor(fn), fn->loweredType, args);
 }
 
-//a reference argument passes the address of the object
 std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signature, ast::NodeList<ast::Expr> &args) {
     std::vector<Value *> values;
     for (size_t i = 0; i < args.size(); i++) {
@@ -86,21 +79,21 @@ std::vector<Value *> IRVisitor::emitArguments(const sema::FunctionType *signatur
     return values;
 }
 
-//  lambdas: a closure struct of captures plus a function taking it 
+const sema::FunctionType *IRVisitor::lambdaSignature(const ast::LambdaExpr *lambda) {
+    const sema::FunctionType *signature = sema::asClosure(lambda->type)->signature;
+    std::vector<const sema::Type *> params;
+    params.push_back(module.pointerType());
+    params.insert(params.end(), signature->params.begin(), signature->params.end());
+    return symTab.functionType(signature->returnType, params, false);
+}
 
 Function *IRVisitor::lambdaFunction(ast::LambdaExpr *lambda) {
     std::string name = lambdaFunctionName(lambda);
     Function *fn = module.findFunction(name);
     if (fn) return fn;
-
-    const sema::FunctionType *signature = sema::asClosure(lambda->type)->signature;
-    std::vector<const sema::Type *> params;
-    params.push_back(module.pointerType());
-    params.insert(params.end(), signature->params.begin(), signature->params.end());
-    return module.createFunction(name, symTab.functionType(signature->returnType, params, false), Linkage::Internal);
+    return module.createFunction(name, lambdaSignature(lambda), Linkage::Internal);
 }
 
-//the lambda body is lowered as its own function, saving and restoring the current context
 void IRVisitor::emitLambdaBody(ast::LambdaExpr *lambda) {
     if (emittedLambdas.count(lambda)) return;
     emittedLambdas.insert(lambda);
@@ -115,7 +108,6 @@ void IRVisitor::emitLambdaBody(ast::LambdaExpr *lambda) {
     startFunction(fn, signature->returnType);
     ctx().thisRecord = outerRecord;
 
-    //each capture is a closure field, by-reference captures hold the address
     Argument *closure = fn->addArgument(module.pointerType(), "__closure");
     for (size_t i = 0; i < lambda->usedCaptures.size(); i++) {
         const ast::LambdaCapture &capture = lambda->usedCaptures[i];
@@ -139,7 +131,6 @@ void IRVisitor::emitLambdaBody(ast::LambdaExpr *lambda) {
     builder.restoreInsertPoint(saved);
 }
 
-//fills a closure with captured values, addresses, or this
 void IRVisitor::emitLambdaInto(Value *address, ast::LambdaExpr *lambda) {
     emitLambdaBody(lambda);
 
@@ -160,4 +151,4 @@ void IRVisitor::emitLambdaInto(Value *address, ast::LambdaExpr *lambda) {
     }
 }
 
-} // namespace ir
+}

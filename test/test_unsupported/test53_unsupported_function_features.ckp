@@ -1,0 +1,18 @@
+// Tests: default argument (unsupported)
+int add(int a, int b = 10) { return a + b; }
+
+// Tests: function with variable arguments (unsupported)
+int sumAll(int count, ...);
+
+// Tests: function returning a reference (unsupported)
+int global = 5;
+int &globalRef() { return global; }
+
+// Tests: trailing return type (unsupported)
+auto twice(int x) -> int { return 2 * x; }
+
+// Tests: function template (unsupported)
+template <typename T> T largest(T a, T b) { return a > b ? a : b; }
+
+// Tests: class template (unsupported)
+template <typename T> struct Box { T value; };

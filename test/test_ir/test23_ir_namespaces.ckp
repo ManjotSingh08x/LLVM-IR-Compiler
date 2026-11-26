@@ -1,0 +1,35 @@
+// Tests: the same name at file scope and in a namespace
+int value = 1;
+
+namespace geometry {
+    int value = 10;
+
+    // Tests: function in a namespace
+    int area(int w, int h) { return w * h; }
+
+    // Tests: nested namespace
+    namespace units {
+        int toCm(int m) { return m * 100; }
+    }
+
+    // Tests: class in a namespace with a static member
+    class Shape {
+    public:
+        static int count;
+        Shape() { count++; }
+    };
+    int Shape::count = 0;
+}
+
+// Tests: reopening a namespace
+namespace geometry {
+    int perimeter(int w, int h) { return 2 * (w + h); }
+}
+
+int main() {
+    geometry::Shape a;
+    geometry::Shape b;
+    printf("%d %d %d %d %d %d\n", value, geometry::value, geometry::area(3, 4),
+           geometry::perimeter(3, 4), geometry::units::toCm(2), geometry::Shape::count);
+    return 0;
+}

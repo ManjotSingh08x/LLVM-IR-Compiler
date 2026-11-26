@@ -1,0 +1,22 @@
+// Tests: cse reuses a value computed in an earlier block instead of computing it again (-O2 and up)
+int price(int cost, int qty, bool member) {
+    int total = cost * qty;
+    if (member) {
+        return cost * qty - 5;
+    }
+    return total;
+}
+
+int main() {
+    printf("%d %d\n", price(4, 5, true), price(4, 5, false));
+    return 0;
+}
+
+// IR-O1-LABEL: define i32 @{{.*}}price
+// IR-O1: if.then:
+// IR-O1: mul i32
+// IR-GE2-LABEL: define i32 @{{.*}}price
+// IR-GE2: [[TOTAL:%[a-z0-9.]+]] = mul i32 %cost, %qty
+// IR-GE2: if.then:
+// IR-GE2-NOT: mul i32
+// IR-GE2: sub i32 [[TOTAL]], 5

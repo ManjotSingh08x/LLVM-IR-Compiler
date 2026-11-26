@@ -8,7 +8,6 @@
 
 namespace ast {
 
-//debugging visitor: one line per node, indented by depth, as role: Kind attrs <line:col>
 class ASTPrinter : public ASTVisitor<ASTPrinter> {
 public:
     explicit ASTPrinter(std::ostream &out) : out(out) {}
@@ -26,6 +25,7 @@ public:
     void visitRecordDecl(RecordDecl *node);
     void visitAccessSpecDecl(AccessSpecDecl *node);
     void visitTypedefDecl(TypedefDecl *node);
+    void visitNamespaceDecl(NamespaceDecl *node);
 
     void visitCompoundStmt(CompoundStmt *node);
     void visitDeclStmt(DeclStmt *node);
@@ -56,6 +56,7 @@ public:
     void visitBinaryExpr(BinaryExpr *node);
     void visitAssignExpr(AssignExpr *node);
     void visitConditionalExpr(ConditionalExpr *node);
+    void visitCommaExpr(CommaExpr *node);
     void visitCallExpr(CallExpr *node);
     void visitArraySubscriptExpr(ArraySubscriptExpr *node);
     void visitMemberExpr(MemberExpr *node);
@@ -63,13 +64,13 @@ public:
     void visitDeleteExpr(DeleteExpr *node);
     void visitInitListExpr(InitListExpr *node);
     void visitLambdaExpr(LambdaExpr *node);
+    void visitCastExpr(CastExpr *node);
+    void visitSizeofExpr(SizeofExpr *node);
     void visitImplicitCastExpr(ImplicitCastExpr *node);
 
 private:
-    //writes the line for a node, attrs may be empty
     void line(const ASTNode &node, const std::string &attrs);
 
-    //visits a child one level deeper, labelled with its role
     void child(const char *role, ASTNode *node);
 
     template <class T>
@@ -77,7 +78,6 @@ private:
         for (const auto &item : list) child(role, item.get());
     }
 
-    //the array sizes and function pointer parameters inside a written type
     void typeChildren(const TypeSpec *type);
     void initChildren(VarDecl *node);
     void functionBody(FunctionDecl *node);
@@ -87,6 +87,6 @@ private:
     const char   *role = nullptr;
 };
 
-} // namespace ast
+}
 
 #endif

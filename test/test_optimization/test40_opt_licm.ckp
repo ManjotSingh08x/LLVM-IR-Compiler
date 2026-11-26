@@ -1,0 +1,25 @@
+// Tests: licm moves a computation that is the same in every iteration out of the loop (-O2 and up)
+int fill(int *out, int n, int width, int height) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        int area = width * height;
+        out[i] = area + i;
+        total += out[i];
+    }
+    return total;
+}
+
+int main() {
+    int data[4];
+    printf("total %d\n", fill(data, 4, 3, 7));
+    return 0;
+}
+
+// IR-O1-LABEL: define i32 @{{.*}}fill
+// IR-O1: for.body:
+// IR-O1: mul i32
+// IR-GE2-LABEL: define i32 @{{.*}}fill
+// IR-GE2: mul i32 %width, %height
+// IR-GE2: for.body:
+// IR-GE2-NOT: mul i32
+// IR-GE2: for.end:

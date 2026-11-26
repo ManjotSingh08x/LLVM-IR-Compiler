@@ -1,0 +1,17 @@
+// Tests: graph colouring register allocation keeps many values in registers at once (-O3)
+int mix(int a, int b, int c, int d) {
+    int e = a + b;
+    int f = c + d;
+    int g = a * c;
+    int h = b * d;
+    return e * f + g * h;
+}
+
+int main() {
+    printf("mix %d\n", mix(1, 2, 3, 4));
+    return 0;
+}
+
+// ASM-O2-NOT: graph colouring
+// ASM-O3-LABEL: {{.*}}mix{{.*}}:
+// ASM-O3-NEXT: # graph colouring: {{[0-9]+}} virtual registers, {{[0-9]+}} copies coalesced, 0 spilled

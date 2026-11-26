@@ -1,0 +1,23 @@
+struct Pair { char tag; double value; };
+typedef Pair Entry;
+
+namespace shapes {
+    struct Point { short x; short y; };
+}
+
+// Tests: sizeof of a class by its name as an array size
+char buffer[sizeof(Pair)];
+
+int main() {
+    // Tests: sizeof of a struct, a typedef and a namespaced struct by name
+    int pairSize = sizeof(Pair);
+    int entrySize = sizeof(Entry);
+    int pointSize = sizeof(shapes::Point);
+
+    // Tests: number of elements from sizeof of an array and of its element
+    double values[5];
+    int count = sizeof(values) / sizeof(values[0]);
+
+    printf("%d %d %d %d %d\n", pairSize, entrySize, pointSize, (int)sizeof(buffer), count);
+    return 0;
+}

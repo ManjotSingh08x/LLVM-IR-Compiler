@@ -1,0 +1,5 @@
+// Tests: use of an undeclared variable
+int undeclaredVariable() {
+    int total = 5;
+    return total + missing;
+}

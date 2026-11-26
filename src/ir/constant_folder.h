@@ -6,7 +6,6 @@
 
 namespace ir {
 
-//a number worked out while compiling, with the type it has at that point
 struct FoldedNumber {
     bool              isFloat = false;
     long long         intValue = 0;
@@ -14,15 +13,14 @@ struct FoldedNumber {
     const sema::Type *type = nullptr;
 };
 
-//folds global and static initializers to constants, applying every implicit cast, null means run at startup
+//evaluates initializers at compile time
 class ConstantFolder {
 public:
     ConstantFolder(Module &module, RecordLayout &layout) : module(module), layout(layout) {}
 
-    //the constant for a whole declaration, or null when its initializer must run as code
+    //folds a global initializer into a constant
     Constant *foldVariable(ast::VarDecl *decl, const sema::Type *type);
 
-    //the constant for one value converted to type, or null
     Constant *fold(ast::Expr *expr, const sema::Type *type);
 
 private:
@@ -41,6 +39,6 @@ private:
     RecordLayout &layout;
 };
 
-} // namespace ir
+}
 
 #endif

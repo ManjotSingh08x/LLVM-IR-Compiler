@@ -1,0 +1,35 @@
+struct Pair {
+    int first;
+    int second;
+};
+
+// Tests: more than six integer arguments (some go on the stack)
+int sum8(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return a + b + c + d + e + f + g + h;
+}
+
+// Tests: more than eight floating arguments
+double sum9(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    return a + b + c + d + e + f + g + h + i;
+}
+
+// Tests: structure passed and returned by value
+Pair swapped(Pair p) {
+    Pair r;
+    r.first = p.second;
+    r.second = p.first;
+    return r;
+}
+
+// Tests: mutual recursion
+bool isOdd(int n);
+bool isEven(int n) { return n == 0 ? true : isOdd(n - 1); }
+bool isOdd(int n) { return n == 0 ? false : isEven(n - 1); }
+
+int main() {
+    Pair p = {1, 2};
+    Pair q = swapped(p);
+    printf("%d %.1f %d %d %d %d\n", sum8(1, 2, 3, 4, 5, 6, 7, 8),
+           sum9(0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5), q.first, q.second, p.first, isEven(10));
+    return 0;
+}

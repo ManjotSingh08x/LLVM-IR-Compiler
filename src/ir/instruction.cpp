@@ -15,10 +15,13 @@ const char *binaryOpName(BinaryOpKind op) {
     case BinaryOpKind::Mul:     return "mul";
     case BinaryOpKind::FMul:    return "fmul";
     case BinaryOpKind::SDiv:    return "sdiv";
+    case BinaryOpKind::UDiv:    return "udiv";
     case BinaryOpKind::FDiv:    return "fdiv";
     case BinaryOpKind::SRem:    return "srem";
+    case BinaryOpKind::URem:    return "urem";
     case BinaryOpKind::Shl:     return "shl";
     case BinaryOpKind::AShr:    return "ashr";
+    case BinaryOpKind::LShr:    return "lshr";
     case BinaryOpKind::And:     return "and";
     case BinaryOpKind::Or:      return "or";
     case BinaryOpKind::Xor:     return "xor";
@@ -50,6 +53,7 @@ const char *castOpName(CastOpKind op) {
     case CastOpKind::SIToFP:   return "sitofp";
     case CastOpKind::UIToFP:   return "uitofp";
     case CastOpKind::FPToSI:   return "fptosi";
+    case CastOpKind::FPToUI:   return "fptoui";
     case CastOpKind::FPExt:    return "fpext";
     case CastOpKind::FPTrunc:  return "fptrunc";
     case CastOpKind::PtrToInt: return "ptrtoint";
@@ -58,7 +62,7 @@ const char *castOpName(CastOpKind op) {
     return "";
 }
 
-} // namespace
+}
 
 bool isCompare(BinaryOpKind op) {
     switch (op) {
@@ -84,8 +88,6 @@ bool isCompare(BinaryOpKind op) {
     }
 }
 
-//  operands and successors 
-
 std::vector<Value *> Instruction::getOperands() const {
     std::vector<Value *> result;
     for (Value **slot : const_cast<Instruction *>(this)->operandSlots()) result.push_back(*slot);
@@ -110,7 +112,6 @@ void Instruction::replaceSuccessor(BasicBlock *from, BasicBlock *to) {
     }
 }
 
-//ret void has no operand
 std::vector<Value **> ReturnInst::operandSlots() {
     if (returnValue == nullptr) return {};
     return { &returnValue };
@@ -140,7 +141,6 @@ std::vector<Value **> GEPInst::operandSlots() {
     return slots;
 }
 
-//the callee comes first, it is a value too for calls through a pointer
 std::vector<Value **> CallInst::operandSlots() {
     std::vector<Value **> slots;
     slots.push_back(&callee);
@@ -176,8 +176,6 @@ void PhiInst::replaceIncomingBlock(BasicBlock *from, BasicBlock *to) {
         if (entry.second == from) entry.second = to;
     }
 }
-
-//  dump 
 
 void ReturnInst::dump(std::ostream &out) const {
     if (returnValue == nullptr) {
@@ -229,7 +227,6 @@ void CallInst::dump(std::ostream &out) const {
     out << "  ";
     if (!type->is(sema::TypeKind::Void)) out << "%" << name << " = ";
     out << "call ";
-    //a variadic callee is written with its full type
     if (calleeType->isVariadic) {
         out << formatType(calleeType);
     } else {
@@ -238,7 +235,7 @@ void CallInst::dump(std::ostream &out) const {
     out << " " << callee->getOperand() << "(";
     for (size_t i = 0; i < args.size(); i++) {
         if (i > 0) out << ", ";
-        //fixed parameters use the declared type, variadic extras their own
+
         if (i < calleeType->params.size()) {
             out << formatType(calleeType->params[i]) << " " << args[i]->getOperand();
         } else {
@@ -276,4 +273,4 @@ void PhiInst::dump(std::ostream &out) const {
     out << "\n";
 }
 
-} // namespace ir
+}

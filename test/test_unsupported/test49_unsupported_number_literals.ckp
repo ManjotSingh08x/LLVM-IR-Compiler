@@ -1,0 +1,8 @@
+// Tests: hexadecimal floating literal (unsupported)
+double half() { return 0x1p-1; }
+
+// Tests: digit separator (unsupported)
+int million() { return 1'000'000; }
+
+// Tests: octal escape in a character literal (unsupported)
+char letter() { return '\101'; }

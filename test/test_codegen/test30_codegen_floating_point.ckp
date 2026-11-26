@@ -1,0 +1,31 @@
+// Tests: double parameters and return value
+double hypotSquared(double x, double y) {
+    return x * x + y * y;
+}
+
+// Tests: float arithmetic
+float average(float a, float b) {
+    return (a + b) / 2;
+}
+
+int main() {
+    double d = hypotSquared(3.0, 4.0);
+    float f = average(1.5, 2.25);
+
+    // Tests: conversions between int and floating types
+    int whole = (int)(d / 3);
+    double back = whole;
+    float narrowed = (float)(1.0 / 3.0);
+
+    // Tests: float literals with the f suffix stay float
+    float third = 1.0f / 3.0f;
+    float scaledF = 2.5f * 4;
+
+    // Tests: floating comparisons
+    bool less = f < d;
+    bool equal = back == 8.0;
+
+    printf("%.2f %.3f %d %.1f %.6f %d %d\n", d, f, whole, back, narrowed, less, equal);
+    printf("%.7f %.1f\n", third, scaledF);
+    return 0;
+}

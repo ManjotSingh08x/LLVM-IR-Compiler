@@ -1,14 +1,12 @@
+
 #include "ir/ir_visitor.h"
 
 #include "semantic/constants.h"
-
-//object lifetime: initialization, construction, destruction, new, delete and base conversions
 
 namespace ir {
 
 namespace {
 
-//the expression a reference is bound to: int &r = x, int &r{x}, int &r(x)
 ast::Expr *referenceSource(ast::VarDecl *decl) {
     switch (decl->initStyle) {
     case ast::InitStyle::Copy:
@@ -25,13 +23,10 @@ ast::Expr *referenceSource(ast::VarDecl *decl) {
     return nullptr;
 }
 
-} // namespace
+}
 
-//  initialization 
-
-//gives the object at address its initial value
 void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarDecl *decl) {
-    //a reference stores the address of the object it is bound to
+
     if (sema::asReference(type)) {
         ast::Expr *source = referenceSource(decl);
         if (source) builder.createStore(type, emitLValue(source), address);
@@ -40,7 +35,7 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
 
     switch (decl->initStyle) {
     case ast::InitStyle::None:
-        //Dog d; runs the default constructor. int x; leaves x as it is
+
         emitDefaultConstruct(address, type, decl->constructor);
         return;
 
@@ -49,12 +44,12 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
             if (decl->constructor) {
                 emitConstructorCall(decl->constructor, address, decl->ctorArgs);
             } else if (decl->ctorArgs.size() == 1) {
-                builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);  //Point b(a): a copy
+                builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);
             } else {
                 emitDefaultConstruct(address, type, nullptr);
             }
         } else if (!decl->ctorArgs.empty()) {
-            builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);    //int x(5)
+            builder.createStore(type, emitRValue(decl->ctorArgs[0].get()), address);
         }
         return;
 
@@ -65,7 +60,6 @@ void IRVisitor::emitObjectInit(Value *address, const sema::Type *type, ast::VarD
     }
 }
 
-//one initializer value: a brace list, a string for a char array, or a lambda
 void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr *expr) {
     if (expr->getKind() == ast::ASTKind::InitListExpr) {
         emitInitList(address, type, static_cast<ast::InitListExpr *>(expr));
@@ -73,7 +67,7 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     }
     const sema::ArrayType *array = sema::asArray(type);
     if (array && expr->getKind() == ast::ASTKind::StringLiteral) {
-        //char s[8] = "hi": the characters, the \0, then zeros up to the size
+
         std::string bytes = sema::decodeStringLiteral(static_cast<ast::StringLiteral *>(expr)->spelling);
         bytes.resize(array->size, '\0');
         builder.createStore(type, module.getString(type, bytes), address);
@@ -90,7 +84,6 @@ void IRVisitor::emitInitValue(Value *address, const sema::Type *type, ast::Expr 
     builder.createStore(type, emitRValue(expr), address);
 }
 
-//{ ... }: constructor arguments, or an element or field-wise fill, the rest zero or default constructed
 void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitListExpr *list) {
     if (list->constructor) {
         emitConstructorCall(list->constructor, address, list->inits);
@@ -133,7 +126,6 @@ void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitLi
         return;
     }
 
-    //int a{5} or int b{}
     if (list->inits.empty()) {
         builder.createStore(type, module.getZero(type), address);
     } else {
@@ -141,10 +133,9 @@ void IRVisitor::emitInitList(Value *address, const sema::Type *type, ast::InitLi
     }
 }
 
-//a field without an initializer: its in-class initializer or default construction
 void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *record, const sema::Symbol *field) {
     ast::VarDecl *decl = RecordLayout::fieldDeclaration(field);
-    if (decl == nullptr && !layout.needsConstruction(field->type)) return;  //int plain; needs no code
+    if (decl == nullptr && !layout.needsConstruction(field->type)) return;
 
     Value *fieldAddr = builder.createStructGEP(record->type, object, RecordLayout::fieldIndex(record, field));
     if (decl == nullptr) {
@@ -160,9 +151,6 @@ void IRVisitor::emitFieldDefaultInit(Value *object, const sema::RecordSymbol *re
     ctx().thisRecord = savedRecord;
 }
 
-//  construction 
-
-//default-constructs an object with no initializer, element-wise for arrays
 void IRVisitor::emitDefaultConstruct(Value *address, const sema::Type *type, const sema::FunctionSymbol *chosen) {
     if (const sema::ArrayType *array = sema::asArray(type)) {
         if (!layout.needsConstruction(type)) return;
@@ -199,11 +187,9 @@ void IRVisitor::emitConstructorCall(const sema::FunctionSymbol *ctor, Value *add
     values.push_back(address);
     std::vector<Value *> rest = emitArguments(ctor->signature(), args);
     values.insert(values.end(), rest.begin(), rest.end());
-    Function *fn = functionFor(ctor);
-    builder.createCall(fn, fn->fnType, values);
+    builder.createCall(functionFor(ctor), ctor->loweredType, values);
 }
 
-//the start of every constructor: bases in order, then the fields in order
 void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value *thisPtr) {
     for (size_t i = 0; i < record->bases.size(); i++) {
         Value *base = builder.createStructGEP(record->type, thisPtr, (unsigned)i);
@@ -212,9 +198,6 @@ void IRVisitor::emitMemberInitialization(const sema::RecordSymbol *record, Value
     for (const sema::Symbol *field : record->fields) emitFieldDefaultInit(thisPtr, record, field);
 }
 
-//  destruction 
-
-//the end of every destructor: fields in reverse order, then bases in reverse
 void IRVisitor::emitMemberDestruction(const sema::RecordSymbol *record, Value *thisPtr) {
     for (size_t i = record->fields.size(); i > 0; i--) {
         const sema::Symbol *field = record->fields[i - 1];
@@ -246,7 +229,6 @@ Function *IRVisitor::destructorFunction(const sema::RecordSymbol *record) {
     return implicitStructor(record, false);
 }
 
-//the implicit constructor or destructor for a record that needs one, body emitted later
 Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isConstructor) {
     std::string name = "class_" + RecordLayout::recordPath(record) + (isConstructor ? "_C_v" : "_D_v");
     Function *fn = module.findFunction(name);
@@ -263,13 +245,11 @@ Function *IRVisitor::implicitStructor(const sema::RecordSymbol *record, bool isC
     return fn;
 }
 
-//  array element loops, destruction runs backwards 
-
 void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Value *begin, Value *end,
                                 ElementAction action, const sema::FunctionSymbol *ctor) {
     bool backwards = action == ElementAction::Destroy;
-    AllocaInst *counter = builder.createEntryAlloca(int64Type(), "arr.i");
-    builder.createStore(int64Type(), backwards ? end : begin, counter);
+    AllocaInst *counter = builder.createEntryAlloca(sema::longType(), "arr.i");
+    builder.createStore(sema::longType(), backwards ? end : begin, counter);
 
     BasicBlock *condBlock = builder.createBlock("arr.cond");
     BasicBlock *bodyBlock = builder.createBlock("arr.body");
@@ -277,22 +257,22 @@ void IRVisitor::emitElementLoop(Value *first, const sema::Type *elementType, Val
     builder.createBr(condBlock);
 
     builder.setInsertBlock(condBlock);
-    Value *index = builder.createLoad(int64Type(), counter);
-    Value *done = backwards ? builder.createBinary(BinaryOpKind::ICmpULE, int64Type(), index, begin)
-                            : builder.createBinary(BinaryOpKind::ICmpUGE, int64Type(), index, end);
+    Value *index = builder.createLoad(sema::longType(), counter);
+    Value *done = backwards ? builder.createBinary(BinaryOpKind::ICmpULE, sema::longType(), index, begin)
+                            : builder.createBinary(BinaryOpKind::ICmpUGE, sema::longType(), index, end);
     builder.createCondBr(done, endBlock, bodyBlock);
 
     builder.setInsertBlock(bodyBlock);
     Value *current = index;
     if (backwards) {
-        current = builder.createBinary(BinaryOpKind::Sub, int64Type(), index, module.getInt64(1));
-        builder.createStore(int64Type(), current, counter);
+        current = builder.createBinary(BinaryOpKind::Sub, sema::longType(), index, module.getInt64(1));
+        builder.createStore(sema::longType(), current, counter);
     }
     Value *element = builder.createElementGEP(elementType, first, current);
     emitElementAction(element, elementType, action, ctor);
     if (!backwards) {
-        Value *next = builder.createBinary(BinaryOpKind::Add, int64Type(), current, module.getInt64(1));
-        builder.createStore(int64Type(), next, counter);
+        Value *next = builder.createBinary(BinaryOpKind::Add, sema::longType(), current, module.getInt64(1));
+        builder.createStore(sema::longType(), next, counter);
     }
     builder.createBr(condBlock);
 
@@ -314,16 +294,12 @@ void IRVisitor::emitElementAction(Value *element, const sema::Type *elementType,
     }
 }
 
-//  fields and base classes 
-
-//the address of a field, moved into the base subobject when inherited
 Value *IRVisitor::fieldAddress(Value *object, const sema::RecordSymbol *objectRecord, const sema::Symbol *field) {
     const sema::RecordSymbol *owner = field->parentRecord;
     Value *base = adjustToBase(object, objectRecord, owner, false);
     return builder.createStructGEP(owner->type, base, RecordLayout::fieldIndex(owner, field));
 }
 
-//the address of a base subobject, a null pointer stays null via select
 Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, const sema::RecordSymbol *to,
                                bool keepNull) {
     if (from == to || from == nullptr || to == nullptr) return address;
@@ -346,8 +322,6 @@ Value *IRVisitor::adjustToBase(Value *address, const sema::RecordSymbol *from, c
     return builder.createSelect(isNull, module.getNull(module.pointerType()), result, module.pointerType());
 }
 
-//  new and delete 
-
 Value *IRVisitor::callMalloc(Value *bytes) {
     Function *fn = module.getRuntimeMalloc();
     std::vector<Value *> args;
@@ -362,9 +336,8 @@ void IRVisitor::callFree(Value *pointer) {
     builder.createCall(fn, fn->fnType, args);
 }
 
-//new T and new T[n], with an 8 byte count cookie in front when elements have destructors
 Value *IRVisitor::emitNew(ast::NewExpr *node) {
-    //the expression type is a pointer to the element, NewExpr::type is as written
+
     const sema::Type *resultType = static_cast<ast::Expr *>(node)->type;
     const sema::Type *element = sema::asPointer(resultType)->pointee;
 
@@ -383,21 +356,20 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
                 emitDefaultConstruct(object, element, nullptr);
             }
         } else if (node->args.empty()) {
-            builder.createStore(element, module.getZero(element), object);  //new int() is 0
+            builder.createStore(element, module.getZero(element), object);
         } else {
             builder.createStore(element, emitRValue(node->args[0].get()), object);
         }
         return object;
     }
 
-    //new T[n] and new T[n]{...}
-    Value *count = builder.createCast(CastOpKind::SExt, emitRValue(node->dims[0].get()), sema::intType(), int64Type());
+    Value *count = builder.createCast(CastOpKind::SExt, emitRValue(node->dims[0].get()), sema::intType(), sema::longType());
     Value *bytes = sizeOf(element, count);
     Value *elements = nullptr;
     if (layout.needsDestruction(element)) {
-        Value *withCookie = builder.createBinary(BinaryOpKind::Add, int64Type(), bytes, module.getInt64(8));
+        Value *withCookie = builder.createBinary(BinaryOpKind::Add, sema::longType(), bytes, module.getInt64(8));
         Value *raw = callMalloc(withCookie);
-        builder.createStore(int64Type(), count, raw);
+        builder.createStore(sema::longType(), count, raw);
         elements = builder.createElementGEP(sema::charType(), raw, module.getInt64(8));
     } else {
         elements = callMalloc(bytes);
@@ -411,7 +383,7 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
             emitInitValue(slot, element, list->inits[i].get());
         }
         initialised = module.getInt64((long long)list->inits.size());
-        //the elements the list leaves out are zero, or default constructed
+
         ElementAction rest = layout.needsConstruction(element) ? ElementAction::DefaultConstruct : ElementAction::ZeroFill;
         emitElementLoop(elements, element, initialised, count, rest, nullptr);
     } else if (layout.needsConstruction(element)) {
@@ -420,7 +392,6 @@ Value *IRVisitor::emitNew(ast::NewExpr *node) {
     return elements;
 }
 
-//delete and delete[], null skips the destructor, delete[] reads the cookie
 Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     Value *pointer = emitRValue(node->operand.get());
     const sema::Type *element = sema::asPointer(node->operand->type)->pointee;
@@ -439,7 +410,7 @@ Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     builder.setInsertBlock(destroyBlock);
     if (node->isArray) {
         Value *raw = builder.createElementGEP(sema::charType(), pointer, module.getInt64(-8));
-        Value *count = builder.createLoad(int64Type(), raw);
+        Value *count = builder.createLoad(sema::longType(), raw);
         emitElementLoop(pointer, element, module.getInt64(0), count, ElementAction::Destroy, nullptr);
         callFree(raw);
     } else {
@@ -452,4 +423,4 @@ Value *IRVisitor::emitDelete(ast::DeleteExpr *node) {
     return nullptr;
 }
 
-} // namespace ir
+}

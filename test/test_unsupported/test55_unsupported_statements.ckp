@@ -1,0 +1,8 @@
+// Tests: exceptions (unsupported)
+int safe() { try { throw 5; } catch (int e) { return e; } return 0; }
+
+// Tests: range-based for loop (unsupported)
+int total(int *a) { int arr[3] = {1, 2, 3}; int s = 0; for (int x : arr) s += x; return s; }
+
+// Tests: if with an initializer (unsupported)
+int check() { if (int x = 3; x > 2) return x; return 0; }

@@ -7,18 +7,16 @@
 
 #include "ast/ast.h"
 
-
 namespace sema {
 
 class RecordSymbol;
 class SymbolTable;
 
-//semantic type, compare with isSameType, never by address
 enum class TypeKind {
-    Void, Bool, Char, Int, Float, Double,
-    Null,     //the type of the null literal, converts to any pointer
-    Auto,     //an auto variable before its initializer is checked
-    Error,    //the type of an expression that already produced an error
+    Void, Bool, Char, SChar, UChar, Short, UShort, Int, UInt, Long, ULong, Float, Double,
+    Null,
+    Auto,
+    Error,
     Pointer, Reference, Array, Function, Record, Closure
 };
 
@@ -32,6 +30,10 @@ public:
 
     TypeKind getKind() const { return kind; }
     bool is(TypeKind other) const { return kind == other; }
+
+    bool isConst() const { return unqualifiedType != nullptr; }
+
+    const Type *unqualifiedType = nullptr;
 
 private:
     const TypeKind kind;
@@ -51,7 +53,6 @@ public:
     const Type *referee;
 };
 
-//a size of 0 is an unsized [] until its size is known
 class ArrayType : public Type {
 public:
     ArrayType(const Type *element, uint64_t size)
@@ -69,10 +70,9 @@ public:
 
     const Type               *returnType;
     std::vector<const Type *> params;
-    bool                      isVariadic;  //printf and scanf
+    bool                      isVariadic;
 };
 
-//a struct or class, identified by its declaration
 class RecordType : public Type {
 public:
     explicit RecordType(RecordSymbol *record) : Type(TypeKind::Record), record(record) {}
@@ -80,7 +80,6 @@ public:
     RecordSymbol *record;
 };
 
-//a lambda's own type, its signature known once the body is checked
 class ClosureType : public Type {
 public:
     explicit ClosureType(ast::LambdaExpr *lambda) : Type(TypeKind::Closure), lambda(lambda) {}
@@ -89,18 +88,23 @@ public:
     const FunctionType *signature = nullptr;
 };
 
-//builtin types
 const Type *voidType();
 const Type *boolType();
 const Type *charType();
+const Type *scharType();
+const Type *ucharType();
+const Type *shortType();
+const Type *ushortType();
 const Type *intType();
+const Type *uintType();
+const Type *longType();
+const Type *ulongType();
 const Type *floatType();
 const Type *doubleType();
 const Type *nullType();
 const Type *autoType();
 const Type *errorType();
 
-//views of a type as one of the compound kinds, null when it is not that kind
 const PointerType   *asPointer(const Type *type);
 const ReferenceType *asReference(const Type *type);
 const ArrayType     *asArray(const Type *type);
@@ -108,36 +112,38 @@ const FunctionType  *asFunction(const Type *type);
 const ClosureType   *asClosure(const Type *type);
 RecordSymbol        *asRecord(const Type *type);
 
-//classification
-bool isIntegral(const Type *type);    //bool, char, int
-bool isFloating(const Type *type);    //float, double
+bool isIntegral(const Type *type);
+bool isUnsigned(const Type *type);
+unsigned integerSize(const Type *type);
+bool isFloating(const Type *type);
 bool isArithmetic(const Type *type);
-bool isScalar(const Type *type);      //arithmetic, pointers and null: usable as a condition
-bool isObjectPointer(const Type *type);  //a pointer that can be dereferenced to an object
+bool isScalar(const Type *type);
+bool isObjectPointer(const Type *type);
 bool isError(const Type *type);
+bool isIncompleteRecord(const Type *type);
 
-//structural equality: same kind and same parts, records by declaration
 bool isSameType(const Type *a, const Type *b);
 
-//true when base is a base of derived at any depth
+bool isSameUnqualified(const Type *a, const Type *b);
+
+const Type *unqualified(const Type *type);
+
+//checks whether a record inherits from another
 bool isDerivedFrom(const RecordSymbol *derived, const RecordSymbol *base);
 
-//the referred type for a reference, the type itself otherwise
 const Type *stripReference(const Type *type);
 
-//array-to-pointer and function-to-pointer decay
+//arrays and functions become pointers
 const Type *decay(const Type *type, SymbolTable &table);
 
-//bool and char become int, the integer promotion
+//applies integer promotion rules
 const Type *promote(const Type *type);
 
-//the common arithmetic type: double, then float, then int
+//finds the common type of two operands
 const Type *commonArithmeticType(const Type *a, const Type *b);
 
-//how well a value converts to a type, best first
 enum class ConversionRank { Exact, Promotion, Conversion, Impossible };
 
-//the implicit casts from a value to a target type, in order
 struct ConversionStep {
     ast::CastKind kind;
     const Type   *result;
@@ -146,23 +152,21 @@ struct ConversionStep {
 struct Conversion {
     ConversionRank              rank = ConversionRank::Impossible;
     std::vector<ConversionStep> steps;
+    bool                        addsConst = false;
 };
 
-//the implicit conversion from type from to type to
+//ranks the implicit conversion between two types
 Conversion findConversion(const Type *from, bool isLValue, const Type *to, SymbolTable &table);
 
-//C style spelling, for messages and dumps: int **(*)[10]
 std::string typeToString(const Type *type);
 
-//the type code used in mangled names, see the README
+//builds the type's name fragment for symbols
 std::string mangleType(const Type *type);
 
-//the llvm type a value is stored as, pointers are opaque ptr
 std::string toLLVMType(const Type *type);
 
-//the llvm record layout spelling: bases in order, then fields
 std::string toLLVMRecord(const RecordSymbol *record);
 
-} // namespace sema
+}
 
 #endif

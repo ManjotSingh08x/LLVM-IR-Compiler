@@ -1,0 +1,15 @@
+// Tests: simplify_cfg removes a branch on a constant and the block it can never reach (-O0 and up)
+int main() {
+    int debug = 0;
+    if (false) {
+        debug = 1;
+        printf("never printed\n");
+    }
+    printf("debug %d\n", debug);
+    return 0;
+}
+
+// IR-LABEL: define i32 @main()
+// IR-NOT: br i1 false
+// IR-NOT: if.then
+// IR: ret i32 0

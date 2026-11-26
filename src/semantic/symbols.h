@@ -16,15 +16,15 @@ namespace sema {
 class Scope;
 
 enum class SymbolKind {
-    Variable,   //a global, a local, or a static data member
+    Variable,
     Parameter,
-    Field,      //a non-static data member
-    Function,   //a free function, a method, a constructor or a destructor
+    Field,
+    Function,
     Record,
-    Typedef     //another name for its type
+    Typedef,
+    Namespace
 };
 
-//one declared name
 class Symbol {
 public:
     Symbol(SymbolKind kind, std::string name, const Type *type, int line, int col)
@@ -36,19 +36,16 @@ public:
 
     SymbolKind  kind;
     std::string name;
-    //the mangled name, empty for locals and fields
     std::string mangledName;
     const Type *type;
-    Scope      *scope = nullptr;  //the scope the symbol is declared in
-    ast::Decl  *decl = nullptr;   //its declaration, null for builtins
+    Scope      *scope = nullptr;
+    ast::Decl  *decl = nullptr;
     int         line;
     int         col;
 
-    //for members of a record
     RecordSymbol   *parentRecord = nullptr;
     ast::AccessKind access = ast::AccessKind::None;
 
-    //static storage: static globals, locals, members and functions
     bool isStatic = false;
 };
 
@@ -57,19 +54,16 @@ public:
     FunctionSymbol(std::string name, const FunctionType *type, int line, int col)
         : Symbol(SymbolKind::Function, std::move(name), type, line, col) {}
 
-    //the signature callers see, without this
     const FunctionType *signature() const { return static_cast<const FunctionType *>(type); }
 
-    //a method that is called on an object, so it receives this
     bool isMethod() const { return parentRecord != nullptr && !isStatic; }
 
-    //the lowered signature, with this in front for methods
     const FunctionType *loweredType = nullptr;
 
     bool                isConstructor = false;
     bool                isDestructor = false;
-    bool                isBuiltin = false;      //printf and scanf
-    ast::FunctionDecl  *definition = nullptr;   //the declaration with the body
+    bool                isBuiltin = false;
+    ast::FunctionDecl  *definition = nullptr;
 };
 
 struct BaseClass {
@@ -82,24 +76,30 @@ public:
     RecordSymbol(std::string name, bool isClass, int line, int col)
         : Symbol(SymbolKind::Record, std::move(name), nullptr, line, col), isClass(isClass) {}
 
-    //Outer::Inner
-    std::string qualifiedName() const {
-        return outer ? outer->qualifiedName() + "::" + name : name;
-    }
+    std::string qualifiedName() const;
 
     bool                          isClass;
-    bool                          isComplete = false;  //set once all members are declared
+    bool                          isComplete = false;
     Scope                        *members = nullptr;
-    RecordSymbol                 *outer = nullptr;     //the enclosing record of a nested one
+    RecordSymbol                 *outer = nullptr;
     std::vector<BaseClass>        bases;
-    std::vector<Symbol *>         fields;  //non-static data members, in layout order
+    std::vector<Symbol *>         fields;
     std::vector<FunctionSymbol *> constructors;
     FunctionSymbol               *destructor = nullptr;
 };
 
-enum class ScopeKind { Global, Record, Function, Block, Lambda };
+class NamespaceSymbol : public Symbol {
+public:
+    NamespaceSymbol(std::string name, int line, int col)
+        : Symbol(SymbolKind::Namespace, std::move(name), nullptr, line, col) {}
 
-//one node of the scope tree, kept for later passes to walk
+    std::string qualifiedName() const;
+
+    Scope *members = nullptr;
+};
+
+enum class ScopeKind { Global, Namespace, Record, Function, Block, Lambda };
+
 class Scope {
 public:
     Scope(ScopeKind kind, Scope *parent, int line, int col)
@@ -110,13 +110,12 @@ public:
 
     Scope *addChild(ScopeKind childKind, int childLine, int childCol);
 
-    //takes ownership, non-findable symbols such as constructors are never looked up by name
     Symbol *add(std::unique_ptr<Symbol> symbol, bool findable = true);
 
-    //the symbols declared here under name, several for overloads, null when none
+    //looks up all symbols with a name
     const std::vector<Symbol *> *find(const std::string &name) const;
 
-    //the nearest enclosing function or lambda scope, the one labels belong to
+    //returns the nearest enclosing function scope
     Scope *functionScope();
 
     ScopeKind kind;
@@ -124,17 +123,31 @@ public:
     int       line;
     int       col;
 
-    RecordSymbol    *record = nullptr;    //for a record scope
-    FunctionSymbol  *function = nullptr;  //for a function scope
-    ast::LambdaExpr *lambda = nullptr;    //for a lambda scope
+    RecordSymbol    *record = nullptr;
+    NamespaceSymbol *space = nullptr;
+    FunctionSymbol  *function = nullptr;
+    ast::LambdaExpr *lambda = nullptr;
 
     std::vector<std::unique_ptr<Scope>>       children;
-    std::vector<std::unique_ptr<Symbol>>      symbols;  //in declaration order
+    std::vector<std::unique_ptr<Symbol>>      symbols;
     llvm::StringMap<std::vector<Symbol *>>    table;
-    llvm::StringMap<ast::LabelStmt *>         labels;   //for function and lambda scopes
+    llvm::StringMap<ast::LabelStmt *>         labels;
 };
 
-//root of the scope tree and owner of every compound type
+std::string namespacePath(const Scope *scope);
+
+std::string namespacePrefix(const Scope *scope);
+
+struct QualifierTarget {
+    Scope        *scope = nullptr;
+    RecordSymbol *record = nullptr;
+    std::string   error;
+    std::string   spelling() const;
+};
+
+//resolves a qualified name prefix to its scope
+QualifierTarget resolveQualifier(Scope *from, const std::vector<std::string> &qualifier, int line, int col);
+
 class SymbolTable {
 public:
     SymbolTable();
@@ -147,9 +160,10 @@ public:
     const FunctionType *functionType(const Type *returnType, std::vector<const Type *> params,
                                      bool isVariadic);
     const Type         *recordType(RecordSymbol *record);
+
+    const Type         *constOf(const Type *type);
     ClosureType        *closureType(ast::LambdaExpr *lambda);
 
-    //writes the scope tree with every symbol, its type and its mangled name
     void dump(std::ostream &out);
 
 private:
@@ -159,6 +173,6 @@ private:
     std::unique_ptr<Scope>             root;
 };
 
-} // namespace sema
+}
 
 #endif

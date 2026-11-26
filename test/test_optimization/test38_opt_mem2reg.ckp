@@ -1,0 +1,18 @@
+// Tests: mem2reg keeps locals in registers, with a phi where two values meet (-O2 and up)
+int pick(int a, int b) {
+    int result;
+    if (a > b) result = a;
+    else result = b;
+    return result;
+}
+
+int main() {
+    printf("max %d\n", pick(3, 9));
+    return 0;
+}
+
+// IR-O1-LABEL: define i32 @{{.*}}pick
+// IR-O1: %result = alloca i32
+// IR-GE2-LABEL: define i32 @{{.*}}pick
+// IR-GE2-NOT: alloca
+// IR-GE2: phi i32

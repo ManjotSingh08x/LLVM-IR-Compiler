@@ -1,0 +1,48 @@
+struct Point { int x; int y; };
+struct Fixed { const int id; };
+void takesPointer(int *p) {}
+
+// Tests: assigning to a const variable
+void assignConst() { const int x = 1; x = 2; }
+
+// Tests: incrementing a const variable
+void incrementConst() { const int x = 1; x++; }
+
+// Tests: compound assignment to a const variable
+void compoundConst() { const int x = 1; x += 2; }
+
+// Tests: const variable without an initialiser
+void uninitialisedConst() { const int x; }
+
+// Tests: writing through a pointer to const
+void writeThroughPointer() { int a = 1; const int *p = &a; *p = 2; }
+
+// Tests: moving a const pointer
+void reseatConstPointer() { int a = 1; int b = 2; int *const p = &a; p = &b; }
+
+// Tests: dropping const from a pointer
+void dropConstPointer() { const int a = 1; int *p = &a; }
+
+// Tests: binding a non-const reference to a const variable
+void dropConstReference() { const int a = 1; int &r = a; }
+
+// Tests: binding a non-const reference to a temporary
+void referenceToTemporary() { int &r = 5; }
+
+// Tests: writing through a const reference
+void writeConstReference() { int a = 1; const int &r = a; r = 3; }
+
+// Tests: writing to a const parameter
+void writeConstParameter(const int n) { n = 2; }
+
+// Tests: writing a member of a const structure
+void writeConstMember() { const Point p = {1, 2}; p.x = 3; }
+
+// Tests: writing an element of a const array
+void writeConstArray() { const int a[2] = {1, 2}; a[0] = 5; }
+
+// Tests: assigning a structure that has a const member
+void assignWithConstField() { Fixed a = {1}; Fixed b = {2}; a = b; }
+
+// Tests: passing a pointer to const where a plain pointer is expected
+void constToParameter() { const int a = 1; takesPointer(&a); }
